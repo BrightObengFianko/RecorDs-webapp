@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>RecorDS-index</title>
+
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/notification.css">
+    <link rel="stylesheet" href="css/confirm-dialog.css">
+</head>
+
+<body class="login-page">
+
+    <main class="auth-container">
+
+        <section class="auth-info" aria-labelledby="introTitle">
+            <div class="info-content">
+                <p class="eyebrow">SMART RECORDS. BETTER SERVICE.</p>
+                <h1 id="introTitle">Manage Records<br><span>with Confidence</span></h1>
+                <p class="intro-copy">
+                    The all-in-one records management system for efficient,
+                    secure and organized data handling.
+                </p>
+
+            </div>
+
+            <div class="records-visual" aria-hidden="true">
+                <img src="assets/records-workspace.svg" alt="">
+            </div>
+        </section>
+
+        <section class="auth-form" aria-labelledby="loginTitle">
+            <div class="login-card">
+                <div class="login-brand">
+                    <img src="assets/records-logo-transparent.png" alt="RecorDs logo">
+                </div>
+
+                <form id="loginForm">
+                    <label for="email">Email or Username</label>
+                    <div class="input-wrap">
+                        <svg class="input-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.25"/><path d="M5.5 19c.5-3.1 2.7-5 6.5-5s6 1.9 6.5 5"/></svg>
+                        <input type="email" id="email" name="email" placeholder="Email or Username" autocomplete="username" required>
+                    </div>
+
+                    <label for="password">Password</label>
+                    <div class="input-wrap">
+                        <svg class="input-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="10" width="13" height="10" rx="2"/><path d="M8.5 10V7.5a3.5 3.5 0 0 1 7 0V10"/></svg>
+                        <input type="password" id="password" name="password" placeholder="Password" autocomplete="current-password" required>
+                        <button type="button" class="password-toggle" id="passwordToggle" aria-label="Show password" title="Show password">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12s3.1-5 8.5-5 8.5 5 8.5 5-3.1 5-8.5 5-8.5-5-8.5-5Z"/><circle cx="12" cy="12" r="2.2"/></svg>
+                        </button>
+                    </div>
+
+                    <div class="form-options">
+                        <label class="remember">
+                            <input type="checkbox" name="remember">
+                            <span>Remember me</span>
+                        </label>
+                        <a href="#">Forgot password?</a>
+                    </div>
+
+                    <button type="submit" class="login-button">
+                        <span>Login</span>
+                        <span class="button-arrow" aria-hidden="true">&#8594;</span>
+                    </button>
+                </form>
+
+                <p class="signup-text" style="display: none;">
+                    Don't have an account?
+                    <a href="signup.html">Create an account</a>
+                </p>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="login-copyright-footer">
+        &copy; 2026 RecorDs. All Rights Reserved.<br>
+        Designed and Developed by Bright Obeng Fianko
+    </footer>
+
+    <script src="js/notification.js"></script>
+    <script src="js/confirm-dialog.js"></script>
+    <script src="js/auth.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RecorDs - Account</title>
+    <script>
+        (function () {
+            if (window.__recordAuthBoot === true) {
+                return;
+            }
+
+            window.__recordAuthBoot = true;
+            document.documentElement.style.visibility = "hidden";
+            document.documentElement.style.opacity = "0";
+
+            const bootStyle = document.createElement("style");
+            bootStyle.id = "record-auth-boot-style";
+            bootStyle.textContent = "html, body { visibility: hidden; opacity: 0; } body.record-auth-loading { visibility: visible; opacity: 1; }";
+            document.head.appendChild(bootStyle);
+        })();
+    </script>
+    <link rel="stylesheet" href="css/notification.css">
+    <link rel="stylesheet" href="css/confirm-dialog.css">
+    <link rel="stylesheet" href="css/sidebar.css">
+    <link rel="stylesheet" href="css/account.css">
+</head>
+<body class="account-page">
+    <svg aria-hidden="true" focusable="false" class="account-icon-sprite">
+        <symbol id="account-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5.5 9.5V21h13V9.5"></path><path d="M9.5 21v-6h5v6"></path></symbol>
+        <symbol id="account-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></symbol>
+        <symbol id="account-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.5"></circle><path d="m16 16 5 5"></path></symbol>
+        <symbol id="account-chart" viewBox="0 0 24 24"><path d="M4 19V5h16v14"></path><path d="M8 16v-3M12 16V8M16 16v-6"></path></symbol>
+        <symbol id="account-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3.5 20c.5-3.3 2.3-5 5.5-5s5 1.7 5.5 5"></path><path d="M15 6.5a3 3 0 0 1 0 5.8M16 15c2.5.2 4 1.8 4.5 4"></path></symbol>
+        <symbol id="account-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"></circle><path d="M5 21c.8-4.2 3.1-6.3 7-6.3s6.2 2.1 7 6.3"></path></symbol>
+        <symbol id="account-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19 12a7 7 0 0 0-.2-1.7l2-1.5-2-3.4-2.4 1a7 7 0 0 0-2.9-1.7L13.2 2h-4l-.4 2.7A7 7 0 0 0 6 6.4l-2.4-1-2 3.4 2 1.5a7 7 0 0 0 0 3.4l-2 1.5 2 3.4 2.4-1a7 7 0 0 0 2.8 1.7l.4 2.7h4l.4-2.7a7 7 0 0 0 2.9-1.7l2.4 1 2-3.4-2-1.5c.1-.5.2-1.1.2-1.7Z"></path></symbol>
+        <symbol id="account-logout" viewBox="0 0 24 24"><path d="M10 4H4v16h6"></path><path d="M14 8l4 4-4 4M18 12H8"></path></symbol>
+        <symbol id="account-menu" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></symbol>
+        <symbol id="icon-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></symbol>
+        <symbol id="icon-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"></path></symbol>
+        <symbol id="account-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></symbol>
+        <symbol id="account-edit" viewBox="0 0 24 24"><path d="m4 16-.8 4.8L8 20l11.5-11.5a2.1 2.1 0 0 0-3-3L5 17Z"></path><path d="m14.5 7.5 2 2"></path></symbol>
+        <symbol id="account-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3"></path></symbol>
+        <symbol id="account-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 10v6M12 7h.01"></path></symbol>
+        <symbol id="account-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-4L4 9"></path><path d="M4 4v5h5M4 13a8 8 0 0 0 14.5 4L20 15"></path><path d="M20 20v-5h-5"></path></symbol>
+    </svg>
+
+    <div class="app">
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-icon">R</div>
+                <span>RecorDs</span>
+            </div>
+
+            <nav class="navigation">
+                <a href="dashboard.html" class="nav-item"><svg class="ui-icon nav-icon"><use href="#account-home"></use></svg><span>Dashboard</span></a>
+                <a href="create-record.html" class="nav-item"><svg class="ui-icon nav-icon"><use href="#account-plus"></use></svg><span>Record Case</span></a>
+                <a href="search-cases.html" class="nav-item"><svg class="ui-icon nav-icon"><use href="#account-search"></use></svg><span>Search Cases</span></a>
+                <a href="reports.html" class="nav-item nav-item-admin-only"><svg class="ui-icon nav-icon"><use href="#account-chart"></use></svg><span>Reports</span></a>
+                <a href="users.html" class="nav-item nav-item-admin-only"><svg class="ui-icon nav-icon"><use href="#account-users"></use></svg><span>Users</span></a>
+                <a href="account.html" class="nav-item nav-item-staff-admin-only active" aria-current="page"><svg class="ui-icon nav-icon"><use href="#account-user"></use></svg><span>Account</span></a>
+                <a href="settings.html" class="nav-item"><svg class="ui-icon nav-icon"><use href="#account-gear"></use></svg><span>Settings</span></a>
+            </nav>
+
+            <div class="sidebar-bottom">
+                <div class="user-box">
+                    <div class="avatar" id="sidebarAvatar">A</div>
+                    <div class="user-info"><strong id="sidebarUserName">Admin</strong><small id="sidebarUserRole">Staff</small></div>
+                </div>
+                <button class="logout" id="logoutButton" type="button"><svg class="ui-icon logout-icon"><use href="#account-logout"></use></svg><span>Logout</span></button>
+            </div>
+        </aside>
+
+        <main class="main account-main">
+            <header class="account-heading">
+                <div class="account-heading-left">
+                    <button class="sidebar-toggle page-toggle" id="sidebarToggle" type="button" title="Toggle sidebar" aria-label="Toggle sidebar">
+                        <svg class="ui-icon toggle-icon" aria-hidden="true"><use href="#icon-chevron-left"></use></svg>
+                    </button>
+                    <div>
+                        <h1>Account</h1>
+                        <p>View cases recorded by Branch Staff waiting for approval.</p>
+                    </div>
+                </div>
+                <button class="refresh-button" id="refreshButton" type="button"><svg class="ui-icon"><use href="#account-refresh"></use></svg><span>Refresh</span></button>
+            </header>
+
+            <section class="account-filters">
+                <label>Filter by Registrar<select id="registrarFilter"><option value="">All Registrars</option></select></label>
+                <label>Search by Name<input id="nameFilter" type="search" placeholder="Search name..."></label>
+                <label>Date of Birth<input id="dateOfBirthFilter" type="date"></label>
+                <button class="account-primary-button" id="searchButton" type="button"><svg class="ui-icon"><use href="#account-search"></use></svg><span>Search</span></button>
+                <button class="account-secondary-button" id="resetButton" type="button">Reset</button>
+            </section>
+
+            <section class="account-card">
+                <div class="account-card-heading"><div><span class="processing-badge">Waiting for Approval</span><button class="account-primary-button" id="approveSelectedButton" type="button"><svg class="ui-icon"><use href="#account-check"></use></svg><span>Approved</span></button></div><strong id="totalCases">0 Cases</strong></div>
+                <div class="account-bulk-row"><label><input id="selectAll" type="checkbox"><span>Select All</span></label><span id="selectedCount">0 selected</span><p>Approve cases one by one or in bulk.</p></div>
+                <div class="account-table-wrap">
+                    <table>
+                        <thead><tr><th></th><th>#</th><th>NAME</th><th>DATE OF BIRTH</th><th>DATE OF DEATH</th><th>CATEGORY</th><th>REGISTRAR</th><th>DATE OF REGISTRATION</th><th>NOTE</th><th>ACTION</th></tr></thead>
+                        <tbody id="processingBody"><tr><td colspan="10" class="account-empty">Loading cases...</td></tr></tbody>
+                    </table>
+                </div>
+                <div class="account-footer">
+                    <span id="showingInfo">Showing 0 cases</span>
+                    <div class="pagination">
+                        <button id="previousPage" disabled type="button" aria-label="Previous page">
+                            <svg class="ui-icon pagination-icon" aria-hidden="true"><use href="#icon-chevron-left"></use></svg>
+                        </button>
+                        <span id="pageInfo">1</span>
+                        <button id="nextPage" disabled type="button" aria-label="Next page">
+                            <svg class="ui-icon pagination-icon" aria-hidden="true"><use href="#icon-chevron-right"></use></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="table-copyright-footer">
+                    &copy; 2026 RecorDs. All Rights Reserved.<br>
+                    Designed and Developed by Bright Obeng Fianko
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/notification.js"></script>
+    <script src="js/confirm-dialog.js"></script>
+    <script src="js/app-settings.js"></script>
+    <script src="js/category-colors.js"></script>
+    <script src="js/account.js"></script>
+</body>
+</html>

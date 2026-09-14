@@ -1,0 +1,157 @@
+{
+  "name": "RecorDs - Ready SMS Live",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        360,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, name, phone_number, status, sms_sent, sms_date, category, registrar, registration_date, branch_id FROM records WHERE LOWER(TRIM(status)) = 'ready' AND LOWER(COALESCE(sms_sent::text, '')) NOT IN ('true', 't', 'yes', 'y', '1', 'sent', 'success') AND phone_number IS NOT NULL AND TRIM(phone_number) <> '' ORDER BY registration_date DESC NULLS LAST, id DESC LIMIT 100;",
+        "options": {}
+      },
+      "id": "get-ready-records",
+      "name": "Get Ready Records",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      },
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1
+      },
+      "id": "split-in-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all(); const results = []; const sandboxEnabled = String($env.ARKESEL_SANDBOX || '').toLowerCase() === 'true' || String($env.ARKESEL_SANDBOX || '') === '1'; for (const item of items) { const recordId = String(item.json.id ?? '').trim(); const phone = String(item.json.phone_number ?? '').trim(); const name = String(item.json.name ?? '').trim(); const message = `Hello ${name || 'customer'}, your case is ready. Please visit the office. Thank you.`; if (!recordId) { results.push({ json: { ...item.json, sms_message: message, sms_sent_candidate: false, sms_error: 'Missing record id.' } }); continue; } if (!phone) { results.push({ json: { ...item.json, sms_message: message, sms_sent_candidate: false, sms_error: 'Missing phone number.' } }); continue; } const apiKey = $env.ARKESEL_API_KEY; if (!apiKey) { results.push({ json: { ...item.json, sms_message: message, sms_sent_candidate: false, sms_error: 'Missing ARKESEL_API_KEY environment variable.' } }); continue; } const sender = $env.ARKESEL_SENDER_ID || 'RECORDS'; try { const response = await this.helpers.httpRequest({ method: 'POST', url: 'https://sms.arkesel.com/api/v2/sms/send', headers: { 'api-key': apiKey, 'Content-Type': 'application/json', Accept: 'application/json' }, body: { sender, message, recipients: [phone], ...(sandboxEnabled ? { sandbox: true } : {}) }, json: true }); const success = response?.success === true || response?.status === 'success' || Boolean(response?.messageId) || Boolean(response?.data?.messageId); results.push({ json: { ...item.json, sms_message: message, sms_sent_candidate: Boolean(success), sms_provider_response: response, sms_sandbox: sandboxEnabled } }); } catch (error) { results.push({ json: { ...item.json, sms_message: message, sms_sent_candidate: false, sms_error: error.message, sms_sandbox: sandboxEnabled } }); } } return results;"
+      },
+      "id": "send-sms",
+      "name": "Send SMS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2.1,
+      "position": [
+        1160,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE records SET sms_sent = 'true', sms_date = NOW(), updated_at = NOW() WHERE id = {{$json.id}} AND LOWER(COALESCE(sms_sent::text, '')) NOT IN ('true', 't', 'yes', 'y', '1', 'sent', 'success') AND {{$json.sms_sent_candidate}} RETURNING id, sms_sent, sms_date;",
+        "options": {}
+      },
+      "id": "mark-sms-sent",
+      "name": "Mark SMS Sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      },
+      "position": [
+        1420,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Ready Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Ready Records": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Send SMS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send SMS": {
+      "main": [
+        [
+          {
+            "node": "Mark SMS Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark SMS Sent": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "active": false
+}

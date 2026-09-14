@@ -1,0 +1,813 @@
+/* =========================================
+   RECORD - CREATE RECORD PAGE
+   public/css/create-record.css
+   ========================================= */
+
+
+/* =========================================
+   RESET
+   ========================================= */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+}
+
+
+/* =========================================
+   BODY
+   ========================================= */
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: var(--app-bg);
+    color: var(--app-text);
+    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
+}
+
+button,
+a {
+    font-family: inherit;
+}
+
+a {
+    text-decoration: none;
+    color: inherit;
+}
+
+.ui-icon {
+    width: 1em;
+    height: 1em;
+
+    display: block;
+    flex: 0 0 auto;
+}
+
+
+/* =========================================
+   PAGE
+   ========================================= */
+
+.page {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+}
+
+
+/* =========================================
+   SIDEBAR
+   ========================================= */
+
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+
+    width: 250px;
+
+    background: var(--app-sidebar-bg);
+    color: var(--app-sidebar-text);
+
+    display: flex;
+    flex-direction: column;
+
+    z-index: 1000;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+
+    gap: 10px;
+
+    padding: 20px 18px;
+}
+
+.brand-icon {
+    width: 38px;
+    height: 38px;
+
+    border-radius: 9px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: var(--accent);
+    color: var(--accent-foreground);
+}
+
+.brand span {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.navigation {
+    display: flex;
+    flex-direction: column;
+
+    gap: 7px;
+    padding: 10px 12px;
+
+    flex: 1;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+
+    padding: 12px 14px;
+
+    color: var(--app-sidebar-text);
+
+    border-radius: 8px;
+
+    margin-bottom: 5px;
+
+    font-size: 14px;
+
+    transition: 0.2s;
+}
+
+.nav-item .nav-icon {
+    width: 18px;
+    height: 18px;
+}
+
+.nav-item:hover {
+    background: var(--app-sidebar-hover-bg);
+    color: white;
+}
+
+.nav-item.active {
+    background: var(--app-sidebar-active-bg);
+    color: var(--accent-foreground);
+}
+
+.sidebar-bottom {
+    padding: 15px 17px;
+
+    border-top: 1px solid var(--app-sidebar-border);
+}
+
+.user-box {
+    display: flex;
+    align-items: center;
+
+    gap: 10px;
+
+    margin-bottom: 12px;
+}
+
+.avatar {
+    width: 40px;
+    height: 40px;
+
+    border-radius: 50%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: var(--accent);
+    color: var(--accent-foreground);
+    font-weight: 700;
+}
+
+.avatar.has-photo {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    color: transparent;
+}
+
+.user-info {
+    min-width: 0;
+}
+
+.user-info strong {
+    display: block;
+
+    color: var(--app-sidebar-text);
+
+    font-size: 14px;
+}
+
+.user-info small {
+    display: block;
+
+    color: var(--app-sidebar-muted);
+
+    font-size: 11px;
+
+    margin-top: 3px;
+}
+
+.logout {
+    width: 100%;
+
+    border: none;
+    background: transparent;
+    color: var(--app-sidebar-text);
+
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    text-align: left;
+
+    padding: 8px 2px;
+
+    cursor: pointer;
+
+    font-size: 13px;
+}
+
+.logout .logout-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.logout:hover {
+    color: white;
+}
+
+
+/* =========================================
+   MAIN
+   ========================================= */
+
+.main {
+    flex: 1;
+    height: 100vh;
+
+    display: flex;
+    flex-direction: column;
+
+    margin-left: 250px;
+    min-width: 0;
+    min-height: 0;
+
+    overflow: hidden;
+}
+
+.content {
+    flex: 1;
+    width: 100%;
+    max-width: 920px;
+
+    margin: 0 auto;
+
+    padding: 24px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+
+    min-height: 0;
+    overflow-y: auto;
+}
+
+
+/* =========================================
+   PAGE HEADING
+   ========================================= */
+
+.page-heading {
+    margin-bottom: 0;
+}
+
+
+.page-heading h1 {
+    font-size: 30px;
+
+    line-height: 1.2;
+
+    color: var(--app-text);
+
+    margin-bottom: 8px;
+}
+
+
+.page-heading p {
+    font-size: 15px;
+
+    color: var(--app-muted);
+}
+
+
+/* =========================================
+   FORM CARD
+   ========================================= */
+
+.form-card {
+    width: 100%;
+
+    background: var(--app-surface);
+
+    border: 1px solid var(--app-border);
+
+    border-radius: 14px;
+
+    padding: 32px;
+
+    box-shadow:
+        var(--app-shadow);
+}
+
+
+/* =========================================
+   TWO COLUMN FORM ROW
+   ========================================= */
+
+.form-row {
+    display: grid;
+
+    grid-template-columns: 1fr 1fr;
+
+    gap: 20px;
+
+    width: 100%;
+}
+
+
+.name-date-row {
+    grid-template-columns:
+        minmax(280px, 1.4fr)
+        minmax(180px, 0.9fr);
+}
+
+
+.category-registrar-row {
+    grid-template-columns:
+        minmax(260px, 1.1fr)
+        minmax(240px, 0.9fr);
+}
+
+
+.phone-status-row {
+    grid-template-columns:
+        minmax(260px, 1.5fr)
+        minmax(180px, 0.9fr)
+        minmax(200px, 1fr);
+}
+
+
+/* =========================================
+   FORM GROUP
+   ========================================= */
+
+.form-group {
+    margin-bottom: 22px;
+
+    min-width: 0;
+}
+
+
+.form-group label {
+    display: block;
+
+    margin-bottom: 8px;
+
+    font-size: 14px;
+
+    font-weight: 600;
+
+    color: var(--app-text);
+}
+
+.form-group label[data-required="true"]::after {
+    content: " *";
+    color: #ef4444;
+    font-weight: 700;
+}
+
+
+/* =========================================
+   INPUTS / SELECT / TEXTAREA
+   ========================================= */
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+
+    padding: 13px 14px;
+
+    border: 1px solid var(--app-input-border);
+
+    border-radius: 8px;
+
+    background: var(--app-input-bg);
+
+    color: var(--app-text);
+
+    font-family: inherit;
+
+    font-size: 15px;
+
+    outline: none;
+
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+
+/* =========================================
+   PLACEHOLDER
+   ========================================= */
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+    color: var(--app-muted-strong);
+}
+
+
+.form-group input[type="text"],
+.form-group input[type="tel"],
+.form-group textarea {
+    text-transform: uppercase;
+}
+
+
+/* =========================================
+   FOCUS
+   ========================================= */
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: var(--accent-ink);
+
+    box-shadow:
+        0 0 0 3px var(--accent-soft);
+}
+
+
+/* =========================================
+   DROPDOWN
+   ========================================= */
+
+.form-group select {
+    cursor: pointer;
+
+    appearance: auto;
+}
+
+
+.form-group select option {
+    background: var(--app-surface);
+
+    color: var(--app-text);
+}
+
+
+/* =========================================
+   DATE INPUT
+   ========================================= */
+
+.form-group input[type="date"] {
+    cursor: pointer;
+}
+
+
+/* =========================================
+   REGISTRATION DATE
+   ========================================= */
+
+#registrationDate {
+    background: var(--app-surface-2);
+
+    color: var(--app-muted);
+
+    cursor: not-allowed;
+}
+
+
+/* =========================================
+   PHONE INPUT
+   ========================================= */
+
+.form-group input[type="tel"] {
+    letter-spacing: 0.2px;
+}
+
+
+/* =========================================
+   TEXTAREA
+   ========================================= */
+
+.form-group textarea {
+    min-height: 110px;
+
+    resize: vertical;
+
+    line-height: 1.5;
+}
+
+
+/* =========================================
+   FORM ACTIONS
+   ========================================= */
+
+.form-actions {
+    display: flex;
+
+    justify-content: flex-end;
+
+    align-items: center;
+
+    gap: 12px;
+
+    margin-top: 8px;
+
+    padding-top: 25px;
+
+    border-top: 1px solid var(--app-border);
+}
+
+
+/* =========================================
+   CANCEL BUTTON
+   ========================================= */
+
+.cancel-button {
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    min-height: 44px;
+
+    padding: 0 20px;
+
+    border: 1px solid var(--app-border);
+
+    border-radius: 8px;
+
+    background: var(--app-surface);
+
+    color: var(--app-text);
+
+    text-decoration: none;
+
+    font-size: 14px;
+
+    font-weight: 600;
+
+    transition: all 0.2s ease;
+}
+
+
+.cancel-button:hover {
+    background: var(--app-surface-2);
+
+    border-color: var(--app-muted-strong);
+}
+
+
+/* =========================================
+   CREATE RECORD BUTTON
+   ========================================= */
+
+.submit-button {
+    min-height: 44px;
+
+    padding: 0 22px;
+
+    border: none;
+
+    border-radius: 8px;
+
+    background: var(--accent);
+
+    color: var(--accent-foreground);
+
+    font-family: inherit;
+
+    font-size: 14px;
+
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition:
+        background 0.2s ease,
+        box-shadow 0.2s ease,
+        transform 0.1s ease;
+}
+
+
+.submit-button:hover {
+    background: var(--accent-strong);
+
+    box-shadow:
+        0 4px 10px var(--accent-soft);
+}
+
+
+.submit-button:active {
+    transform: translateY(1px);
+}
+
+
+/* =========================================
+   DISABLED BUTTON
+   ========================================= */
+
+.submit-button:disabled {
+    background: var(--accent-soft);
+    color: var(--accent-foreground);
+
+    cursor: not-allowed;
+
+    box-shadow: none;
+
+    transform: none;
+}
+
+
+/* =========================================
+   ACCESSIBILITY
+   ========================================= */
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 3px solid var(--accent-soft);
+
+    outline-offset: 2px;
+}
+
+
+/* =========================================
+   TABLET / MOBILE
+   ========================================= */
+
+@media (max-width: 700px) {
+
+    .sidebar {
+        display: none;
+    }
+
+
+    .main {
+        margin-left: 0;
+    }
+
+
+    .content {
+        padding: 20px;
+    }
+
+
+    .page-heading h1 {
+        font-size: 26px;
+    }
+
+
+    .page-heading p {
+        font-size: 14px;
+    }
+
+
+    .form-card {
+        padding: 22px 18px;
+
+        border-radius: 12px;
+    }
+
+
+    .name-date-row {
+        grid-template-columns: 1fr;
+
+        gap: 0;
+    }
+
+
+    .form-row {
+        grid-template-columns: 1fr;
+
+        gap: 0;
+    }
+
+
+    .form-group {
+        margin-bottom: 19px;
+    }
+
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: 12px 13px;
+
+        font-size: 15px;
+    }
+
+
+    .form-actions {
+        flex-direction: column-reverse;
+
+        align-items: stretch;
+
+        gap: 10px;
+    }
+
+
+    .cancel-button,
+    .submit-button {
+        width: 100%;
+    }
+
+}
+
+
+/* =========================================
+   SMALL PHONES
+   ========================================= */
+
+@media (max-width: 420px) {
+
+    .content {
+        padding: 15px;
+    }
+
+
+    .page-heading h1 {
+        font-size: 23px;
+    }
+
+
+    .form-card {
+        padding: 18px 14px;
+    }
+
+}
+
+@media (max-width: 480px) {
+
+    .page-top {
+        min-height: 58px;
+        padding: 10px 14px 0;
+    }
+
+    .page-top h1 {
+        font-size: 21px;
+    }
+
+    .page-top p {
+        font-size: 12px;
+        line-height: 1.35;
+    }
+
+    .content {
+        padding: 12px;
+    }
+
+    .form-card {
+        padding: 16px 13px;
+        border-radius: 10px;
+    }
+
+    .form-card h2 {
+        font-size: 17px;
+    }
+
+    .form-group label {
+        font-size: 12px;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        min-height: 43px;
+        padding: 11px 12px;
+        font-size: 14px;
+    }
+
+    .form-group textarea {
+        min-height: 92px;
+    }
+
+    .form-actions {
+        margin-top: 8px;
+    }
+}

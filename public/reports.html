@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RecorDs - Reports</title>
+    <script>
+        (function () {
+            document.documentElement.style.visibility = "hidden";
+            document.documentElement.style.opacity = "0";
+        })();
+    </script>
+    <link rel="stylesheet" href="css/sidebar.css">
+    <link rel="stylesheet" href="css/notification.css">
+    <link rel="stylesheet" href="css/reports.css">
+</head>
+<body class="reports-page">
+    <svg aria-hidden="true" focusable="false" class="reports-icon-sprite">
+        <symbol id="icon-home" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5"></path><path d="M6 9.75V20h12V9.75M9 20v-6h6v6"></path></symbol>
+        <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></symbol>
+        <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 5 5"></path></symbol>
+        <symbol id="icon-chart" viewBox="0 0 24 24"><path d="M4 19V5h16v14"></path><path d="M8 16v-3M12 16V8M16 16v-6"></path></symbol>
+        <symbol id="icon-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3.5 20c.5-3.3 2.3-5 5.5-5s5 1.7 5.5 5M15 6.5a3 3 0 0 1 0 5.8M16 15c2.5.2 4 1.8 4.5 4"></path></symbol>
+        <symbol id="icon-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"></circle><path d="M5 21c.8-4.2 3.1-6.3 7-6.3s6.2 2.1 7 6.3"></path></symbol>
+        <symbol id="icon-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19 12a7 7 0 0 0-.2-1.7l2-1.5-2-3.4-2.4 1a7 7 0 0 0-2.9-1.7L13.2 2h-4l-.4 2.7A7 7 0 0 0 6 6.4l-2.4-1-2 3.4 2 1.5a7 7 0 0 0 0 3.4l-2 1.5 2 3.4 2.4-1a7 7 0 0 0 2.8 1.7l.4 2.7h4l.4-2.7a7 7 0 0 0 2.9-1.7l2.4 1 2-3.4-2-1.5c.1-.5.2-1.1.2-1.7Z"></path></symbol>
+        <symbol id="icon-logout" viewBox="0 0 24 24"><path d="M10 4H4v16h6M14 8l4 4-4 4M18 12H8"></path></symbol>
+        <symbol id="icon-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></symbol>
+        <symbol id="icon-filter" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"></path></symbol>
+        <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-4L4 9M4 4v5h5M4 13a8 8 0 0 0 14.5 4L20 15M20 20v-5h-5"></path></symbol>
+    </svg>
+
+    <div class="app">
+        <aside class="sidebar">
+            <div class="brand"><div class="brand-icon">R</div><span>RecorDs</span></div>
+            <nav class="navigation">
+                <a href="dashboard.html" class="nav-item"><svg class="ui-icon nav-icon"><use href="#icon-home"></use></svg><span>Dashboard</span></a>
+                <a href="create-record.html" class="nav-item"><svg class="ui-icon nav-icon"><use href="#icon-plus"></use></svg><span>Record Case</span></a>
+                <a href="search-cases.html" class="nav-item"><svg class="ui-icon nav-icon"><use href="#icon-search"></use></svg><span>Search Cases</span></a>
+                <a href="reports.html" class="nav-item nav-item-admin-only active" aria-current="page"><svg class="ui-icon nav-icon"><use href="#icon-chart"></use></svg><span>Reports</span></a>
+                <a href="users.html" class="nav-item nav-item-admin-only"><svg class="ui-icon nav-icon"><use href="#icon-users"></use></svg><span>Users</span></a>
+                <a href="account.html" class="nav-item nav-item-staff-admin-only"><svg class="ui-icon nav-icon"><use href="#icon-user"></use></svg><span>Account</span></a>
+                <a href="settings.html" class="nav-item"><svg class="ui-icon nav-icon"><use href="#icon-gear"></use></svg><span>Settings</span></a>
+            </nav>
+            <div class="sidebar-bottom">
+                <div class="user-box"><div class="avatar" id="sidebarAvatar">A</div><div class="user-info"><strong id="sidebarUserName">Admin</strong><small id="sidebarUserRole">Administrator</small></div></div>
+                <button class="logout" id="logoutButton" type="button"><svg class="ui-icon logout-icon"><use href="#icon-logout"></use></svg><span>Logout</span></button>
+            </div>
+        </aside>
+
+        <main class="main reports-main">
+            <header class="reports-topbar">
+                <div class="reports-heading">
+                    <button class="sidebar-toggle page-toggle" id="sidebarToggle" type="button" title="Toggle sidebar"><svg class="ui-icon toggle-icon"><use href="#icon-chevron-left"></use></svg></button>
+                    <div><h1>Reports</h1><p>Track user authentication activity.</p></div>
+                </div>
+                <button class="reports-refresh" id="refreshButton" type="button"><svg class="ui-icon"><use href="#icon-refresh"></use></svg>Refresh</button>
+            </header>
+
+            <section class="reports-content">
+                <div class="reports-card reports-filters">
+                    <label>Date<input id="dateFilter" type="date"></label>
+                    <label>User<input id="userFilter" type="search" placeholder="Name or email"></label>
+                    <label>Role<select id="roleFilter"><option value="">All roles</option><option value="admin">Admin</option><option value="staff">Staff</option><option value="branch_staff">Branch Staff</option></select></label>
+                    <label>Activity<select id="activityFilter"><option value="">All activity</option><option value="LOGIN_SUCCESS">Successful login</option><option value="LOGOUT_SUCCESS">Successful logout</option><option value="LOGIN_FAILURE">Failed login</option></select></label>
+                    <button class="reports-primary" id="filterButton" type="button"><svg class="ui-icon"><use href="#icon-filter"></use></svg>Filter</button>
+                    <button class="reports-secondary" id="resetButton" type="button">Reset</button>
+                </div>
+
+                <section class="reports-card activity-card">
+                    <div class="activity-heading"><div><h2>Authentication Activity</h2><p id="activitySummary">Loading activity...</p></div></div>
+                    <div class="activity-table-wrap">
+                        <table>
+                            <thead><tr><th>User</th><th>Role</th><th>Activity</th><th>Date</th><th>Time</th></tr></thead>
+                            <tbody id="activityBody"><tr><td colspan="5" class="reports-empty">Loading activity...</td></tr></tbody>
+                        </table>
+                    </div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/notification.js"></script>
+    <script src="js/app-settings.js"></script>
+    <script src="js/reports.js"></script>
+</body>
+</html>

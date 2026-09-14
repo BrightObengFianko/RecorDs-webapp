@@ -1,0 +1,81 @@
+{
+  "name": "RecorDs - Ready SMS Dry Run",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        360,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, name, phone_number, status, sms_sent, sms_date, category, registrar, registration_date, branch_id FROM records WHERE LOWER(TRIM(status)) = 'ready' AND LOWER(COALESCE(sms_sent::text, '')) NOT IN ('true', 't', 'yes', 'y', '1', 'sent', 'success') AND phone_number IS NOT NULL AND TRIM(phone_number) <> '' ORDER BY registration_date DESC NULLS LAST, id DESC LIMIT 5;",
+        "options": {}
+      },
+      "id": "get-ready-records",
+      "name": "Get Ready Records",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      },
+      "position": [
+        620,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all(); const preview = []; for (const item of items) { const name = String(item.json.name ?? 'customer').trim(); const phone = String(item.json.phone_number ?? '').trim(); const message = `Hello ${name || 'customer'}, your case is ready. Please visit the office. Thank you.`; preview.push({ json: { ...item.json, dry_run: true, sms_preview: message, sms_to: phone, sms_sent_candidate: false } }); } return preview;"
+      },
+      "id": "preview-sms",
+      "name": "Preview SMS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2.1,
+      "position": [
+        900,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Ready Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Ready Records": {
+      "main": [
+        [
+          {
+            "node": "Preview SMS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "active": false
+}
