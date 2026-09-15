@@ -22,6 +22,7 @@ if (
     throw new Error("DATABASE_URL must be configured for production PostgreSQL access.");
 }
 
+// Use DATABASE_URL if available, otherwise fall back to individual env vars
 const poolOptions = databaseUrl
     ? {
         connectionString: databaseUrl
@@ -34,17 +35,20 @@ const poolOptions = databaseUrl
         port: Number(env(process.env.DB_PORT) || 5432)
     };
 
+// Apply SSL configuration
+const sslConfig = sslEnabled
+    ? {
+        rejectUnauthorized:
+            process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false"
+    }
+    : false;
+
 const pool = new Pool({
     ...poolOptions,
+    ...(sslConfig && { ssl: sslConfig }),
     max: 20,
     connectionTimeoutMillis: 5000,
-    idleTimeoutMillis: 30000,
-    ssl: sslEnabled
-        ? {
-            rejectUnauthorized:
-                process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false"
-        }
-        : undefined
+    idleTimeoutMillis: 30000
 });
 
 pool.on("error", error => {
@@ -52,3 +56,4 @@ pool.on("error", error => {
 });
 
 module.exports = pool;
+
