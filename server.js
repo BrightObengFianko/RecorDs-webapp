@@ -3,7 +3,8 @@ const cors = require("cors");
 const path = require("path");
 
 require("dotenv").config({
-    path: process.env.ENV_FILE || ".env"
+    path: process.env.ENV_FILE || ".env",
+    override: false
 });
 
 const pool = require("./server/config/database");
@@ -187,10 +188,18 @@ const PORT =
 const HOST =
     process.env.HOST || "0.0.0.0";
 
+function logJwtConfiguration() {
+    const secret = String(process.env.JWT_SECRET || "").trim();
+
+    console.log(`JWT_SECRET present: ${Boolean(secret)}`);
+    console.log(`JWT_SECRET length: ${secret.length}`);
+}
+
 async function startServer() {
 
     try {
 
+        logJwtConfiguration();
         getJwtSecret();
         await ensureDatabaseSchema();
 
