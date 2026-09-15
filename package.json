@@ -6,6 +6,7 @@
   "scripts": {
     "build": "node --check server.js",
     "start": "node server.js",
+    "bootstrap:admin": "node scripts/bootstrap-admin.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "migrate:sheets": "node migrateGoogleSheets.js",
     "backup:db": "node scripts/backup-postgres.js",
