@@ -184,6 +184,9 @@ app.use("/api", (req, res) => {
 const PORT =
     process.env.PORT || 5000;
 
+const HOST =
+    process.env.HOST || "0.0.0.0";
+
 async function startServer() {
 
     try {
@@ -193,10 +196,11 @@ async function startServer() {
 
         app.listen(
             PORT,
+            HOST,
             () => {
 
                 console.log(
-                    `RecorDs server running on http://localhost:${PORT}`
+                    `RecorDs server running on http://${HOST}:${PORT}`
                 );
 
             }

@@ -2,8 +2,10 @@
   "name": "record",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
+    "build": "node --check server.js",
+    "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "migrate:sheets": "node migrateGoogleSheets.js",
     "backup:db": "node scripts/backup-postgres.js",
