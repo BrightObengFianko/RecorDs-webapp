@@ -1,5 +1,8 @@
 const { Pool } = require("pg");
-require("dotenv").config();
+require("dotenv").config({
+    path: process.env.ENV_FILE || ".env",
+    override: false
+});
 
 const env =
     value =>
@@ -8,10 +11,20 @@ const env =
             : value;
 
 const sslEnabled = String(process.env.DB_SSL || "").toLowerCase() === "true";
+const databaseUrl = env(process.env.DATABASE_URL) || "";
+const configuredHost = env(process.env.DB_HOST) || "";
 
-const poolOptions = process.env.DATABASE_URL
+if (
+    String(process.env.NODE_ENV || "").toLowerCase() === "production" &&
+    !databaseUrl &&
+    (!configuredHost || ["localhost", "127.0.0.1", "::1"].includes(configuredHost))
+) {
+    throw new Error("DATABASE_URL must be configured for production PostgreSQL access.");
+}
+
+const poolOptions = databaseUrl
     ? {
-        connectionString: env(process.env.DATABASE_URL)
+        connectionString: databaseUrl
     }
     : {
         user: env(process.env.DB_USER),
