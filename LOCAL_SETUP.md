@@ -74,6 +74,28 @@ $env:ENV_FILE = ".env.local"
 node syncLocalToOnline.js
 ```
 
+## 6. Copy local login accounts to Railway
+
+The record sync does not copy users. To migrate existing local accounts, set
+`ONLINE_DATABASE_URL` to the Railway PostgreSQL connection string in the local
+environment file, then run a preview:
+
+```powershell
+$env:ENV_FILE = ".env.local"
+node scripts/sync-users-to-online.js --dry-run
+```
+
+If the preview is correct, run:
+
+```powershell
+$env:ENV_FILE = ".env.local"
+node scripts/sync-users-to-online.js
+```
+
+This copies bcrypt password hashes and account metadata, never plaintext
+passwords. Existing Railway users are not overwritten; matching emails are
+skipped.
+
 Run it again after a connection interruption. UUID matching makes retries idempotent. Existing records with no UUID are matched by category, name, dates, registration date, and branch. A mismatch is recorded as a conflict and is not overwritten automatically.
 
 ## Sync behavior and permissions
