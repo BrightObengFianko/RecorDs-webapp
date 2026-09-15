@@ -40,6 +40,44 @@ async function ensureDatabaseSchema() {
         [DEFAULT_BRANCH_NAME]
     );
 
+    // Bootstrap the legacy tables when deploying against a new empty database.
+    // Existing tables and records are preserved by IF NOT EXISTS.
+    await pool.query(
+        `
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                email VARCHAR(150) UNIQUE NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                role VARCHAR(20) NOT NULL DEFAULT 'staff',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE TABLE IF NOT EXISTS records (
+                id SERIAL PRIMARY KEY,
+                category VARCHAR(100),
+                name VARCHAR(150) NOT NULL,
+                date_of_birth DATE,
+                date_of_death DATE,
+                registration_date TIMESTAMP,
+                phone_number VARCHAR(30),
+                registrar VARCHAR(150),
+                status VARCHAR(20) DEFAULT 'Pending',
+                sms_sent VARCHAR(20),
+                sms_date TIMESTAMP,
+                sms_status VARCHAR(20),
+                sms_error TEXT,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `
+    );
+
     await pool.query(
         `
             ALTER TABLE users
