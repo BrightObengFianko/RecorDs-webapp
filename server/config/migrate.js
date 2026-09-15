@@ -20,7 +20,23 @@ async function constraintExists(tableName, constraintName) {
     return result.rowCount > 0;
 }
 
+async function tableExists(tableName) {
+    const result = await pool.query(
+        `
+            SELECT 1
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = $1
+            LIMIT 1
+        `,
+        [tableName]
+    );
+
+    return result.rowCount > 0;
+}
+
 async function ensureDatabaseSchema() {
+    // Create branches table first (dependencies need to exist)
     await pool.query(
         `
             CREATE TABLE IF NOT EXISTS branches (
@@ -31,6 +47,54 @@ async function ensureDatabaseSchema() {
         `
     );
 
+    // Create users table if it doesn't exist
+    if (!(await tableExists("users"))) {
+        await pool.query(
+            `
+                CREATE TABLE users (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100) NOT NULL,
+                    email VARCHAR(150) UNIQUE NOT NULL,
+                    password VARCHAR(255) NOT NULL,
+                    role VARCHAR(20),
+                    branch_id INTEGER,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    account_status VARCHAR(20) DEFAULT 'PENDING',
+                    auth_token_version INTEGER DEFAULT 0 NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `
+        );
+    }
+
+    // Create records table if it doesn't exist
+    if (!(await tableExists("records"))) {
+        await pool.query(
+            `
+                CREATE TABLE records (
+                    id SERIAL PRIMARY KEY,
+                    first_name VARCHAR(100),
+                    last_name VARCHAR(100),
+                    email VARCHAR(150),
+                    phone VARCHAR(20),
+                    status VARCHAR(20),
+                    registration_date DATE,
+                    registrar VARCHAR(100),
+                    branch_id INTEGER,
+                    sms_sent VARCHAR(20),
+                    sms_date TIMESTAMP,
+                    sms_status VARCHAR(20),
+                    sms_error TEXT,
+                    client_uuid UUID,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `
+        );
+    }
+
+    // Insert default branch
     await pool.query(
         `
             INSERT INTO branches (name)
@@ -40,6 +104,7 @@ async function ensureDatabaseSchema() {
         [DEFAULT_BRANCH_NAME]
     );
 
+    // Alter users table to add any missing columns
     await pool.query(
         `
             ALTER TABLE users
@@ -92,6 +157,7 @@ async function ensureDatabaseSchema() {
         `
     );
 
+    // Alter records table to add any missing columns
     await pool.query(
         `
             ALTER TABLE records
@@ -468,3 +534,4 @@ module.exports = {
     DEFAULT_BRANCH_NAME,
     ensureDatabaseSchema
 };
+
