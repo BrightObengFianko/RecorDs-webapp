@@ -100,6 +100,11 @@ function serveFrontendPage(fileName) {
     app.get(
         `/${fileName}`,
         (req, res) => {
+            res.setHeader(
+                "Cache-Control",
+                "no-cache, must-revalidate"
+            );
+
             res.sendFile(
                 path.join(
                     __dirname,
@@ -126,7 +131,20 @@ serveFrontendPage("settings.html");
 
 app.use(
     express.static(
-        path.join(__dirname, "public")
+        path.join(__dirname, "public"),
+        {
+            etag: true,
+            lastModified: true,
+            maxAge: "1h",
+            setHeaders(res, filePath) {
+                if (path.extname(filePath).toLowerCase() === ".html") {
+                    res.setHeader(
+                        "Cache-Control",
+                        "no-cache, must-revalidate"
+                    );
+                }
+            }
+        }
     )
 );
 

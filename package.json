@@ -13,8 +13,8 @@
     "migrate:sheets": "node migrateGoogleSheets.js",
     "backup:db": "node scripts/backup-postgres.js",
     "start:local": "powershell -NoProfile -Command \"$env:ENV_FILE='.env.local'; node server.js\"",
-    "sync:local:dry": "powershell -NoProfile -Command \"$env:ENV_FILE='.env.local'; node syncLocalToOnline.js --dry-run\"",
-    "sync:local": "powershell -NoProfile -Command \"$env:ENV_FILE='.env.local'; node syncLocalToOnline.js\""
+    "sync:local:dry": "powershell -NoProfile -Command \"$env:ENV_FILE='.env'; node syncLocalToOnline.js --dry-run\"",
+    "sync:local": "powershell -NoProfile -Command \"$env:ENV_FILE='.env'; node syncLocalToOnline.js\""
   },
   "keywords": [],
   "author": "",

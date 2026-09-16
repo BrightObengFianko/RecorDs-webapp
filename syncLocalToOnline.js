@@ -9,6 +9,7 @@
  */
 
 const { Pool } = require("pg");
+const { randomUUID } = require("crypto");
 const dotenv = require("dotenv");
 
 dotenv.config({
@@ -141,9 +142,7 @@ async function saveSyncState(record, state, onlineRecordId, errorMessage) {
             INSERT INTO local_record_sync_state
                 (client_uuid, local_record_id, online_record_id, state,
                  last_error, synced_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5,
-                    CASE WHEN $4 = 'synced' THEN CURRENT_TIMESTAMP ELSE NULL END,
-                    CURRENT_TIMESTAMP)
+            VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
             ON CONFLICT (client_uuid)
             DO UPDATE SET
                 local_record_id = EXCLUDED.local_record_id,
@@ -158,7 +157,8 @@ async function saveSyncState(record, state, onlineRecordId, errorMessage) {
             record.id,
             onlineRecordId || null,
             state,
-            errorMessage || null
+            errorMessage || null,
+            state === "synced" ? new Date() : null
         ]
     );
 }
@@ -170,8 +170,7 @@ async function getPendingRecords() {
             FROM records r
             LEFT JOIN local_record_sync_state s
                 ON s.client_uuid = r.client_uuid
-            WHERE r.client_uuid IS NOT NULL
-              AND (s.state IS NULL OR s.state = 'pending')
+            WHERE (s.state IS NULL OR s.state = 'pending')
             ORDER BY r.updated_at ASC NULLS FIRST, r.id ASC
             LIMIT $1
         `,
@@ -291,6 +290,23 @@ async function updateOnlineRecord(localRecord, onlineRecord) {
 }
 
 async function processRecord(record, stats) {
+    if (!record.client_uuid) {
+        record.client_uuid = randomUUID();
+
+        if (!DRY_RUN) {
+            await localPool.query(
+                `
+                    UPDATE records
+                    SET client_uuid = $1,
+                        updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+                    WHERE id = $2
+                      AND client_uuid IS NULL
+                `,
+                [record.client_uuid, record.id]
+            );
+        }
+    }
+
     if (!(await verifyBranch(record))) {
         stats.conflicts++;
         await saveSyncState(
@@ -383,6 +399,16 @@ async function main() {
                         null,
                         "Sync failed for this record. Retry after checking the connection."
                     );
+
+                    if (stats.errors === 1) {
+                        const safeMessage = String(error.message || "")
+                            .replace(/postgres(?:ql)?:\/\/[^\s]+/gi, "[database-url]");
+
+                        console.error(
+                            `Sync error (${error.code || "UNKNOWN"}): ${safeMessage}`
+                        );
+                    }
+
                     console.error(`Record ${record.id} was not synced.`);
                 }
             }
@@ -412,6 +438,13 @@ async function main() {
         }
     } catch (error) {
         console.error("Local-to-online sync could not complete.");
+        const safeMessage = String(error.message || "")
+            .replace(/postgres(?:ql)?:\/\/[^\s]+/gi, "[database-url]");
+
+        console.error(
+            `Sync error (${error.code || "UNKNOWN"}): ${safeMessage}`
+        );
+
         process.exitCode = 1;
     } finally {
         if (lockAcquired) {
