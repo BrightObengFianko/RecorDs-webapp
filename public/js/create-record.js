@@ -272,7 +272,8 @@ function formatDateForInput(value) {
         )
     ) {
 
-        return text;
+        const [, year, month, day] = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        return `${day}-${month}-${year}`;
 
     }
 
@@ -293,21 +294,48 @@ function formatDateForInput(value) {
 
 
     const year =
-        date.getFullYear();
+        date.getUTCFullYear();
 
     const month =
         String(
-            date.getMonth() + 1
+            date.getUTCMonth() + 1
         ).padStart(2, "0");
 
     const day =
         String(
-            date.getDate()
+            date.getUTCDate()
         ).padStart(2, "0");
 
 
-    return `${year}-${month}-${day}`;
+    return `${day}-${month}-${year}`;
 
+}
+
+function formatDateWhileTyping(value) {
+    const digits = String(value || "").replace(/\D/g, "").slice(0, 8);
+
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+}
+
+function parseDateInput(value) {
+    const match = String(value || "").trim().match(/^(\d{2})-(\d{2})-(\d{4})$/);
+
+    if (!match) return null;
+
+    const [, day, month, year] = match;
+    const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+
+    if (
+        date.getUTCFullYear() !== Number(year) ||
+        date.getUTCMonth() !== Number(month) - 1 ||
+        date.getUTCDate() !== Number(day)
+    ) {
+        return null;
+    }
+
+    return `${year}-${month}-${day}`;
 }
 
 
@@ -795,6 +823,21 @@ forceUppercaseInput(customerNameInput);
 forceUppercaseInput(registrarInput);
 forceUppercaseInput(notesInput);
 
+if (dateInput) {
+    dateInput.addEventListener("input", () => {
+        dateInput.value = formatDateWhileTyping(dateInput.value);
+        dateInput.setCustomValidity("");
+    });
+
+    dateInput.addEventListener("blur", () => {
+        dateInput.setCustomValidity(
+            dateInput.value && !parseDateInput(dateInput.value)
+                ? "Enter a valid date in DD-MM-YYYY format."
+                : ""
+        );
+    });
+}
+
 
 // =========================================
 // AUTO-FORMAT PHONE NUMBER
@@ -960,8 +1003,11 @@ recordForm.addEventListener(
                 .trim();
 
 
+        const selectedDateInput =
+            dateInput.value.trim();
+
         const selectedDate =
-            dateInput.value;
+            parseDateInput(selectedDateInput);
 
 
         const phoneNumber =
@@ -1017,7 +1063,7 @@ recordForm.addEventListener(
         }
 
 
-        if (!selectedDate) {
+        if (!selectedDateInput) {
 
             if (
                 isDeathCategory(
@@ -1039,6 +1085,15 @@ recordForm.addEventListener(
 
             return;
 
+        }
+
+        if (!selectedDate) {
+            Notification.warning(
+                "Enter a valid date in DD-MM-YYYY format."
+            );
+
+            dateInput.focus();
+            return;
         }
 
 
