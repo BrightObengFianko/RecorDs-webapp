@@ -527,7 +527,7 @@ a {
 }
 
 .input-box input {
-    padding-left: 44px;
+    padding-left: 48px;
 }
 
 .input-box input:focus,
@@ -1333,7 +1333,7 @@ tbody tr:hover {
     }
 
     .search-field .input-box input {
-        padding-left: 44px;
+        padding-left: 48px;
         padding-right: 14px;
     }
 
