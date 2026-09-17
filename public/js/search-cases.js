@@ -328,6 +328,48 @@ let activeActionMenu = null;
 
 let actionMenuFrame = 0;
 
+function formatDateWhileTyping(value) {
+    const digits = String(value || "").replace(/\D/g, "").slice(0, 8);
+
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+}
+
+function parseDateInput(value) {
+    const match = String(value || "").trim().match(/^([0-9]{2})-([0-9]{2})-([0-9]{4})$/);
+
+    if (!match) return null;
+
+    const [, day, month, year] = match;
+    const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+
+    if (
+        date.getUTCFullYear() !== Number(year) ||
+        date.getUTCMonth() !== Number(month) - 1 ||
+        date.getUTCDate() !== Number(day)
+    ) {
+        return null;
+    }
+
+    return `${year}-${month}-${day}`;
+}
+
+if (dateOfBirthInput) {
+    dateOfBirthInput.addEventListener("input", () => {
+        dateOfBirthInput.value = formatDateWhileTyping(dateOfBirthInput.value);
+        dateOfBirthInput.setCustomValidity("");
+    });
+
+    dateOfBirthInput.addEventListener("blur", () => {
+        dateOfBirthInput.setCustomValidity(
+            dateOfBirthInput.value && !parseDateInput(dateOfBirthInput.value)
+                ? "Enter a valid date in DD-MM-YYYY format."
+                : ""
+        );
+    });
+}
+
 
 // =========================================
 // ACTION MENUS
@@ -1116,8 +1158,11 @@ async function searchCases({ silent = false } = {}) {
             .toUpperCase();
 
 
+    const dateOfBirthInputValue =
+        dateOfBirthInput.value.trim();
+
     const dateOfBirth =
-        dateOfBirthInput.value;
+        parseDateInput(dateOfBirthInputValue);
 
 
     const status =
@@ -1158,6 +1203,15 @@ async function searchCases({ silent = false } = {}) {
 
         return;
 
+    }
+
+    if (dateOfBirthInputValue && !dateOfBirth) {
+        Notification.warning(
+            "Enter a valid Date of Birth in DD-MM-YYYY format."
+        );
+
+        dateOfBirthInput.focus();
+        return;
     }
 
 
@@ -1447,10 +1501,15 @@ async function refreshSearchResults() {
 
     refreshInFlight = true;
 
+    refreshResultsButton?.classList.add("is-refreshing");
+    refreshResultsButton?.setAttribute("aria-busy", "true");
+
     try {
         await searchCases({ silent: true });
     } finally {
         refreshInFlight = false;
+        refreshResultsButton?.classList.remove("is-refreshing");
+        refreshResultsButton?.setAttribute("aria-busy", "false");
     }
 }
 
@@ -2219,7 +2278,13 @@ if (refreshResultsButton) {
         if (hasActiveSearch) {
             refreshSearchResults();
         } else {
-            searchCases();
+            refreshResultsButton.classList.add("is-refreshing");
+            refreshResultsButton.setAttribute("aria-busy", "true");
+
+            searchCases().finally(() => {
+                refreshResultsButton.classList.remove("is-refreshing");
+                refreshResultsButton.setAttribute("aria-busy", "false");
+            });
         }
     });
 }

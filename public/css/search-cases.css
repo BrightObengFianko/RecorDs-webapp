@@ -808,6 +808,26 @@ tbody tr:hover {
     background: var(--app-surface-muted, #f5f7fa);
 }
 
+.refresh-button .button-icon {
+    transition: transform 180ms ease;
+}
+
+.refresh-button.is-refreshing .button-icon {
+    animation: search-results-refresh-spin 700ms linear infinite;
+}
+
+@keyframes search-results-refresh-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .refresh-button.is-refreshing .button-icon {
+        animation: none;
+    }
+}
+
 .category-badge[style*="--category-color"] {
     background: var(--category-color);
     color: #ffffff;
@@ -1410,6 +1430,12 @@ body.sidebar-collapsed .content {
 }
 
 @media (max-width: 480px) {
+
+    #dateOfBirth {
+        min-height: 44px;
+        padding: 10px 12px;
+        font-size: 16px;
+    }
 
     .results-sync-status {
         max-width: 110px;
