@@ -37,6 +37,12 @@ const resetButton =
 const exportButton =
     document.getElementById("exportButton");
 
+const refreshResultsButton =
+    document.getElementById("refreshResultsButton");
+
+const resultsSyncStatus =
+    document.getElementById("resultsSyncStatus");
+
 const resultsBody =
     document.getElementById("resultsBody");
 
@@ -311,6 +317,12 @@ let currentPage = 1;
 const rowsPerPage = 10;
 
 let allResults = [];
+
+let hasActiveSearch = false;
+
+let refreshInFlight = false;
+
+const SEARCH_REFRESH_INTERVAL_MS = 12000;
 
 let activeActionMenu = null;
 
@@ -1083,7 +1095,20 @@ async function loadRegistrars() {
 
 }
 
-async function searchCases() {
+function setResultsSyncStatus(message, state = "") {
+    if (!resultsSyncStatus) {
+        return;
+    }
+
+    resultsSyncStatus.textContent = message;
+    resultsSyncStatus.dataset.state = state;
+}
+
+function recordsHaveChanged(previousRecords, nextRecords) {
+    return JSON.stringify(previousRecords) !== JSON.stringify(nextRecords);
+}
+
+async function searchCases({ silent = false } = {}) {
 
     const name =
         nameInput.value
@@ -1143,13 +1168,15 @@ async function searchCases() {
     // SHOW LOADING
     // =====================================
 
-    resultsBody.innerHTML = `
-        <tr>
-            <td colspan="11" class="loading">
-                Searching records...
-            </td>
-        </tr>
-    `;
+    if (!silent) {
+        resultsBody.innerHTML = `
+            <tr>
+                <td colspan="11" class="loading">
+                    Searching records...
+                </td>
+            </tr>
+        `;
+    }
 
 
     try {
@@ -1324,12 +1351,12 @@ async function searchCases() {
         // GET RECORDS
         // =================================
 
+        let nextResults;
+
         if (
             Array.isArray(data)
         ) {
-
-            allResults =
-                data;
+            nextResults = data;
 
         }
 
@@ -1339,8 +1366,7 @@ async function searchCases() {
             )
         ) {
 
-            allResults =
-                data.records;
+            nextResults = data.records;
 
         }
 
@@ -1350,31 +1376,32 @@ async function searchCases() {
             )
         ) {
 
-            allResults =
-                data.results;
+            nextResults = data.results;
 
         }
 
         else {
 
-            allResults = [];
+            nextResults = [];
 
         }
 
+        const changed = recordsHaveChanged(allResults, nextResults);
+        allResults = nextResults;
+        hasActiveSearch = true;
 
-        // =================================
-        // RESET PAGE
-        // =================================
+        if (!silent || changed) {
+            if (!silent) {
+                currentPage = 1;
+            }
 
-        currentPage = 1;
+            displayResults();
+        }
 
-
-        // =================================
-        // DISPLAY
-        // =================================
-
-        displayResults();
-
+        setResultsSyncStatus(
+            `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+            "updated"
+        );
 
     } catch (error) {
 
@@ -1384,6 +1411,11 @@ async function searchCases() {
         );
 
 
+        if (silent) {
+            setResultsSyncStatus("Offline - showing last updated data", "offline");
+            return;
+        }
+
         resultsBody.innerHTML = `
             <tr>
                 <td colspan="11" class="empty">
@@ -1392,28 +1424,34 @@ async function searchCases() {
             </tr>
         `;
 
-
-        resultCount.textContent =
-            "0 records found";
-
-
-        showingInfo.textContent =
-            "Showing 0 results";
-
-
-        pageInfo.textContent =
-            "1";
-
-
-        previousPage.disabled =
-            true;
-
-
-        nextPage.disabled =
-            true;
+        resultCount.textContent = "0 records found";
+        showingInfo.textContent = "Showing 0 results";
+        pageInfo.textContent = "1";
+        previousPage.disabled = true;
+        nextPage.disabled = true;
+        setResultsSyncStatus("Unable to update", "offline");
 
     }
 
+}
+
+async function refreshSearchResults() {
+    if (
+        !hasActiveSearch ||
+        refreshInFlight ||
+        document.visibilityState !== "visible" ||
+        navigator.onLine === false
+    ) {
+        return;
+    }
+
+    refreshInFlight = true;
+
+    try {
+        await searchCases({ silent: true });
+    } finally {
+        refreshInFlight = false;
+    }
 }
 
 
@@ -2176,6 +2214,26 @@ if (categorySelect) {
 
 }
 
+if (refreshResultsButton) {
+    refreshResultsButton.addEventListener("click", () => {
+        if (hasActiveSearch) {
+            refreshSearchResults();
+        } else {
+            searchCases();
+        }
+    });
+}
+
+window.setInterval(refreshSearchResults, SEARCH_REFRESH_INTERVAL_MS);
+
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+        refreshSearchResults();
+    }
+});
+
+window.addEventListener("online", refreshSearchResults);
+
 
 if (registrarSelect) {
 
@@ -2243,6 +2301,9 @@ if (resetButton) {
 
             allResults =
                 [];
+
+            hasActiveSearch = false;
+            setResultsSyncStatus("Not searched");
 
 
             currentPage =
