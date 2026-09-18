@@ -54,6 +54,8 @@ const editReturnPage =
         ? "account.html"
         : "search-cases.html";
 
+let isSubmitting = false;
+
 function createClientUuid() {
     if (window.crypto && typeof window.crypto.randomUUID === "function") {
         return window.crypto.randomUUID();
@@ -565,6 +567,30 @@ function setEditMode() {
 
 }
 
+function resetFormForNextRecord() {
+    const preservedValues = {
+        category: categoryInput?.value || "",
+        registrar: registrarInput?.value || "",
+        status: statusInput?.value || "Pending",
+        registrationDate: registrationDate?.value || ""
+    };
+
+    recordForm.reset();
+
+    if (categoryInput) {
+        categoryInput.value = preservedValues.category;
+    }
+
+    setRegistrarValue(preservedValues.registrar);
+    setStatusValue(preservedValues.status);
+
+    if (registrationDate) {
+        registrationDate.value = preservedValues.registrationDate;
+    }
+
+    updateDateLabel();
+}
+
 
 async function loadRecordForEdit() {
 
@@ -985,6 +1011,10 @@ recordForm.addEventListener(
 
         event.preventDefault();
 
+        if (isSubmitting) {
+            return;
+        }
+
 
         // =====================================
         // GET VALUES
@@ -1163,6 +1193,15 @@ recordForm.addEventListener(
         // SEND TO SERVER
         // =====================================
 
+        isSubmitting = true;
+
+        if (createRecordButton) {
+            createRecordButton.disabled = true;
+            createRecordButton.textContent = isEditMode
+                ? "Updating..."
+                : "Creating...";
+        }
+
         try {
 
             const endpoint =
@@ -1251,10 +1290,11 @@ recordForm.addEventListener(
             );
 
 
-            window.location.href =
-                isEditMode
-                    ? editReturnPage
-                    : "dashboard.html";
+            if (isEditMode) {
+                window.location.href = editReturnPage;
+            } else {
+                resetFormForNextRecord();
+            }
 
 
         } catch (error) {
@@ -1277,7 +1317,7 @@ recordForm.addEventListener(
                         "You are Offline - Record saved and will sync when internet returns."
                     );
 
-                    recordForm.reset();
+                    resetFormForNextRecord();
                     return;
                 } catch (offlineError) {
                     console.error("OFFLINE RECORD ERROR:", offlineError);
@@ -1285,6 +1325,16 @@ recordForm.addEventListener(
             }
 
             Notification.error("Unable to connect to the server.");
+
+        } finally {
+            isSubmitting = false;
+
+            if (createRecordButton) {
+                createRecordButton.disabled = false;
+                createRecordButton.textContent = isEditMode
+                    ? "Update Record"
+                    : "Create Record";
+            }
 
         }
 
