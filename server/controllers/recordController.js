@@ -270,29 +270,14 @@ async function queryRecentTodayRecords(user, requestedPage) {
     // current Accra calendar day rather than the database server's timezone.
     const page = normalizePage(requestedPage);
 
-    const selectedDateResult = await pool.query(
+    const todayResult = await pool.query(
         `
-            SELECT
-                (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date AS today,
-                COALESCE(
-                    MAX(r.registration_date::date) FILTER (
-                        WHERE r.registration_date::date =
-                            (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date
-                    ),
-                    MAX(r.registration_date::date) FILTER (
-                        WHERE r.registration_date::date <
-                            (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date
-                    )
-                ) AS selected_date
-            FROM records r
-            ${clause}
-        `,
-        values
+            SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date AS today
+        `
     );
 
-    const selectedDate = selectedDateResult.rows[0]?.selected_date;
-    const today = selectedDateResult.rows[0]?.today;
-    const selectedDateText = sqlDateText(selectedDate);
+    const today = todayResult.rows[0]?.today;
+    const selectedDateText = sqlDateText(today);
     const todayText = sqlDateText(today);
     const isToday = Boolean(selectedDateText && selectedDateText === todayText);
 
