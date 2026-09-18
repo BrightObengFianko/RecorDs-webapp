@@ -1277,11 +1277,10 @@ function renderRecentRecords(records, pagination, metadata = {}) {
         const row = document.createElement("tr");
         const status = formatStatusLabel(record.status);
         const statusClass = getStatusClass(record.status);
-        const smsClass = isSmsSent(record.sms_sent) ? "sent" : "not-sent";
-        const smsLabel = isSmsSent(record.sms_sent) ? "Sent" : "Not Sent";
         const registrationDate = formatDateOnly(record.registration_date);
         const dateValue = formatDateOnly(getRecordDisplayDate(record));
         const category = record.category || "-";
+        const registrar = record.registrar || "-";
         const name = record.name || "-";
         const id = record.id || "";
 
@@ -1306,11 +1305,7 @@ function renderRecentRecords(records, pagination, metadata = {}) {
                     ${escapeHtml(status)}
                 </span>
             </td>
-            <td>
-                <span class="sms-badge ${smsClass}">
-                    ${escapeHtml(smsLabel)}
-                </span>
-            </td>
+            <td>${escapeHtml(registrar)}</td>
             <td>
                 <a
                     class="table-action-link"
