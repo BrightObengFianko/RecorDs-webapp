@@ -1086,7 +1086,7 @@
 
             const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
                 document.body.classList.contains("reduced-motion");
-            const transitionDuration = reducedMotion ? 0 : 250;
+            const transitionDuration = reducedMotion ? 0 : 160;
 
             window.setTimeout(() => {
                 window.location.assign(destination.href);
