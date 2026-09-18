@@ -80,6 +80,9 @@ const recentRecordsState = {
     loading: false
 };
 
+const DASHBOARD_REFRESH_INTERVAL_MS = 15000;
+let dashboardSummaryLoading = false;
+
 function readStoredUser() {
     try {
         return JSON.parse(localStorage.getItem("user") || "null") || {};
@@ -1393,6 +1396,12 @@ async function loadRecentRecordsPage(page) {
 }
 
 async function loadDashboardSummary() {
+    if (dashboardSummaryLoading) {
+        return;
+    }
+
+    dashboardSummaryLoading = true;
+
     try {
         setDashboardLoading("Loading recent records...");
 
@@ -1482,6 +1491,8 @@ async function loadDashboardSummary() {
                 </tr>
             `;
         }
+    } finally {
+        dashboardSummaryLoading = false;
     }
 }
 
@@ -1588,3 +1599,19 @@ document
 
 loadDashboard();
 loadOverviewRegistrars();
+
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+        loadDashboardSummary();
+    }
+});
+
+window.addEventListener("focus", () => {
+    loadDashboardSummary();
+});
+
+window.setInterval(() => {
+    if (!document.hidden) {
+        loadDashboardSummary();
+    }
+}, DASHBOARD_REFRESH_INTERVAL_MS);
