@@ -663,15 +663,21 @@ a {
 .results-header-main {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
     gap: 16px;
+}
+
+.results-header-right {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-left: auto;
 }
 
 .results-header-actions {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    order: -1;
 }
 
 .results-header p {
@@ -1434,6 +1440,13 @@ tbody tr:hover {
     .results-header-main {
         flex-wrap: wrap;
         gap: 10px;
+    }
+
+    .results-header-right {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        margin-left: 0;
     }
 }
 

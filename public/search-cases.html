@@ -24,7 +24,7 @@
         })();
     </script>
 
-    <link rel="stylesheet" href="css/search-cases.css?v=7dd35f2">
+    <link rel="stylesheet" href="css/search-cases.css?v=650dafd">
     <link rel="stylesheet" href="css/notification.css">
     <link rel="stylesheet" href="css/confirm-dialog.css">
     <link rel="stylesheet" href="css/sidebar.css">
@@ -507,6 +507,16 @@
                     <div class="results-header">
 
                         <div class="results-header-main">
+                            <div>
+                                <h2>Search Results</h2>
+                                <p id="resultCount">0 records found</p>
+                            </div>
+                        </div>
+
+                        <div class="results-header-right">
+                            <span class="results-sync-status" id="resultsSyncStatus" aria-live="polite">
+                                Not searched
+                            </span>
 
                             <div class="results-header-actions">
                             <button
@@ -532,16 +542,7 @@
                                 <span>Export</span>
                             </button>
                             </div>
-
-                            <div>
-                                <h2>Search Results</h2>
-                                <p id="resultCount">0 records found</p>
-                            </div>
                         </div>
-
-                        <span class="results-sync-status" id="resultsSyncStatus" aria-live="polite">
-                            Not searched
-                        </span>
 
                     </div>
 
