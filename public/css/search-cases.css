@@ -660,6 +660,18 @@ a {
     font-size: 17px;
 }
 
+.results-header-main {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.results-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .results-header p {
     display: inline-block;
 
@@ -1414,6 +1426,11 @@ tbody tr:hover {
     .results-header {
         align-items: flex-start;
 
+        gap: 10px;
+    }
+
+    .results-header-main {
+        flex-wrap: wrap;
         gap: 10px;
     }
 }

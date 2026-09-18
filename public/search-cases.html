@@ -506,34 +506,38 @@
 
                     <div class="results-header">
 
-                        <div>
-                            <h2>Search Results</h2>
-                            <p id="resultCount">0 records found</p>
+                        <div class="results-header-main">
+
+                            <div class="results-header-actions">
+                            <button
+                                type="button"
+                                class="refresh-button"
+                                id="refreshResultsButton"
+                                aria-label="Refresh search results"
+                                title="Refresh search results"
+                            >
+                                <svg class="ui-icon button-icon" aria-hidden="true">
+                                    <use href="#icon-refresh"></use>
+                                </svg>
+                            </button>
+
+                            <button
+                                type="button"
+                                class="export-button"
+                                id="exportButton"
+                            >
+                                <svg class="ui-icon button-icon" aria-hidden="true">
+                                    <use href="#icon-download"></use>
+                                </svg>
+                                <span>Export</span>
+                            </button>
+                            </div>
+
+                            <div>
+                                <h2>Search Results</h2>
+                                <p id="resultCount">0 records found</p>
+                            </div>
                         </div>
-
-
-                        <button
-                            type="button"
-                            class="export-button"
-                            id="exportButton"
-                        >
-                            <svg class="ui-icon button-icon" aria-hidden="true">
-                                <use href="#icon-download"></use>
-                            </svg>
-                            <span>Export</span>
-                        </button>
-
-                        <button
-                            type="button"
-                            class="refresh-button"
-                            id="refreshResultsButton"
-                            aria-label="Refresh search results"
-                            title="Refresh search results"
-                        >
-                            <svg class="ui-icon button-icon" aria-hidden="true">
-                                <use href="#icon-refresh"></use>
-                            </svg>
-                        </button>
 
                         <span class="results-sync-status" id="resultsSyncStatus" aria-live="polite">
                             Not searched
