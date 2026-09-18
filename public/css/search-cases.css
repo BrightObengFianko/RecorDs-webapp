@@ -1476,7 +1476,7 @@ body.sidebar-collapsed .content {
 
     #dateOfBirth {
         min-height: 44px;
-        padding: 10px 12px;
+        padding: 10px 12px 10px 48px;
         font-size: 16px;
     }
 
