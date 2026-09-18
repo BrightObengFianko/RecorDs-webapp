@@ -326,6 +326,12 @@ let hasActiveSearch = false;
 
 let refreshInFlight = false;
 
+let searchRequestInFlight = false;
+
+let automaticSearchTimer = null;
+
+const AUTOMATIC_SEARCH_DEBOUNCE_MS = 400;
+
 const SEARCH_REFRESH_INTERVAL_MS = 12000;
 
 let activeActionMenu = null;
@@ -363,6 +369,7 @@ if (dateOfBirthInput) {
     dateOfBirthInput.addEventListener("input", () => {
         dateOfBirthInput.value = formatDateWhileTyping(dateOfBirthInput.value);
         dateOfBirthInput.setCustomValidity("");
+        scheduleAutomaticSearch();
     });
 
     dateOfBirthInput.addEventListener("blur", () => {
@@ -1154,7 +1161,56 @@ function recordsHaveChanged(previousRecords, nextRecords) {
     return JSON.stringify(previousRecords) !== JSON.stringify(nextRecords);
 }
 
-async function searchCases({ silent = false } = {}) {
+function resetAutomaticSearchResults() {
+    allResults = [];
+    hasActiveSearch = false;
+    currentPage = 1;
+    setResultsSyncStatus("Not searched");
+
+    resultsBody.innerHTML = `
+        <tr>
+            <td colspan="11" class="empty">
+                Search for a case to see results.
+            </td>
+        </tr>
+    `;
+
+    resultCount.textContent = "0 records found";
+    showingInfo.textContent = "Showing 0 results";
+    pageInfo.textContent = "1";
+    previousPage.disabled = true;
+    nextPage.disabled = true;
+}
+
+function scheduleAutomaticSearch() {
+    window.clearTimeout(automaticSearchTimer);
+
+    const name = nameInput.value.trim();
+    const dateValue = dateOfBirthInput.value.trim();
+    const hasOtherCriteria = Boolean(
+        statusSelect.value ||
+        categorySelect.value ||
+        registrarSelect?.value ||
+        fromDateInput.value ||
+        toDateInput.value
+    );
+
+    if (!name && !dateValue && !hasOtherCriteria) {
+        resetAutomaticSearchResults();
+        return;
+    }
+
+    // Do not search while a date is incomplete or invalid.
+    if (dateValue && !parseDateInput(dateValue)) {
+        return;
+    }
+
+    automaticSearchTimer = window.setTimeout(() => {
+        searchCases({ automatic: true });
+    }, AUTOMATIC_SEARCH_DEBOUNCE_MS);
+}
+
+async function searchCases({ silent = false, automatic = false } = {}) {
 
     const name =
         nameInput.value
@@ -1210,6 +1266,10 @@ async function searchCases({ silent = false } = {}) {
     }
 
     if (dateOfBirthInputValue && !dateOfBirth) {
+        if (automatic) {
+            return;
+        }
+
         Notification.warning(
                 "Enter a valid Date of Birth / Death in DD-MM-YYYY format."
         );
@@ -1221,20 +1281,30 @@ async function searchCases({ silent = false } = {}) {
 
     closeActionMenus();
 
+    if (searchRequestInFlight) {
+        return;
+    }
+
+    searchRequestInFlight = true;
+
 
     // =====================================
     // SHOW LOADING
     // =====================================
 
-    if (!silent) {
-        resultsBody.innerHTML = `
+        if (!silent) {
+            resultsBody.innerHTML = `
             <tr>
                 <td colspan="11" class="loading">
                     Searching records...
                 </td>
             </tr>
-        `;
-    }
+            `;
+        }
+
+        if (automatic) {
+            setResultsSyncStatus("Searching...", "loading");
+        }
 
 
     try {
@@ -1489,6 +1559,8 @@ async function searchCases({ silent = false } = {}) {
         nextPage.disabled = true;
         setResultsSyncStatus("Unable to update", "offline");
 
+    } finally {
+        searchRequestInFlight = false;
     }
 
 }
@@ -2230,6 +2302,8 @@ if (nameInput) {
                 );
 
             }
+
+            scheduleAutomaticSearch();
 
         }
     );
