@@ -68,6 +68,7 @@ const smsAccountState = {
 const validDashboardRegistrars = [
     "ADMIN",
     "OFFICE",
+    "NEW OFFICE",
     "NEW MARKET",
     "POLYCLINIC"
 ];

@@ -3,6 +3,7 @@ const pool = require("../config/database");
 const DASHBOARD_REGISTRARS = [
     "ADMIN",
     "OFFICE",
+    "NEW OFFICE",
     "NEW MARKET",
     "POLYCLINIC"
 ];
@@ -860,6 +861,7 @@ const getDashboardSummary = async (req, res) => {
         const validRegistrarCondition = `LOWER(BTRIM(COALESCE(r.registrar, ''))) IN (
             'admin',
             'office',
+            'new office',
             'new market',
             'polyclinic'
         )`;
@@ -1009,6 +1011,7 @@ const getDashboardSummary = async (req, res) => {
                         CASE LOWER(BTRIM(r.registrar))
                             WHEN 'admin' THEN 'ADMIN'
                             WHEN 'office' THEN 'OFFICE'
+                            WHEN 'new office' THEN 'NEW OFFICE'
                             WHEN 'new market' THEN 'NEW MARKET'
                             WHEN 'polyclinic' THEN 'POLYCLINIC'
                         END AS label,
