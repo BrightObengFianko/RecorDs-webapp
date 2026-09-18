@@ -222,12 +222,111 @@ function dashboardBranchClause(user) {
     return {
         clause: `
             WHERE r.branch_id = $1
-              AND r.registration_date >= date_trunc('year', CURRENT_DATE)::date
-              AND r.registration_date < (date_trunc('year', CURRENT_DATE) + INTERVAL '1 year')::date
+              AND r.registration_date >= date_trunc(
+                  'year',
+                  (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date
+              )::date
+              AND r.registration_date < (
+                  date_trunc(
+                      'year',
+                      (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date
+                  ) + INTERVAL '1 year'
+              )::date
         `,
         values: [user.branch_id]
     };
 }
+
+const RECENT_RECORDS_PAGE_SIZE = 10;
+
+function normalizePage(value) {
+    const page = Number.parseInt(String(value || "1"), 10);
+    return Number.isInteger(page) && page > 0 ? page : 1;
+}
+
+async function queryRecentTodayRecords(user, requestedPage) {
+    const {
+        clause,
+        values
+    } = dashboardBranchClause(user);
+
+    // registration_date is a PostgreSQL TIMESTAMP without time zone. The
+    // application stores it as Ghana-local time, so compare against the
+    // current Accra calendar day rather than the database server's timezone.
+    const todayCondition = `
+        r.registration_date >= (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date
+        AND r.registration_date < (
+            (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date + INTERVAL '1 day'
+        )
+    `;
+    const todayClause = clause
+        ? `${clause} AND ${todayCondition}`
+        : `WHERE ${todayCondition}`;
+    const page = normalizePage(requestedPage);
+    const limitParameter = values.length + 1;
+    const offsetParameter = values.length + 2;
+    const offset = (page - 1) * RECENT_RECORDS_PAGE_SIZE;
+
+    const [countResult, recordsResult] = await Promise.all([
+        pool.query(
+            `
+                SELECT COUNT(*)::int AS total
+                FROM records r
+                ${todayClause}
+            `,
+            values
+        ),
+        pool.query(
+            `
+                ${recordSelectSql()}
+                ${todayClause}
+                ORDER BY r.registration_date DESC NULLS LAST, r.id DESC
+                LIMIT $${limitParameter}
+                OFFSET $${offsetParameter}
+            `,
+            [
+                ...values,
+                RECENT_RECORDS_PAGE_SIZE,
+                offset
+            ]
+        )
+    ]);
+
+    const total = Number(countResult.rows[0]?.total || 0);
+    const totalPages = Math.ceil(total / RECENT_RECORDS_PAGE_SIZE);
+
+    return {
+        records: recordsResult.rows || [],
+        pagination: {
+            page,
+            limit: RECENT_RECORDS_PAGE_SIZE,
+            total,
+            totalPages
+        }
+    };
+}
+
+const getRecentTodayRecords = async (req, res) => {
+    try {
+        const result = await queryRecentTodayRecords(
+            req.user,
+            req.query?.page
+        );
+
+        return res.json({
+            success: true,
+            records: result.records,
+            pagination: result.pagination
+        });
+    } catch (error) {
+        console.error("GET RECENT TODAY RECORDS ERROR:", error.message);
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load today's records."
+        });
+    }
+};
 
 function assertBranchAccess(user, record) {
     if (
@@ -724,12 +823,16 @@ const getDashboardSummary = async (req, res) => {
         const registrarPerformanceClause =
             `${overviewDateClause} AND ${validRegistrarCondition}`;
 
+        const recentToday = await queryRecentTodayRecords(
+            req.user,
+            req.query?.recentPage
+        );
+
         const normalizeStatusSql =
             "LOWER(REPLACE(REPLACE(COALESCE(r.status, ''), '_', ' '), '-', ' '))";
 
         const [
             statsResult,
-            recentResult,
             dailyResult,
             categoryResult,
             branchResult,
@@ -773,16 +876,6 @@ const getDashboardSummary = async (req, res) => {
                         )::int AS closed_cases
                     FROM records r
                     ${clause}
-                `,
-                values
-            ),
-
-            pool.query(
-                `
-                    ${recordSelectSql()}
-                    ${clause}
-                    ORDER BY r.registration_date DESC NULLS LAST, r.id DESC
-                    LIMIT 5
                 `,
                 values
             ),
@@ -1101,7 +1194,9 @@ const getDashboardSummary = async (req, res) => {
                 closedCases:
                     stats.closed_cases || 0,
                 recentRecords:
-                    recentResult.rows || [],
+                    recentToday.records,
+                recentRecordsPagination:
+                    recentToday.pagination,
                 dailyRecords:
                     dailyResult.rows || [],
                 categoryBreakdown:
@@ -2210,6 +2305,7 @@ module.exports = {
     getRecords,
     getProcessingRecords,
     getDashboardSummary,
+    getRecentTodayRecords,
     searchRecords,
     getRecordRegistrars,
     getSmsStatus,

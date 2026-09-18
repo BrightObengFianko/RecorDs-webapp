@@ -6,6 +6,7 @@ const {
     getRecords,
     getProcessingRecords,
     getDashboardSummary,
+    getRecentTodayRecords,
     getRecordRegistrars,
     getSmsStatus,
     searchRecords,
@@ -89,6 +90,11 @@ router.get(
 router.get(
     "/summary",
     getDashboardSummary
+);
+
+router.get(
+    "/recent-today",
+    getRecentTodayRecords
 );
 
 

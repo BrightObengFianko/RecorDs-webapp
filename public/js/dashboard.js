@@ -11,6 +11,7 @@ const readyRecordsElement = document.getElementById("readyRecords");
 const pendingRecordsElement = document.getElementById("pendingRecords");
 const smsSentElement = document.getElementById("smsSent");
 const recentRecordsBody = document.getElementById("recentRecords");
+const recentRecordsPagination = document.getElementById("recentRecordsPagination");
 const adminDashboardExtras = document.getElementById("adminDashboardExtras");
 const overviewChart = document.getElementById("overviewChart");
 const categoryChart = document.getElementById("categoryChart");
@@ -71,6 +72,12 @@ const validDashboardRegistrars = [
 ];
 
 const overviewCategories = new Set();
+
+const recentRecordsState = {
+    page: 1,
+    totalPages: 0,
+    loading: false
+};
 
 function readStoredUser() {
     try {
@@ -1153,7 +1160,72 @@ function renderAdminOverview(summary) {
     }
 }
 
-function renderRecentRecords(records) {
+function renderRecentPagination(pagination) {
+    if (!recentRecordsPagination) {
+        return;
+    }
+
+    const totalPages = Number(pagination?.totalPages || 0);
+    const page = Number(pagination?.page || 1);
+
+    recentRecordsState.page = page;
+    recentRecordsState.totalPages = totalPages;
+
+    if (totalPages <= 1) {
+        recentRecordsPagination.innerHTML = "";
+        recentRecordsPagination.hidden = true;
+        return;
+    }
+
+    const pages = [];
+    const addPage = value => {
+        if (!pages.includes(value)) {
+            pages.push(value);
+        }
+    };
+
+    addPage(1);
+    if (page > 3) {
+        pages.push("ellipsis-left");
+    }
+    for (let value = Math.max(2, page - 1); value <= Math.min(totalPages - 1, page + 1); value++) {
+        addPage(value);
+    }
+    if (page < totalPages - 2) {
+        pages.push("ellipsis-right");
+    }
+    addPage(totalPages);
+
+    recentRecordsPagination.hidden = false;
+    recentRecordsPagination.innerHTML = `
+        <button
+            type="button"
+            class="recent-page-button"
+            data-recent-page="${Math.max(1, page - 1)}"
+            ${page <= 1 || recentRecordsState.loading ? "disabled" : ""}
+        >Previous</button>
+        <div class="recent-page-numbers">
+            ${pages.map(value => value === "ellipsis-left" || value === "ellipsis-right"
+                ? `<span class="recent-page-ellipsis">...</span>`
+                : `<button type="button" class="recent-page-button ${value === page ? "is-active" : ""}" data-recent-page="${value}" ${recentRecordsState.loading ? "disabled" : ""} aria-current="${value === page ? "page" : "false"}">${value}</button>`
+            ).join("")}
+        </div>
+        <button
+            type="button"
+            class="recent-page-button"
+            data-recent-page="${Math.min(totalPages, page + 1)}"
+            ${page >= totalPages || recentRecordsState.loading ? "disabled" : ""}
+        >Next</button>
+    `;
+
+    recentRecordsPagination.querySelectorAll("[data-recent-page]").forEach(button => {
+        button.addEventListener("click", () => {
+            loadRecentRecordsPage(Number(button.dataset.recentPage));
+        });
+    });
+}
+
+function renderRecentRecords(records, pagination) {
     if (!recentRecordsBody) {
         return;
     }
@@ -1165,17 +1237,21 @@ function renderRecentRecords(records) {
                     colspan="8"
                     class="empty"
                 >
-                    No records found.
+                    No records registered today.
                 </td>
             </tr>
         `;
+
+        renderRecentPagination(pagination);
 
         return;
     }
 
     recentRecordsBody.innerHTML = "";
 
-    records.slice(0, 5).forEach((record, index) => {
+    const page = Number(pagination?.page || 1);
+
+    records.forEach((record, index) => {
         const row = document.createElement("tr");
         const status = formatStatusLabel(record.status);
         const statusClass = getStatusClass(record.status);
@@ -1188,7 +1264,7 @@ function renderRecentRecords(records) {
         const id = record.id || "";
 
         row.innerHTML = `
-            <td>${index + 1}</td>
+            <td>${((page - 1) * 10) + index + 1}</td>
             <td>
                 <span class="category-badge" style="--category-color:${window.RecordCategoryColors ? window.RecordCategoryColors.getColor(category) : "#6b5bff"}">
                     ${escapeHtml(category)}
@@ -1225,6 +1301,8 @@ function renderRecentRecords(records) {
 
         recentRecordsBody.appendChild(row);
     });
+
+    renderRecentPagination(pagination);
 }
 
 function setDashboardLoading(message) {
@@ -1241,13 +1319,63 @@ function setDashboardLoading(message) {
     `;
 }
 
+async function loadRecentRecordsPage(page) {
+    if (recentRecordsState.loading || !Number.isInteger(page) || page < 1) {
+        return;
+    }
+
+    recentRecordsState.loading = true;
+    renderRecentPagination({
+        page: recentRecordsState.page,
+        totalPages: recentRecordsState.totalPages
+    });
+
+    try {
+        const response = await fetch(
+            `/api/records/recent-today?page=${encodeURIComponent(page)}`,
+            {
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                }
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || "Unable to load today's records.");
+        }
+
+        const pagination = data.pagination || {};
+        const totalPages = Number(pagination.totalPages || 0);
+
+        if (totalPages > 0 && page > totalPages) {
+            recentRecordsState.loading = false;
+            await loadRecentRecordsPage(totalPages);
+            return;
+        }
+
+        renderRecentRecords(data.records || [], pagination);
+    } catch (error) {
+        console.error("RECENT RECORDS ERROR:", error);
+    } finally {
+        recentRecordsState.loading = false;
+        renderRecentPagination({
+            page: recentRecordsState.page,
+            totalPages: recentRecordsState.totalPages
+        });
+    }
+}
+
 async function loadDashboardSummary() {
     try {
         setDashboardLoading("Loading recent records...");
 
         const params = new URLSearchParams({
             period: overviewState.period,
-            range: overviewState.range
+            range: overviewState.range,
+            recentPage: String(recentRecordsState.page)
         });
 
         if (overviewState.registrar) {
@@ -1291,7 +1419,23 @@ async function loadDashboardSummary() {
 
         renderSummaryCounts(summary);
         renderAdminOverview(summary);
-        renderRecentRecords(recentRecords);
+
+        const recentPagination =
+            summary.recentRecordsPagination || {
+                page: recentRecordsState.page,
+                limit: 10,
+                total: recentRecords.length,
+                totalPages: recentRecords.length ? 1 : 0
+            };
+
+        if (
+            recentPagination.totalPages > 0 &&
+            recentPagination.page > recentPagination.totalPages
+        ) {
+            await loadRecentRecordsPage(recentPagination.totalPages);
+        } else {
+            renderRecentRecords(recentRecords, recentPagination);
+        }
     } catch (error) {
         console.error("DASHBOARD SUMMARY ERROR:", error);
 

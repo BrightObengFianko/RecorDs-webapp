@@ -142,6 +142,50 @@ a {
     padding: 30px;
 }
 
+.recent-records-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+    min-height: 32px;
+}
+
+.recent-page-numbers {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.recent-page-button {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 9px;
+    border: 1px solid var(--app-border);
+    border-radius: 6px;
+    background: var(--app-surface);
+    color: var(--app-text);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.recent-page-button:hover:not(:disabled),
+.recent-page-button.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-foreground);
+}
+
+.recent-page-button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+.recent-page-ellipsis {
+    color: var(--app-muted);
+    padding: 0 2px;
+}
+
 
 /* WELCOME */
 
@@ -1421,6 +1465,19 @@ th {
 }
 
 @media (max-width: 380px) {
+
+    .recent-records-pagination {
+        justify-content: center;
+        gap: 5px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+    }
+
+    .recent-page-button {
+        min-width: 30px;
+        padding-inline: 7px;
+        font-size: 11px;
+    }
 
     .content {
         padding: 12px;
