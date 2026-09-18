@@ -1403,9 +1403,28 @@ const searchRecords = async (req, res) => {
         }
 
         if (dob) {
-            query += `
-                AND r.date_of_birth::date = $${parameter}::date
-            `;
+            const normalizedCategory = String(category || "")
+                .trim()
+                .toLowerCase();
+            const isDeathCategory = normalizedCategory.includes("death");
+            const isBirthCategory = normalizedCategory.includes("birth");
+
+            if (isDeathCategory && !isBirthCategory) {
+                query += `
+                    AND r.date_of_death::date = $${parameter}::date
+                `;
+            } else if (isBirthCategory && !isDeathCategory) {
+                query += `
+                    AND r.date_of_birth::date = $${parameter}::date
+                `;
+            } else {
+                query += `
+                    AND (
+                        r.date_of_birth::date = $${parameter}::date
+                        OR r.date_of_death::date = $${parameter}::date
+                    )
+                `;
+            }
 
             values.push(dob);
             parameter++;

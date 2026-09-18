@@ -1207,7 +1207,7 @@ async function searchCases({ silent = false } = {}) {
 
     if (dateOfBirthInputValue && !dateOfBirth) {
         Notification.warning(
-            "Enter a valid Date of Birth in DD-MM-YYYY format."
+                "Enter a valid Date of Birth / Death in DD-MM-YYYY format."
         );
 
         dateOfBirthInput.focus();
