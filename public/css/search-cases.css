@@ -1500,7 +1500,30 @@ body.sidebar-collapsed .content {
     }
 
     .page-top-right {
-        gap: 6px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 8px;
+        align-items: stretch;
+    }
+
+    .search-sms-balance,
+    .search-sms-error {
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        overflow: hidden;
+    }
+
+    .search-sms-balance strong,
+    .search-sms-error strong {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .page-top-right .heading-action-button {
+        grid-column: 1 / -1;
+        width: 100%;
     }
 
     .content {
