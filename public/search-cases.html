@@ -24,7 +24,7 @@
         })();
     </script>
 
-    <link rel="stylesheet" href="css/search-cases.css?v=9b1c694">
+    <link rel="stylesheet" href="css/search-cases.css?v=035f1b0">
     <link rel="stylesheet" href="css/notification.css">
     <link rel="stylesheet" href="css/confirm-dialog.css">
     <link rel="stylesheet" href="css/sidebar.css">
@@ -429,17 +429,24 @@
 
                     <!-- FILTERS -->
 
-                    <div class="filters">
+                    <div class="filters" id="searchFilters">
 
-                        <div class="filter-title">
+                        <button
+                            type="button"
+                            class="filter-title"
+                            id="filtersToggle"
+                            aria-expanded="true"
+                            aria-controls="filterGrid"
+                        >
                             <svg class="ui-icon filter-icon" aria-hidden="true">
                                 <use href="#icon-filter"></use>
                             </svg>
                             <span>Filters</span>
-                        </div>
+                            <span class="filter-toggle-icon" aria-hidden="true">›</span>
+                        </button>
 
 
-                        <div class="filter-grid">
+                        <div class="filter-grid" id="filterGrid">
 
                             <div class="filter-field">
                                 <label for="status">Status</label>

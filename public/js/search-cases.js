@@ -27,6 +27,10 @@ const fromDateInput =
 
 const toDateInput =
     document.getElementById("toDate");
+const searchFilters =
+    document.getElementById("searchFilters");
+const filtersToggle =
+    document.getElementById("filtersToggle");
 
 const searchButton =
     document.getElementById("searchButton");
@@ -2253,6 +2257,30 @@ if (nameInput) {
 // =========================================
 // FILTERS
 // =========================================
+
+function setFiltersExpanded(expanded) {
+    if (!searchFilters || !filtersToggle) {
+        return;
+    }
+
+    searchFilters.classList.toggle("is-expanded", expanded);
+    filtersToggle.setAttribute("aria-expanded", String(expanded));
+}
+
+function syncMobileFilters() {
+    if (window.matchMedia("(max-width: 750px)").matches) {
+        setFiltersExpanded(false);
+    } else {
+        setFiltersExpanded(true);
+    }
+}
+
+filtersToggle?.addEventListener("click", () => {
+    setFiltersExpanded(!searchFilters.classList.contains("is-expanded"));
+});
+
+syncMobileFilters();
+window.matchMedia("(max-width: 750px)").addEventListener("change", syncMobileFilters);
 
 if (statusSelect) {
 
