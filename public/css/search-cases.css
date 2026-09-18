@@ -784,6 +784,10 @@ td {
     vertical-align: middle;
 }
 
+.phone-number-cell {
+    font-weight: 700;
+}
+
 tbody tr:hover {
     background: var(--app-surface-2);
 }

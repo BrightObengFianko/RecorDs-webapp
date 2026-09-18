@@ -1981,7 +1981,7 @@ function displayResults() {
                 </td>
 
 
-                <td>
+                <td class="phone-number-cell">
 
                     ${escapeHtml(
                         phone
