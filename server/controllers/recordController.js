@@ -244,6 +244,21 @@ function normalizePage(value) {
     return Number.isInteger(page) && page > 0 ? page : 1;
 }
 
+function sqlDateText(value) {
+    if (!value) {
+        return null;
+    }
+
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime())
+            ? null
+            : value.toISOString().slice(0, 10);
+    }
+
+    const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+    return match ? match[1] : null;
+}
+
 async function queryRecentTodayRecords(user, requestedPage) {
     const {
         clause,
@@ -253,39 +268,79 @@ async function queryRecentTodayRecords(user, requestedPage) {
     // registration_date is a PostgreSQL TIMESTAMP without time zone. The
     // application stores it as Ghana-local time, so compare against the
     // current Accra calendar day rather than the database server's timezone.
-    const todayCondition = `
-        r.registration_date >= (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date
-        AND r.registration_date < (
-            (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date + INTERVAL '1 day'
-        )
-    `;
-    const todayClause = clause
-        ? `${clause} AND ${todayCondition}`
-        : `WHERE ${todayCondition}`;
     const page = normalizePage(requestedPage);
-    const limitParameter = values.length + 1;
-    const offsetParameter = values.length + 2;
+
+    const selectedDateResult = await pool.query(
+        `
+            SELECT
+                (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date AS today,
+                COALESCE(
+                    MAX(r.registration_date::date) FILTER (
+                        WHERE r.registration_date::date =
+                            (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date
+                    ),
+                    MAX(r.registration_date::date) FILTER (
+                        WHERE r.registration_date::date <
+                            (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date
+                    )
+                ) AS selected_date
+            FROM records r
+            ${clause}
+        `,
+        values
+    );
+
+    const selectedDate = selectedDateResult.rows[0]?.selected_date;
+    const today = selectedDateResult.rows[0]?.today;
+    const selectedDateText = sqlDateText(selectedDate);
+    const todayText = sqlDateText(today);
+    const isToday = Boolean(selectedDateText && selectedDateText === todayText);
+
+    if (!selectedDateText) {
+        return {
+            records: [],
+            selectedDate: null,
+            isToday: false,
+            pagination: {
+                page: 1,
+                limit: RECENT_RECORDS_PAGE_SIZE,
+                total: 0,
+                totalPages: 0
+            }
+        };
+    }
+
+    const dateParameter = values.length + 1;
+    const limitParameter = values.length + 2;
+    const offsetParameter = values.length + 3;
     const offset = (page - 1) * RECENT_RECORDS_PAGE_SIZE;
+    const selectedDateClause = clause
+        ? `${clause} AND r.registration_date >= $${dateParameter}::date AND r.registration_date < ($${dateParameter}::date + INTERVAL '1 day')`
+        : `WHERE r.registration_date >= $${dateParameter}::date AND r.registration_date < ($${dateParameter}::date + INTERVAL '1 day')`;
+    const dateValues = [
+        ...values,
+        selectedDateText
+    ];
 
     const [countResult, recordsResult] = await Promise.all([
         pool.query(
             `
                 SELECT COUNT(*)::int AS total
                 FROM records r
-                ${todayClause}
+                ${selectedDateClause}
             `,
-            values
+            dateValues
         ),
         pool.query(
             `
                 ${recordSelectSql()}
-                ${todayClause}
+                ${selectedDateClause}
                 ORDER BY r.registration_date DESC NULLS LAST, r.id DESC
                 LIMIT $${limitParameter}
                 OFFSET $${offsetParameter}
             `,
             [
-                ...values,
+                ...dateValues,
                 RECENT_RECORDS_PAGE_SIZE,
                 offset
             ]
@@ -297,6 +352,8 @@ async function queryRecentTodayRecords(user, requestedPage) {
 
     return {
         records: recordsResult.rows || [],
+        selectedDate: selectedDateText,
+        isToday,
         pagination: {
             page,
             limit: RECENT_RECORDS_PAGE_SIZE,
@@ -316,6 +373,8 @@ const getRecentTodayRecords = async (req, res) => {
         return res.json({
             success: true,
             records: result.records,
+            selectedDate: result.selectedDate,
+            isToday: result.isToday,
             pagination: result.pagination
         });
     } catch (error) {
@@ -1195,6 +1254,10 @@ const getDashboardSummary = async (req, res) => {
                     stats.closed_cases || 0,
                 recentRecords:
                     recentToday.records,
+                recentRecordsDate:
+                    recentToday.selectedDate,
+                recentRecordsIsToday:
+                    recentToday.isToday,
                 recentRecordsPagination:
                     recentToday.pagination,
                 dailyRecords:

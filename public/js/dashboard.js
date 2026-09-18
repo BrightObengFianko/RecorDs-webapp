@@ -12,6 +12,7 @@ const pendingRecordsElement = document.getElementById("pendingRecords");
 const smsSentElement = document.getElementById("smsSent");
 const recentRecordsBody = document.getElementById("recentRecords");
 const recentRecordsPagination = document.getElementById("recentRecordsPagination");
+const recentRecordsCaption = document.getElementById("recentRecordsCaption");
 const adminDashboardExtras = document.getElementById("adminDashboardExtras");
 const overviewChart = document.getElementById("overviewChart");
 const categoryChart = document.getElementById("categoryChart");
@@ -1225,9 +1226,30 @@ function renderRecentPagination(pagination) {
     });
 }
 
-function renderRecentRecords(records, pagination) {
+function formatRecentSelectedDate(selectedDate) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(selectedDate || ""))) {
+        return "";
+    }
+
+    const [year, month, day] = String(selectedDate).split("-").map(Number);
+    return new Intl.DateTimeFormat("en-US", {
+        timeZone: "Africa/Accra",
+        month: "long",
+        day: "numeric",
+        year: "numeric"
+    }).format(new Date(Date.UTC(year, month - 1, day, 12)));
+}
+
+function renderRecentRecords(records, pagination, metadata = {}) {
     if (!recentRecordsBody) {
         return;
+    }
+
+    if (recentRecordsCaption) {
+        const selectedDateLabel = formatRecentSelectedDate(metadata.selectedDate);
+        recentRecordsCaption.textContent = selectedDateLabel
+            ? `${metadata.isToday ? "Today's Registrations" : "Latest Registrations"} - ${selectedDateLabel}`
+            : "No registrations available";
     }
 
     if (!Array.isArray(records) || !records.length) {
@@ -1356,7 +1378,14 @@ async function loadRecentRecordsPage(page) {
             return;
         }
 
-        renderRecentRecords(data.records || [], pagination);
+        renderRecentRecords(
+            data.records || [],
+            pagination,
+            {
+                selectedDate: data.selectedDate,
+                isToday: data.isToday
+            }
+        );
     } catch (error) {
         console.error("RECENT RECORDS ERROR:", error);
     } finally {
@@ -1434,7 +1463,14 @@ async function loadDashboardSummary() {
         ) {
             await loadRecentRecordsPage(recentPagination.totalPages);
         } else {
-            renderRecentRecords(recentRecords, recentPagination);
+            renderRecentRecords(
+                recentRecords,
+                recentPagination,
+                {
+                    selectedDate: summary.recentRecordsDate,
+                    isToday: summary.recentRecordsIsToday
+                }
+            );
         }
     } catch (error) {
         console.error("DASHBOARD SUMMARY ERROR:", error);
