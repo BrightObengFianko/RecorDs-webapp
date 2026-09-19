@@ -8,6 +8,10 @@
  *   node migrateGoogleSheets.js --dry-run
  *   node migrateGoogleSheets.js
  *   node migrateGoogleSheets.js --status-only
+ *   node migrateGoogleSheets.js --repair-registrar --dry-run
+ *   node migrateGoogleSheets.js --repair-registrar
+ *   node migrateGoogleSheets.js --repair-status-registrar --dry-run
+ *   node migrateGoogleSheets.js --repair-status-registrar
  *
  * Requirements:
  * - .env with database credentials
@@ -61,6 +65,12 @@ const STATUS_ONLY =
 const DRY_RUN =
     process.argv.includes("--dry-run");
 
+const REPAIR_STATUS_REGISTRAR =
+    process.argv.includes("--repair-status-registrar");
+
+const REPAIR_REGISTRAR_ONLY =
+    process.argv.includes("--repair-registrar");
+
 // =====================================================
 // COLUMN POSITIONS
 // 0-based indexes
@@ -71,8 +81,8 @@ const COLUMNS = {
     NAME: 1,          // B = Name
     DOB: 2,           // C = Date of Birth
     PHONE: 3,         // D = Phone
-    STATUS: 4,        // E = STATUS  <-- YOUR NEW STATUS COLUMN
-    REGISTRAR: 5,     // F = Registrar
+    REGISTRAR: 4,     // E = Registrar
+    STATUS: 5,        // F = Status
     SMS_SENT: 7,      // H = SMS Sent
     SMS_DATE: 8,      // I = SMS Date
 };
@@ -767,7 +777,7 @@ async function findMatchingRecord(
 ) {
     const result = await client.query(
         `
-        SELECT id
+        SELECT id, registrar
         FROM records
         WHERE category = $1
           AND name = $2
@@ -844,6 +854,42 @@ async function updateRecordStatus(
             normalizeStatusValue(status),
             recordId,
         ]
+    );
+}
+
+async function updateRecordStatusAndRegistrar(
+    client,
+    recordId,
+    status,
+    registrar
+) {
+    return client.query(
+        `
+        UPDATE records
+        SET status = $1,
+            registrar = COALESCE(NULLIF($2, ''), registrar),
+            updated_at = NOW()
+        WHERE id = $3
+        RETURNING id
+        `,
+        [
+            normalizeStatusValue(status),
+            registrar,
+            recordId,
+        ]
+    );
+}
+
+async function updateRecordRegistrar(client, recordId, registrar) {
+    return client.query(
+        `
+        UPDATE records
+        SET registrar = $1,
+            updated_at = NOW()
+        WHERE id = $2
+        RETURNING id
+        `,
+        [registrar, recordId]
     );
 }
 
@@ -1067,6 +1113,141 @@ async function processSheet(
                     );
 
                     stats.skipped++;
+
+                    await client.query(
+                        "RELEASE SAVEPOINT row_import"
+                    );
+
+                    continue;
+                }
+
+                // ======================================
+                // REPAIR REGISTRAR ONLY
+                // ======================================
+
+                if (REPAIR_REGISTRAR_ONLY) {
+                    if (!registrar) {
+                        console.log(
+                            `    ⚠️ Skipped: "${name}" - no registrar found in Google Sheet column E`
+                        );
+
+                        stats.skipped++;
+
+                        await client.query(
+                            "RELEASE SAVEPOINT row_import"
+                        );
+
+                        continue;
+                    }
+
+                    const matchedRecord =
+                        await findMatchingRecord(
+                            client,
+                            category,
+                            name,
+                            normalizedDateOfBirth,
+                            dateOfDeath,
+                            phoneNumber,
+                            registrationDate,
+                            branchId
+                        );
+
+                    if (!matchedRecord) {
+                        console.log(
+                            `    ⚠️ Skipped: "${name}" - matching record not found`
+                        );
+
+                        stats.notFound++;
+
+                        await client.query(
+                            "RELEASE SAVEPOINT row_import"
+                        );
+
+                        continue;
+                    }
+
+                    const currentRegistrar = matchedRecord.registrar || "";
+
+                    console.log(
+                        `    🔎 Verify: "${name}" -> records.registrar: "${currentRegistrar || "(empty)"}" => "${registrar}"`
+                    );
+
+                    if (!DRY_RUN) {
+                        await updateRecordRegistrar(
+                            client,
+                            matchedRecord.id,
+                            registrar
+                        );
+                    }
+
+                    stats.updated++;
+
+                    await client.query(
+                        "RELEASE SAVEPOINT row_import"
+                    );
+
+                    continue;
+                }
+
+                // ======================================
+                // REPAIR SWAPPED STATUS/REGISTRAR FIELDS
+                // ======================================
+
+                if (REPAIR_STATUS_REGISTRAR) {
+                    if (!rawStatus) {
+                        console.log(
+                            `    ⚠️ Skipped: "${name}" - no status found`
+                        );
+
+                        stats.skipped++;
+
+                        await client.query(
+                            "RELEASE SAVEPOINT row_import"
+                        );
+
+                        continue;
+                    }
+
+                    const matchedRecord =
+                        await findMatchingRecord(
+                            client,
+                            category,
+                            name,
+                            normalizedDateOfBirth,
+                            dateOfDeath,
+                            phoneNumber,
+                            registrationDate,
+                            branchId
+                        );
+
+                    if (!matchedRecord) {
+                        console.log(
+                            `    ⚠️ Skipped: "${name}" - matching record not found`
+                        );
+
+                        stats.notFound++;
+
+                        await client.query(
+                            "RELEASE SAVEPOINT row_import"
+                        );
+
+                        continue;
+                    }
+
+                    if (!DRY_RUN) {
+                        await updateRecordStatusAndRegistrar(
+                            client,
+                            matchedRecord.id,
+                            status,
+                            registrar
+                        );
+                    }
+
+                    stats.updated++;
+
+                    console.log(
+                        `    ✅ Repaired: "${name}" -> status ${normalizeStatusValue(status)}, registrar ${registrar || "unchanged"}`
+                    );
 
                     await client.query(
                         "RELEASE SAVEPOINT row_import"
@@ -1402,12 +1583,24 @@ async function migrate() {
     );
 
     console.log(
-        `📌 STATUS COLUMN: E`
+        `📌 REGISTRAR COLUMN: E`
     );
 
     console.log(
-        `📌 STATUS INDEX: ${COLUMNS.STATUS}`
+        `📌 STATUS COLUMN: F`
     );
+
+    if (REPAIR_STATUS_REGISTRAR) {
+        console.log(
+            "📌 REPAIR MODE: existing status and registrar fields will be corrected"
+        );
+    }
+
+    if (REPAIR_REGISTRAR_ONLY) {
+        console.log(
+            "📌 REGISTRAR-ONLY MODE: Google Sheet column E -> records.registrar; status will not be changed"
+        );
+    }
 
     console.log(
         "============================================================"
