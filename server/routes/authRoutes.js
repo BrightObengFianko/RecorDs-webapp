@@ -7,6 +7,8 @@ const {
     login,
     logout,
     getMe,
+    getAccountSettings,
+    updateAccountSettings,
     createStaffAccount
 } = require("../controllers/authController");
 
@@ -28,6 +30,8 @@ router.post("/logout", authenticateToken, auditMutatingRequest, logout);
 
 // Protected endpoints - auth required
 router.get("/me", authenticateToken, getMe);
+router.get("/settings", authenticateToken, getAccountSettings);
+router.patch("/settings", authenticateToken, updateAccountSettings);
 router.get("/account-access", authenticateToken, requireRole("admin", "staff", "branch_staff"), (req, res) => {
     res.json({
         success: true,

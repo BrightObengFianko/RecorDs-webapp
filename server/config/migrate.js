@@ -110,6 +110,14 @@ async function ensureDatabaseSchema() {
 
     await pool.query(
         `
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS account_settings JSONB NOT NULL
+            DEFAULT '{}'::jsonb
+        `
+    );
+
+    await pool.query(
+        `
             UPDATE users
             SET auth_token_version = COALESCE(auth_token_version, 0)
             WHERE auth_token_version IS NULL

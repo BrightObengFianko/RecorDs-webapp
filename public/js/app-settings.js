@@ -164,6 +164,36 @@
         }
     }
 
+    function mergeSettings(base, serverSettings) {
+        if (!serverSettings || typeof serverSettings !== "object") {
+            return base;
+        }
+
+        if (serverSettings.profile && typeof serverSettings.profile === "object") {
+            base.profile = {
+                ...base.profile,
+                ...serverSettings.profile
+            };
+        }
+
+        if (serverSettings.appearance && typeof serverSettings.appearance === "object") {
+            base.appearance = {
+                ...base.appearance,
+                ...serverSettings.appearance
+            };
+        }
+
+        return base;
+    }
+
+    function cacheSettings(settings) {
+        try {
+            localStorage.setItem(getSettingsStorageKey(), JSON.stringify(settings));
+        } catch (error) {
+            console.error("Unable to cache account settings:", error);
+        }
+    }
+
     function readStoredUser() {
         try {
             const raw = localStorage.getItem(USER_KEY);
@@ -490,6 +520,10 @@
                 branch: user.branch || "",
                 branch_id: user.branch_id || ""
             }));
+
+            if (user.accountSettings) {
+                cacheSettings(mergeSettings(readSettings(), user.accountSettings));
+            }
 
             const currentRole = normalizeRole(user.role);
             const allowedPages = getAllowedPages(currentRole);

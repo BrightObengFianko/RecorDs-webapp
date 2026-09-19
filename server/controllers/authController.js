@@ -47,6 +47,84 @@ function normalizeAccountStatus(status) {
     return "approved";
 }
 
+const DEFAULT_ACCOUNT_SETTINGS = {
+    profile: {
+        fullName: "",
+        emailAddress: "",
+        phoneNumber: "",
+        username: "",
+        bio: "",
+        avatar: ""
+    },
+    appearance: {
+        theme: "light",
+        accent: "#5b4df5",
+        compactMode: false,
+        showAvatars: true,
+        showStatusColors: true,
+        enableAnimations: true
+    }
+};
+
+function normalizeAccountSettings(rawSettings, user) {
+    const raw = rawSettings && typeof rawSettings === "object"
+        ? rawSettings
+        : {};
+    const rawProfile = raw.profile && typeof raw.profile === "object"
+        ? raw.profile
+        : {};
+    const rawAppearance = raw.appearance && typeof raw.appearance === "object"
+        ? raw.appearance
+        : {};
+    const cleanText = (value, fallback, maxLength) => {
+        const text = String(value ?? fallback ?? "").trim();
+        return text.length <= maxLength ? text : text.slice(0, maxLength);
+    };
+    const accent = String(rawAppearance.accent || "").trim();
+    const avatar = String(rawProfile.avatar || "");
+
+    return {
+        profile: {
+            fullName: cleanText(rawProfile.fullName, user?.name, 100),
+            emailAddress: cleanText(rawProfile.emailAddress, user?.email, 150).toLowerCase(),
+            phoneNumber: cleanText(rawProfile.phoneNumber, "", 30),
+            username: cleanText(rawProfile.username, "", 100),
+            bio: cleanText(rawProfile.bio, "", 500),
+            avatar: /^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(avatar)
+                && avatar.length <= 750000
+                ? avatar
+                : ""
+        },
+        appearance: {
+            theme: ["light", "dark", "system"].includes(rawAppearance.theme)
+                ? rawAppearance.theme
+                : DEFAULT_ACCOUNT_SETTINGS.appearance.theme,
+            accent: /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(accent)
+                ? accent.toLowerCase()
+                : DEFAULT_ACCOUNT_SETTINGS.appearance.accent,
+            compactMode: Boolean(rawAppearance.compactMode),
+            showAvatars: rawAppearance.showAvatars !== false,
+            showStatusColors: rawAppearance.showStatusColors !== false,
+            enableAnimations: rawAppearance.enableAnimations !== false
+        }
+    };
+}
+
+function attachAccountSettings(user) {
+    if (!user) {
+        return user;
+    }
+
+    const accountSettings = normalizeAccountSettings(user.account_settings, user);
+    delete user.account_settings;
+    user.accountSettings = accountSettings;
+    user.avatar = accountSettings.profile.avatar;
+    user.phoneNumber = accountSettings.profile.phoneNumber;
+    user.username = accountSettings.profile.username;
+    user.bio = accountSettings.profile.bio;
+    return user;
+}
+
 async function fetchUserByEmail(email) {
     const result = await pool.query(
         `
@@ -87,6 +165,7 @@ async function fetchUserById(id) {
                 UPPER(COALESCE(u.account_status, 'APPROVED')) AS account_status,
                 COALESCE(u.auth_token_version, 0) AS auth_token_version,
                 COALESCE(b.name, '') AS branch,
+                u.account_settings,
                 u.created_at
             FROM users u
             LEFT JOIN branches b
@@ -97,7 +176,7 @@ async function fetchUserById(id) {
         [id]
     );
 
-    return result.rows[0] || null;
+    return attachAccountSettings(result.rows[0] || null);
 }
 
 // =========================
@@ -527,10 +606,103 @@ const getMe = async (req, res) => {
     }
 };
 
+const getAccountSettings = async (req, res) => {
+    try {
+        const user = await fetchUserById(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        return res.json({ success: true, settings: user.accountSettings });
+    } catch (error) {
+        console.error("Get account settings error:", error);
+        return res.status(500).json({ message: "Unable to load account settings." });
+    }
+};
+
+const updateAccountSettings = async (req, res) => {
+    const client = await pool.connect();
+
+    try {
+        const existing = await fetchUserById(req.user.id);
+
+        if (!existing) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        const requested = req.body && typeof req.body === "object"
+            ? req.body
+            : {};
+        const requestedProfile = requested.profile && typeof requested.profile === "object"
+            ? requested.profile
+            : {};
+        const fullName = String(requestedProfile.fullName ?? existing.name).trim();
+        const email = String(requestedProfile.emailAddress ?? existing.email).trim().toLowerCase();
+
+        if (!fullName || boundedText(fullName, 100) === null) {
+            return res.status(400).json({ message: "Full name is required and must be 100 characters or fewer." });
+        }
+
+        if (!email || boundedText(email, 150) === null || !/^\S+@\S+\.\S+$/.test(email)) {
+            return res.status(400).json({ message: "A valid email address is required." });
+        }
+
+        const merged = {
+            ...existing.accountSettings,
+            ...requested,
+            profile: {
+                ...existing.accountSettings.profile,
+                ...requestedProfile,
+                fullName,
+                emailAddress: email
+            }
+        };
+        const settings = normalizeAccountSettings(merged, {
+            ...existing,
+            name: fullName,
+            email
+        });
+
+        await client.query("BEGIN");
+        const result = await client.query(
+            `
+                UPDATE users
+                SET name = $1,
+                    email = $2,
+                    account_settings = $3::jsonb
+                WHERE id = $4
+                RETURNING id, name, email
+            `,
+            [fullName, email, JSON.stringify(settings), req.user.id]
+        );
+        await client.query("COMMIT");
+
+        return res.json({ success: true, settings });
+    } catch (error) {
+        try {
+            await client.query("ROLLBACK");
+        } catch (rollbackError) {
+            console.error("Account settings rollback error:", rollbackError);
+        }
+
+        if (error.code === "23505") {
+            return res.status(409).json({ message: "That email address is already in use." });
+        }
+
+        console.error("Update account settings error:", error);
+        return res.status(500).json({ message: "Unable to save account settings." });
+    } finally {
+        client.release();
+    }
+};
+
 module.exports = {
     signup,
     login,
     logout,
     getMe,
+    getAccountSettings,
+    updateAccountSettings,
     createStaffAccount
 };

@@ -47,7 +47,7 @@ app.use(cors(
         : { origin: false }
 ));
 
-app.use(express.json({ limit: "100kb" }));
+app.use(express.json({ limit: "1mb" }));
 
 
 // =========================================

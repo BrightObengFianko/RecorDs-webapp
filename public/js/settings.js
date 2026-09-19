@@ -206,6 +206,41 @@ function saveSettings() {
     localStorage.setItem(getSettingsStorageKey(), JSON.stringify(state));
 }
 
+function mergeServerSettings(serverSettings) {
+    if (!serverSettings || typeof serverSettings !== "object") {
+        return;
+    }
+
+    state = mergeSettings(cloneDefaults(), serverSettings);
+    saveSettings();
+}
+
+async function persistSettingsToServer() {
+    const response = await fetch("/api/auth/settings", {
+        method: "PATCH",
+        headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(state)
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (response.status === 401 || response.status === 403) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "index.html";
+        throw new Error("Your session has expired.");
+    }
+
+    if (!response.ok || !data.settings) {
+        throw new Error(data.message || "Unable to save account settings.");
+    }
+
+    mergeServerSettings(data.settings);
+    return state;
+}
+
 function normalizeHex(value) {
     const raw = String(value || "").trim();
 
@@ -505,7 +540,11 @@ async function loadAuthenticatedUser() {
             currentUserId = user.id || currentUserId;
             currentUserEmail = user.email || currentUserEmail;
             currentUserRole = user.role || currentUserRole;
-            fillMissingProfileData(user);
+            if (user.accountSettings) {
+                mergeServerSettings(user.accountSettings);
+            } else {
+                fillMissingProfileData(user);
+            }
             persistUserCache();
             updateAvatarViews();
             updateFormFields();
@@ -515,7 +554,8 @@ async function loadAuthenticatedUser() {
     }
 }
 
-function saveProfileFromForm() {
+async function saveProfileFromForm() {
+    const previousState = JSON.parse(JSON.stringify(state));
     state.profile.fullName = fullNameInput.value.trim();
     state.profile.emailAddress = emailAddressInput.value.trim();
     state.profile.phoneNumber = phoneNumberInput.value.trim();
@@ -540,9 +580,20 @@ function saveProfileFromForm() {
     updateAvatarViews();
     persistUserCache();
     saveSettings();
+
+    try {
+        await persistSettingsToServer();
+        showToast("Profile saved.");
+    } catch (error) {
+        state = previousState;
+        renderSettings();
+        persistUserCache();
+        showToast(error.message || "Unable to save profile.");
+    }
 }
 
-function saveAppearanceFromForm() {
+async function saveAppearanceFromForm() {
+    const previousState = JSON.parse(JSON.stringify(state));
     const selectedTheme = document.querySelector('input[name="theme"]:checked');
     const selectedAccent = document.querySelector('input[name="accent"]:checked');
 
@@ -559,6 +610,16 @@ function saveAppearanceFromForm() {
     syncThemeCards();
     syncAccentSwatches();
     saveSettings();
+
+    try {
+        await persistSettingsToServer();
+        showToast("Appearance saved.");
+    } catch (error) {
+        state = previousState;
+        renderSettings();
+        persistUserCache();
+        showToast(error.message || "Unable to save appearance.");
+    }
 }
 
 function optimizeProfilePhoto(file) {
@@ -617,15 +678,21 @@ async function handlePhotoSelection(file) {
         return;
     }
 
+    const previousState = JSON.parse(JSON.stringify(state));
+
     try {
         state.profile.avatar = await optimizeProfilePhoto(file);
         updateAvatarViews();
         persistUserCache();
         saveSettings();
+        await persistSettingsToServer();
         showToast("Photo updated.");
     } catch (error) {
+        state = previousState;
+        renderSettings();
+        persistUserCache();
         console.error("Unable to save profile photo:", error);
-        showToast("Unable to save the selected photo.");
+        showToast(error.message || "Unable to save the selected photo.");
     }
 }
 
@@ -647,17 +714,25 @@ function bindEvents() {
     }
 
     if (profileForm) {
-        profileForm.addEventListener("submit", event => {
+        profileForm.addEventListener("submit", async event => {
             event.preventDefault();
-            saveProfileFromForm();
-            showToast("Profile saved.");
+            profileSaveButton.disabled = true;
+            try {
+                await saveProfileFromForm();
+            } finally {
+                profileSaveButton.disabled = false;
+            }
         });
     }
 
     if (appearanceSaveButton) {
-        appearanceSaveButton.addEventListener("click", () => {
-            saveAppearanceFromForm();
-            showToast("Appearance saved.");
+        appearanceSaveButton.addEventListener("click", async () => {
+            appearanceSaveButton.disabled = true;
+            try {
+                await saveAppearanceFromForm();
+            } finally {
+                appearanceSaveButton.disabled = false;
+            }
         });
     }
 
