@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v5";
+const CACHE_NAME = "records-shell-v6";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -79,7 +79,8 @@ self.addEventListener("fetch", event => {
                     caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
                     return response;
                 })
-                .catch(() => caches.match(request).then(cached => cached || caches.match("/index.html")))
+                .catch(() => caches.match(request, { ignoreSearch: true })
+                    .then(cached => cached || caches.match("/index.html")))
         );
         return;
     }

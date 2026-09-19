@@ -514,13 +514,33 @@
         }
 
         try {
-            const response = await fetch("/api/auth/me", {
-                method: "GET",
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json"
-                }
-            });
+            const cachedUser = readStoredUser();
+            if (navigator.onLine === false && cachedUser && cachedUser.role) {
+                document.body.dataset.connectionState = "offline";
+                return true;
+            }
+
+            const authController = typeof AbortController === "function"
+                ? new AbortController()
+                : null;
+            const authTimeout = window.setTimeout(
+                () => authController?.abort(),
+                4000
+            );
+            let response;
+
+            try {
+                response = await fetch("/api/auth/me", {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json"
+                    },
+                    signal: authController?.signal
+                });
+            } finally {
+                window.clearTimeout(authTimeout);
+            }
 
             if (response.status === 401 || response.status === 403) {
                 localStorage.removeItem("token");
@@ -532,8 +552,6 @@
             const data = await response.json().catch(() => ({}));
 
             if (!response.ok || !data || !data.user || !data.user.role) {
-                const cachedUser = readStoredUser();
-
                 if (response.status >= 500 && cachedUser && cachedUser.role) {
                     document.body.dataset.connectionState = "offline";
                     return true;
