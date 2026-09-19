@@ -866,8 +866,16 @@ const getDashboardSummary = async (req, res) => {
             'polyclinic'
         )`;
 
-        const registrarPerformanceClause =
-            `${overviewDateClause} AND ${validRegistrarCondition}`;
+        const registrarPerformanceDateCondition = period === "daily"
+            ? `COALESCE(
+                r.registration_date::date,
+                r.created_at::date
+            ) = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date`
+            : overviewDateCondition;
+
+        const registrarPerformanceClause = summaryClause
+            ? `${summaryClause} AND ${registrarPerformanceDateCondition} AND ${validRegistrarCondition}`
+            : `WHERE ${registrarPerformanceDateCondition} AND ${validRegistrarCondition}`;
 
         const recentToday = await queryRecentTodayRecords(
             req.user,

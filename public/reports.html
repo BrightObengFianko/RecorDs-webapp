@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="css/sidebar.css">
     <link rel="stylesheet" href="css/notification.css">
     <link rel="stylesheet" href="css/reports.css">
+    <link rel="stylesheet" href="css/mobile-form-controls.css">
 </head>
 <body class="reports-page">
     <svg aria-hidden="true" focusable="false" class="reports-icon-sprite">
@@ -73,6 +74,11 @@
                             <thead><tr><th>User</th><th>Role</th><th>Activity</th><th>Date</th><th>Time</th></tr></thead>
                             <tbody id="activityBody"><tr><td colspan="5" class="reports-empty">Loading activity...</td></tr></tbody>
                         </table>
+                    </div>
+                    <div class="activity-pagination">
+                        <button id="previousActivityPage" type="button" disabled>Previous</button>
+                        <span id="activityPageInfo">Page 1</span>
+                        <button id="nextActivityPage" type="button" disabled>Next</button>
                     </div>
                 </section>
             </section>

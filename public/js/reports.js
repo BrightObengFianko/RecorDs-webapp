@@ -1,6 +1,11 @@
 const reportsToken = localStorage.getItem("token");
 const activityBody = document.getElementById("activityBody");
 const activitySummary = document.getElementById("activitySummary");
+const previousActivityPage = document.getElementById("previousActivityPage");
+const nextActivityPage = document.getElementById("nextActivityPage");
+const activityPageInfo = document.getElementById("activityPageInfo");
+const ACTIVITY_PAGE_SIZE = 10;
+let activityPage = 1;
 
 function escapeReportHtml(value) {
     return String(value ?? "")
@@ -41,7 +46,23 @@ function activityClass(type) {
     return String(type || "").toLowerCase().replace("_", "-");
 }
 
-async function loadActivity() {
+function updateActivityPagination(total) {
+    const totalPages = Math.max(1, Math.ceil(total / ACTIVITY_PAGE_SIZE));
+
+    if (activityPage > totalPages) {
+        activityPage = totalPages;
+    }
+
+    activityPageInfo.textContent = `Page ${activityPage} of ${totalPages}`;
+    previousActivityPage.disabled = activityPage <= 1;
+    nextActivityPage.disabled = activityPage >= totalPages;
+}
+
+async function loadActivity({ resetPage = false } = {}) {
+    if (resetPage) {
+        activityPage = 1;
+    }
+
     const params = new URLSearchParams();
     const date = document.getElementById("dateFilter").value;
     const user = document.getElementById("userFilter").value.trim();
@@ -52,6 +73,8 @@ async function loadActivity() {
     if (user) params.set("user", user);
     if (role) params.set("role", role);
     if (activityType) params.set("activity_type", activityType);
+    params.set("page", String(activityPage));
+    params.set("limit", String(ACTIVITY_PAGE_SIZE));
 
     activityBody.innerHTML = '<tr><td colspan="5" class="reports-empty">Loading activity...</td></tr>';
 
@@ -71,7 +94,9 @@ async function loadActivity() {
         if (!response.ok) throw new Error(data.message || "Unable to load authentication activity.");
 
         const activities = Array.isArray(data.activities) ? data.activities : [];
-        activitySummary.textContent = `${activities.length} activit${activities.length === 1 ? "y" : "ies"} found`;
+        const total = Number(data.pagination?.total) || 0;
+        activitySummary.textContent = `${total} activit${total === 1 ? "y" : "ies"} found`;
+        updateActivityPagination(total);
 
         if (!activities.length) {
             activityBody.innerHTML = '<tr><td colspan="5" class="reports-empty">No authentication activity found.</td></tr>';
@@ -96,14 +121,26 @@ async function loadActivity() {
 if (!reportsToken) {
     window.location.replace("index.html");
 } else {
-    document.getElementById("filterButton").addEventListener("click", loadActivity);
-    document.getElementById("refreshButton").addEventListener("click", loadActivity);
+    document.getElementById("filterButton").addEventListener("click", () => loadActivity({ resetPage: true }));
+    document.getElementById("refreshButton").addEventListener("click", () => loadActivity());
     document.getElementById("resetButton").addEventListener("click", () => {
         document.getElementById("dateFilter").value = "";
         document.getElementById("userFilter").value = "";
         document.getElementById("roleFilter").value = "";
         document.getElementById("activityFilter").value = "";
-        loadActivity();
+        loadActivity({ resetPage: true });
     });
-    loadActivity();
+    previousActivityPage.addEventListener("click", () => {
+        if (activityPage > 1) {
+            activityPage -= 1;
+            loadActivity();
+        }
+    });
+    nextActivityPage.addEventListener("click", () => {
+        if (!nextActivityPage.disabled) {
+            activityPage += 1;
+            loadActivity();
+        }
+    });
+    loadActivity({ resetPage: true });
 }

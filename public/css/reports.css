@@ -201,6 +201,37 @@ body.reports-page {
     text-align: center !important;
 }
 
+.activity-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--app-border);
+}
+
+.activity-pagination button {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--app-border);
+    border-radius: 7px;
+    background: var(--app-surface);
+    color: var(--app-text);
+    cursor: pointer;
+}
+
+.activity-pagination button:disabled {
+    cursor: not-allowed;
+    opacity: .45;
+}
+
+.activity-pagination span {
+    min-width: 90px;
+    color: var(--app-muted);
+    font-size: 12px;
+    text-align: center;
+}
+
 @media (max-width: 1000px) {
     .reports-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

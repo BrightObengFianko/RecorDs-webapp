@@ -247,6 +247,13 @@ a {
     color: var(--accent-foreground);
 }
 
+.avatar.logo-avatar,
+.top-avatar.logo-avatar {
+    color: transparent;
+    background-color: #ffffff;
+    background-clip: padding-box;
+}
+
 .user-info {
     min-width: 0;
 }
@@ -626,4 +633,16 @@ body.sidebar-collapsed .logout span {
         overflow: hidden;
     }
 
+}
+
+@media (max-width: 480px) {
+    .sidebar-toggle {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+    }
+
+    .sidebar-toggle::before {
+        font-size: 25px;
+    }
 }

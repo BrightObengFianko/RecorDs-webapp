@@ -13,6 +13,7 @@ const smsSentElement = document.getElementById("smsSent");
 const recentRecordsBody = document.getElementById("recentRecords");
 const recentRecordsPagination = document.getElementById("recentRecordsPagination");
 const recentRecordsCaption = document.getElementById("recentRecordsCaption");
+const recentRecordsRefreshButton = document.getElementById("recentRecordsRefresh");
 const adminDashboardExtras = document.getElementById("adminDashboardExtras");
 const overviewChart = document.getElementById("overviewChart");
 const categoryChart = document.getElementById("categoryChart");
@@ -81,7 +82,6 @@ const recentRecordsState = {
     loading: false
 };
 
-const DASHBOARD_REFRESH_INTERVAL_MS = 15000;
 let dashboardSummaryLoading = false;
 
 function readStoredUser() {
@@ -538,10 +538,11 @@ function renderRegistrarPerformance(summary) {
         null
     );
 
-    const maxCount = Math.max(
-        1,
-        ...rows.map(row => row.count)
+    const totalCases = rows.reduce(
+        (total, row) => total + row.count,
+        0
     );
+    const barScale = Math.max(10, totalCases);
 
     registrarPerformanceList.innerHTML = rows.map(row => `
         <div class="registrar-performance-row">
@@ -550,7 +551,7 @@ function renderRegistrarPerformance(summary) {
                 <span>${formatNumber(row.count)} cases</span>
             </div>
             <div class="registrar-performance-bar" aria-hidden="true">
-                <span style="width:${(row.count / maxCount) * 100}%"></span>
+                <span style="width:${Math.min(100, (row.count / barScale) * 100)}%"></span>
             </div>
         </div>
     `).join("");
@@ -1536,6 +1537,22 @@ overviewYearFilter?.addEventListener("change", () => {
     loadDashboardSummary();
 });
 
+recentRecordsRefreshButton?.addEventListener("click", async () => {
+    if (dashboardSummaryLoading) {
+        return;
+    }
+
+    recentRecordsRefreshButton.disabled = true;
+    recentRecordsRefreshButton.classList.add("is-refreshing");
+
+    try {
+        await loadDashboardSummary();
+    } finally {
+        recentRecordsRefreshButton.disabled = false;
+        recentRecordsRefreshButton.classList.remove("is-refreshing");
+    }
+});
+
 // Get logged-in user
 
 async function loadDashboard() {
@@ -1600,19 +1617,3 @@ document
 
 loadDashboard();
 loadOverviewRegistrars();
-
-document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) {
-        loadDashboardSummary();
-    }
-});
-
-window.addEventListener("focus", () => {
-    loadDashboardSummary();
-});
-
-window.setInterval(() => {
-    if (!document.hidden) {
-        loadDashboardSummary();
-    }
-}, DASHBOARD_REFRESH_INTERVAL_MS);

@@ -1,9 +1,12 @@
 /**
- * Google Sheets -> PostgreSQL Status Sync
+ * Google Sheets -> PostgreSQL incremental migration/status sync
  *
- * Syncs status from TWO Google Spreadsheets into PostgreSQL.
+ * Imports missing records from TWO Google Spreadsheets into PostgreSQL, or
+ * updates statuses when --status-only is supplied.
  *
  * Usage:
+ *   node migrateGoogleSheets.js --dry-run
+ *   node migrateGoogleSheets.js
  *   node migrateGoogleSheets.js --status-only
  *
  * Requirements:
@@ -55,6 +58,9 @@ const RESOLVED_SERVICE_ACCOUNT_PATH =
 const STATUS_ONLY =
     process.argv.includes("--status-only");
 
+const DRY_RUN =
+    process.argv.includes("--dry-run");
+
 // =====================================================
 // COLUMN POSITIONS
 // 0-based indexes
@@ -90,13 +96,26 @@ const DEFAULT_SHEET_TABS = [
 // DATABASE
 // =====================================================
 
+const databaseUrl = String(process.env.DATABASE_URL || "").trim();
+const sslEnabled = String(process.env.DB_SSL || "").toLowerCase() === "true";
+
 const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: parseInt(process.env.DB_PORT, 10),
+    ...(databaseUrl
+        ? { connectionString: databaseUrl }
+        : {
+            user: process.env.DB_USER,
+            host: process.env.DB_HOST,
+            database: process.env.DB_NAME,
+            password: process.env.DB_PASSWORD,
+            port: parseInt(process.env.DB_PORT || "5432", 10),
+        }),
     connectionTimeoutMillis: 5000,
+    ssl: sslEnabled
+        ? {
+            rejectUnauthorized:
+                process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false",
+        }
+        : undefined,
 });
 
 // =====================================================
@@ -661,40 +680,146 @@ async function getSpreadsheetTabs(
 // FIND MATCHING RECORD
 // =====================================================
 
+function normalizeKeyText(value) {
+    return String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+}
+
+function datePart(value) {
+    if (!value) {
+        return null;
+    }
+
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime())
+            ? null
+            : value.toISOString().slice(0, 10);
+    }
+
+    const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+    return match ? match[1] : null;
+}
+
+function recordKey({
+    category,
+    name,
+    dateOfBirth,
+    dateOfDeath,
+    phoneNumber,
+    registrationDate,
+    branchId,
+}) {
+    return JSON.stringify([
+        normalizeKeyText(category),
+        normalizeKeyText(name),
+        dateOfBirth || null,
+        dateOfDeath || null,
+        phoneNumber || null,
+        datePart(registrationDate),
+        Number(branchId),
+    ]);
+}
+
+async function loadExistingRecords(client, category, branchId) {
+    const result = await client.query(
+        `
+        SELECT id, category, name, date_of_birth, date_of_death,
+               phone_number, registration_date, branch_id
+        FROM records
+        WHERE category = $1
+          AND branch_id = $2
+        `,
+        [category, branchId]
+    );
+
+    const recordsByKey = new Map();
+
+    for (const record of result.rows) {
+        const key = recordKey({
+            category: record.category,
+            name: record.name,
+            dateOfBirth: datePart(record.date_of_birth),
+            dateOfDeath: datePart(record.date_of_death),
+            phoneNumber: record.phone_number,
+            registrationDate: record.registration_date,
+            branchId: record.branch_id,
+        });
+
+        if (!recordsByKey.has(key)) {
+            recordsByKey.set(key, record);
+        }
+    }
+
+    return recordsByKey;
+}
+
 async function findMatchingRecord(
     client,
     category,
     name,
     dateOfBirth,
+    dateOfDeath,
     phoneNumber,
     registrationDate,
     branchId
 ) {
-
-    const result =
-        await client.query(
-            `
-            SELECT id
-            FROM records
-            WHERE category = $1
-              AND name = $2
-              AND date_of_birth IS NOT DISTINCT FROM $3
-              AND phone_number IS NOT DISTINCT FROM $4
-              AND registration_date IS NOT DISTINCT FROM $5
-              AND branch_id = $6
-            LIMIT 1
-            `,
-            [
-                category,
-                name,
-                dateOfBirth,
-                phoneNumber,
-                registrationDate,
-                branchId,
-            ]
-        );
+    const result = await client.query(
+        `
+        SELECT id
+        FROM records
+        WHERE category = $1
+          AND name = $2
+          AND date_of_birth IS NOT DISTINCT FROM $3
+          AND date_of_death IS NOT DISTINCT FROM $4
+          AND phone_number IS NOT DISTINCT FROM $5
+          AND registration_date::date IS NOT DISTINCT FROM $6::date
+          AND branch_id = $7
+        LIMIT 1
+        `,
+        [
+            category,
+            name,
+            dateOfBirth,
+            dateOfDeath,
+            phoneNumber,
+            registrationDate,
+            branchId,
+        ]
+    );
 
     return result.rows[0] || null;
+}
+
+async function insertRecord(client, record) {
+    const result = await client.query(
+        `
+        INSERT INTO records (
+            category, name, date_of_birth, date_of_death,
+            phone_number, registration_date, status, registrar,
+            sms_sent, sms_date, branch_id, notes
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        RETURNING id
+        `,
+        [
+            record.category,
+            record.name,
+            record.dateOfBirth,
+            record.dateOfDeath,
+            record.phoneNumber,
+            record.registrationDate,
+            record.status,
+            record.registrar,
+            record.smsSent,
+            record.smsDate,
+            record.branchId,
+            null,
+        ]
+    );
+
+    return result.rows[0];
 }
 
 // =====================================================
@@ -733,7 +858,8 @@ async function processSheet(
     spreadsheetName,
     sheetName,
     category,
-    branchId
+    branchId,
+    sourceKeys
 ) {
 
     console.log("");
@@ -760,6 +886,9 @@ async function processSheet(
 
             return {
                 read: 0,
+                inserted: 0,
+                existingSkipped: 0,
+                sourceDuplicateSkipped: 0,
                 updated: 0,
                 skipped: 0,
                 notFound: 0,
@@ -771,11 +900,21 @@ async function processSheet(
 
         const stats = {
             read: 0,
+            inserted: 0,
+            existingSkipped: 0,
+            sourceDuplicateSkipped: 0,
             updated: 0,
             skipped: 0,
             notFound: 0,
             errors: 0,
         };
+
+        const existingRecords =
+            await loadExistingRecords(
+                client,
+                category,
+                branchId
+            );
 
         for (
             let i = 0;
@@ -842,6 +981,19 @@ async function processSheet(
                           )
                         : null;
 
+                const isDeathCategory =
+                    normalizeKeyText(category) === "death";
+
+                const dateOfDeath =
+                    isDeathCategory
+                        ? dateOfBirth
+                        : null;
+
+                const normalizedDateOfBirth =
+                    isDeathCategory
+                        ? null
+                        : dateOfBirth;
+
                 const phoneNumber =
                     row[COLUMNS.PHONE]
                         ? cleanPhoneNumber(
@@ -865,7 +1017,44 @@ async function processSheet(
                         : "";
 
                 const status =
-                    rawStatus || "Pending";
+                    normalizeStatusValue(rawStatus);
+
+                const registrar =
+                    row[COLUMNS.REGISTRAR]
+                        ? String(row[COLUMNS.REGISTRAR]).trim()
+                        : null;
+
+                const smsSent =
+                    row[COLUMNS.SMS_SENT] === undefined ||
+                    String(row[COLUMNS.SMS_SENT]).trim() === ""
+                        ? null
+                        : String(
+                              normalizeSmsSentValue(
+                                  row[COLUMNS.SMS_SENT]
+                              )
+                          );
+
+                const smsDate =
+                    row[COLUMNS.SMS_DATE]
+                        ? parseTimestamp(row[COLUMNS.SMS_DATE])
+                        : null;
+
+                const sourceRecord = {
+                    category,
+                    name,
+                    dateOfBirth: normalizedDateOfBirth,
+                    dateOfDeath,
+                    phoneNumber,
+                    registrationDate,
+                    status,
+                    registrar,
+                    smsSent,
+                    smsDate,
+                    branchId,
+                };
+
+                const duplicateKey =
+                    recordKey(sourceRecord);
 
                 // ======================================
                 // VALIDATION
@@ -912,7 +1101,8 @@ async function processSheet(
                             client,
                             category,
                             name,
-                            dateOfBirth,
+                            normalizedDateOfBirth,
+                            dateOfDeath,
                             phoneNumber,
                             registrationDate,
                             branchId
@@ -951,6 +1141,43 @@ async function processSheet(
 
                     continue;
                 }
+
+                if (sourceKeys.has(duplicateKey)) {
+                    stats.sourceDuplicateSkipped++;
+
+                    await client.query(
+                        "RELEASE SAVEPOINT row_import"
+                    );
+
+                    continue;
+                }
+
+                sourceKeys.add(duplicateKey);
+
+                if (existingRecords.has(duplicateKey)) {
+                    stats.existingSkipped++;
+
+                    await client.query(
+                        "RELEASE SAVEPOINT row_import"
+                    );
+
+                    continue;
+                }
+
+                if (!DRY_RUN) {
+                    const inserted =
+                        await insertRecord(
+                            client,
+                            sourceRecord
+                        );
+
+                    existingRecords.set(
+                        duplicateKey,
+                        inserted
+                    );
+                }
+
+                stats.inserted++;
 
                 await client.query(
                     "RELEASE SAVEPOINT row_import"
@@ -996,6 +1223,9 @@ async function processSheet(
 
         return {
             read: 0,
+            inserted: 0,
+            existingSkipped: 0,
+            sourceDuplicateSkipped: 0,
             updated: 0,
             skipped: 0,
             notFound: 0,
@@ -1011,7 +1241,8 @@ async function processSheet(
 async function processSpreadsheet(
     client,
     sheets,
-    spreadsheet
+    spreadsheet,
+    sourceKeys
 ) {
 
     console.log("");
@@ -1046,6 +1277,9 @@ async function processSpreadsheet(
 
     const totals = {
         read: 0,
+        inserted: 0,
+        existingSkipped: 0,
+        sourceDuplicateSkipped: 0,
         updated: 0,
         skipped: 0,
         notFound: 0,
@@ -1068,14 +1302,18 @@ async function processSpreadsheet(
                     spreadsheet.name,
                     sheetTab,
                     sheetTab,
-                    branchId
+                    branchId,
+                    sourceKeys
                 );
 
             await client.query(
-                "COMMIT"
+                DRY_RUN ? "ROLLBACK" : "COMMIT"
             );
 
             totals.read += stats.read;
+            totals.inserted += stats.inserted;
+            totals.existingSkipped += stats.existingSkipped;
+            totals.sourceDuplicateSkipped += stats.sourceDuplicateSkipped;
             totals.updated += stats.updated;
             totals.skipped += stats.skipped;
             totals.notFound += stats.notFound;
@@ -1111,6 +1349,18 @@ async function processSpreadsheet(
 
     console.log(
         `   Read:       ${totals.read}`
+    );
+
+    console.log(
+        `   Inserted:   ${totals.inserted}`
+    );
+
+    console.log(
+        `   Existing:   ${totals.existingSkipped}`
+    );
+
+    console.log(
+        `   Source dup: ${totals.sourceDuplicateSkipped}`
     );
 
     console.log(
@@ -1163,7 +1413,7 @@ async function migrate() {
         "============================================================"
     );
 
-    if (!STATUS_ONLY) {
+    if (false) {
 
         console.log("");
         console.log(
@@ -1215,10 +1465,14 @@ async function migrate() {
             "🗄️ Preparing database schema..."
         );
 
-        await ensureDatabaseSchema();
+        if (!DRY_RUN) {
+            await ensureDatabaseSchema();
+        }
 
         console.log(
-            "✅ Database schema ready."
+            DRY_RUN
+                ? "🧪 Dry run: database schema was not changed."
+                : "✅ Database schema ready."
         );
 
         // ==========================================
@@ -1258,6 +1512,9 @@ async function migrate() {
 
         const allStats = {
             read: 0,
+            inserted: 0,
+            existingSkipped: 0,
+            sourceDuplicateSkipped: 0,
             updated: 0,
             skipped: 0,
             notFound: 0,
@@ -1268,6 +1525,8 @@ async function migrate() {
         // PROCESS BOTH GOOGLE SHEETS
         // ==========================================
 
+        const sourceKeys = new Set();
+
         for (
             const spreadsheet
             of GOOGLE_SHEET_IDS
@@ -1277,11 +1536,21 @@ async function migrate() {
                 await processSpreadsheet(
                     client,
                     sheets,
-                    spreadsheet
+                    spreadsheet,
+                    sourceKeys
                 );
 
             allStats.read +=
                 stats.read;
+
+            allStats.inserted +=
+                stats.inserted;
+
+            allStats.existingSkipped +=
+                stats.existingSkipped;
+
+            allStats.sourceDuplicateSkipped +=
+                stats.sourceDuplicateSkipped;
 
             allStats.updated +=
                 stats.updated;
@@ -1306,7 +1575,9 @@ async function migrate() {
         );
 
         console.log(
-            "📊 FINAL STATUS SYNC SUMMARY"
+            STATUS_ONLY
+                ? "📊 FINAL STATUS SYNC SUMMARY"
+                : "📊 FINAL INCREMENTAL MIGRATION SUMMARY"
         );
 
         console.log(
@@ -1319,6 +1590,18 @@ async function migrate() {
 
         console.log(
             `Total records read:      ${allStats.read}`
+        );
+
+        console.log(
+            `Inserted:                ${allStats.inserted}`
+        );
+
+        console.log(
+            `Existing skipped:        ${allStats.existingSkipped}`
+        );
+
+        console.log(
+            `Source duplicates:       ${allStats.sourceDuplicateSkipped}`
         );
 
         console.log(
@@ -1344,13 +1627,15 @@ async function migrate() {
         if (allStats.errors === 0) {
 
             console.log(
-                "✅ STATUS SYNC COMPLETED SUCCESSFULLY!"
+                STATUS_ONLY
+                    ? "✅ STATUS SYNC COMPLETED SUCCESSFULLY!"
+                    : "✅ INCREMENTAL MIGRATION COMPLETED SUCCESSFULLY!"
             );
 
         } else {
 
             console.log(
-                `⚠️ STATUS SYNC COMPLETED WITH ${allStats.errors} ERROR(S).`
+                `⚠️ OPERATION COMPLETED WITH ${allStats.errors} ERROR(S).`
             );
         }
 

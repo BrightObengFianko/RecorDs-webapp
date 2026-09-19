@@ -329,6 +329,50 @@ a {
     font-weight: bold;
 }
 
+.recent-records-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.recent-records-refresh {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: var(--app-surface);
+    color: var(--app-text);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.recent-records-refresh:hover:not(:disabled) {
+    background: var(--app-surface-2);
+}
+
+.recent-records-refresh:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.recent-records-refresh.is-refreshing {
+    animation: recent-records-refresh-spin 700ms linear infinite;
+}
+
+@keyframes recent-records-refresh-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .recent-records-refresh.is-refreshing {
+        animation: none;
+    }
+}
+
 
 /* TABLE */
 

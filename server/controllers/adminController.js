@@ -161,6 +161,15 @@ async function listAuthActivity(req, res) {
             activity_type: activityType
         } = req.query;
 
+        const requestedPage = Number.parseInt(req.query.page || "1", 10);
+        const requestedLimit = Number.parseInt(req.query.limit || "10", 10);
+        const page = Number.isInteger(requestedPage) && requestedPage > 0
+            ? requestedPage
+            : 1;
+        const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
+            ? Math.min(requestedLimit, 50)
+            : 10;
+
         const conditions = [];
         const values = [];
 
@@ -229,6 +238,14 @@ async function listAuthActivity(req, res) {
             ? `WHERE ${conditions.join(" AND ")}`
             : "";
 
+        const countResult = await pool.query(
+            `SELECT COUNT(*)::int AS total FROM auth_activity_logs ${whereClause}`,
+            values
+        );
+
+        const offset = (page - 1) * limit;
+        const queryValues = [...values, limit, offset];
+
         const result = await pool.query(
             `
                 SELECT
@@ -242,14 +259,20 @@ async function listAuthActivity(req, res) {
                 FROM auth_activity_logs
                 ${whereClause}
                 ORDER BY occurred_at DESC, id DESC
-                LIMIT 1000
+                LIMIT $${queryValues.length - 1}
+                OFFSET $${queryValues.length}
             `,
-            values
+            queryValues
         );
 
         return res.json({
             success: true,
-            activities: result.rows
+            activities: result.rows,
+            pagination: {
+                page,
+                limit,
+                total: countResult.rows[0]?.total || 0
+            }
         });
     } catch (error) {
         console.error("LIST AUTH ACTIVITY ERROR:", error);

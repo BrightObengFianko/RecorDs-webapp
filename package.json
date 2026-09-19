@@ -10,6 +10,7 @@
     "create-admin": "node scripts/bootstrap-admin.js",
     "sync:users": "node scripts/sync-users-to-online.js",
     "test": "echo \"Error: no test specified\" && exit 1",
+    "migrate": "node migrateGoogleSheets.js",
     "migrate:sheets": "node migrateGoogleSheets.js",
     "backup:db": "node scripts/backup-postgres.js",
     "start:local": "powershell -NoProfile -Command \"$env:ENV_FILE='.env.local'; node server.js\"",

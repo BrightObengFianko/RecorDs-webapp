@@ -751,6 +751,7 @@
             : "";
 
         if (safeAvatar) {
+            element.classList.remove("logo-avatar");
             element.classList.add("has-photo");
             element.style.backgroundImage = `url("${safeAvatar}")`;
             element.style.backgroundSize = "cover";
@@ -761,12 +762,13 @@
             return;
         }
 
+        element.classList.add("logo-avatar");
         element.classList.remove("has-photo");
-        element.style.backgroundImage = "";
-        element.style.backgroundSize = "";
-        element.style.backgroundPosition = "";
-        element.style.backgroundRepeat = "";
-        element.style.backgroundColor = "";
+        element.style.backgroundImage = 'url("/assets/records-logo.jpeg")';
+        element.style.backgroundSize = "135% auto";
+        element.style.backgroundPosition = "center 18%";
+        element.style.backgroundRepeat = "no-repeat";
+        element.style.backgroundColor = "#ffffff";
         element.textContent = getInitial(profile.name);
     }
 
