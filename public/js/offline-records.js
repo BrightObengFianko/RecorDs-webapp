@@ -1,10 +1,15 @@
 (function () {
     const DB_NAME = "recor_ds_offline_records";
-    const DB_VERSION = 1;
+    const DB_VERSION = 2;
     const STORE_NAME = "pending_records";
     const PENDING_STATUS = "PENDING_SYNC";
+    const FAILED_STATUS = "SYNC_FAILED";
+    const SYNCING_STATUS = "SYNCING";
+    const MAX_RETRY_DELAY_MS = 5 * 60 * 1000;
 
     let dbPromise = null;
+    let syncPromise = null;
+    let statusElement = null;
 
     function isIndexedDbSupported() {
         return typeof indexedDB !== "undefined";
@@ -88,6 +93,17 @@
                             unique: false
                         }
                     );
+                }
+
+                const store = event.target.transaction.objectStore(STORE_NAME);
+                if (!store.indexNames.contains("status")) {
+                    store.createIndex("status", "status", { unique: false });
+                }
+                if (!store.indexNames.contains("ownerKey")) {
+                    store.createIndex("ownerKey", "ownerKey", { unique: false });
+                }
+                if (!store.indexNames.contains("createdAt")) {
+                    store.createIndex("createdAt", "createdAt", { unique: false });
                 }
             };
 
@@ -251,12 +267,33 @@
         return records.filter(
             record =>
                 record &&
-                record.status === PENDING_STATUS &&
+                [PENDING_STATUS, FAILED_STATUS, SYNCING_STATUS].includes(record.status) &&
                 (
                     !normalizedOwnerKey ||
                     record.ownerKey === normalizedOwnerKey
                 )
         ).length;
+    }
+
+    async function getQueueStats(ownerKey) {
+        const normalizedOwnerKey = String(ownerKey || getCurrentUserKey()).trim().toLowerCase();
+        const records = (await getAllRecords()).filter(record =>
+            record && (!normalizedOwnerKey || record.ownerKey === normalizedOwnerKey)
+        );
+
+        return {
+            waiting: records.filter(record => record.status === PENDING_STATUS).length,
+            syncing: records.filter(record => record.status === SYNCING_STATUS).length,
+            failed: records.filter(record => record.status === FAILED_STATUS).length,
+            total: records.length
+        };
+    }
+
+    async function getPendingRecords(ownerKey) {
+        const normalizedOwnerKey = String(ownerKey || getCurrentUserKey()).trim().toLowerCase();
+        return (await getAllRecords())
+            .filter(record => record && record.payload && (!normalizedOwnerKey || record.ownerKey === normalizedOwnerKey))
+            .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
     }
 
     async function queueRecord(recordData) {
@@ -278,6 +315,7 @@
 
         const ownerKey =
             getCurrentUserKey();
+        const storedUser = JSON.parse(localStorage.getItem("user") || "null");
 
         const existing =
             await getRecord(uuid);
@@ -297,7 +335,11 @@
             createdAt,
             updatedAt: new Date().toISOString(),
             attempts: existing?.attempts || 0,
-            lastError: null
+            lastError: null,
+            lastAttemptAt: null,
+            nextRetryAt: null,
+            userId: storedUser?.id || "",
+            branchId: storedUser?.branch_id || ""
         };
 
         await saveRecord(entry);
@@ -306,6 +348,20 @@
     }
 
     async function syncPendingRecords(options = {}) {
+        if (syncPromise) {
+            return syncPromise;
+        }
+
+        syncPromise = syncPendingRecordsInternal(options);
+
+        try {
+            return await syncPromise;
+        } finally {
+            syncPromise = null;
+        }
+    }
+
+    async function syncPendingRecordsInternal(options = {}) {
         if (
             typeof navigator !== "undefined" &&
             navigator.onLine === false
@@ -343,21 +399,14 @@
             };
         }
 
+        const now = Date.now();
         const records =
-            (await getAllRecords())
+            (await getPendingRecords(ownerKey))
                 .filter(
                     record =>
                         record &&
-                        record.status === PENDING_STATUS &&
-                        (
-                            !ownerKey ||
-                            record.ownerKey === ownerKey
-                        )
-                )
-                .sort(
-                    (left, right) =>
-                        new Date(left.createdAt).getTime() -
-                        new Date(right.createdAt).getTime()
+                        (record.status === PENDING_STATUS || record.status === FAILED_STATUS || record.status === SYNCING_STATUS) &&
+                        (options.force === true || !record.nextRetryAt || new Date(record.nextRetryAt).getTime() <= now)
                 );
 
         let syncedCount = 0;
@@ -366,6 +415,13 @@
         for (const entry of records) {
 
             try {
+
+                await saveRecord({
+                    ...entry,
+                    status: SYNCING_STATUS,
+                    lastAttemptAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                });
 
                 const response =
                     await fetch(
@@ -396,6 +452,12 @@
                     response.status === 401 ||
                     response.status === 403
                 ) {
+                    await saveRecord({
+                        ...entry,
+                        status: PENDING_STATUS,
+                        lastError: "Authentication required.",
+                        updatedAt: new Date().toISOString()
+                    });
                     return {
                         online: true,
                         syncedCount,
@@ -412,10 +474,18 @@
                 ) {
                     failedCount++;
 
+                    const attempts = (entry.attempts || 0) + 1;
+                    const retryDelay = Math.min(
+                        MAX_RETRY_DELAY_MS,
+                        5000 * (2 ** Math.min(attempts - 1, 6))
+                    );
+
                     await saveRecord({
                         ...entry,
-                        attempts: (entry.attempts || 0) + 1,
+                        status: FAILED_STATUS,
+                        attempts,
                         updatedAt: new Date().toISOString(),
+                        nextRetryAt: new Date(Date.now() + retryDelay).toISOString(),
                         lastError:
                             data?.message ||
                             `HTTP ${response.status}`
@@ -431,8 +501,13 @@
 
                 await saveRecord({
                     ...entry,
+                    status: FAILED_STATUS,
                     attempts: (entry.attempts || 0) + 1,
                     updatedAt: new Date().toISOString(),
+                    nextRetryAt: new Date(Date.now() + Math.min(
+                        MAX_RETRY_DELAY_MS,
+                        5000 * (2 ** Math.min((entry.attempts || 0), 6))
+                    )).toISOString(),
                     lastError:
                         error?.message ||
                         "Network error"
@@ -469,13 +544,89 @@
         }
     }
 
-    async function syncForCurrentUser() {
+    function updateOfflineBanners(message) {
+        document.querySelectorAll("#offlineStatusBanner").forEach(banner => {
+            banner.textContent = message;
+            banner.hidden = false;
+        });
+    }
+
+    function ensureStatusElement() {
+        if (statusElement || !document.body) return statusElement;
+
+        statusElement = document.createElement("aside");
+        statusElement.className = "offline-sync-indicator";
+        statusElement.setAttribute("aria-live", "polite");
+        statusElement.innerHTML = `
+            <span class="offline-sync-copy"></span>
+            <button type="button" class="offline-sync-button">Sync Now</button>
+        `;
+        document.body.appendChild(statusElement);
+        statusElement.querySelector("button").addEventListener("click", async () => {
+            const button = statusElement.querySelector("button");
+            button.disabled = true;
+            try {
+                await syncForCurrentUser({ force: true });
+            } finally {
+                button.disabled = false;
+                await refreshStatusIndicator();
+            }
+        });
+        return statusElement;
+    }
+
+    async function refreshStatusIndicator() {
+        const element = ensureStatusElement();
+        if (!element) return;
+
+        const stats = await getQueueStats();
+        const copy = element.querySelector(".offline-sync-copy");
+        const isOnline = typeof navigator === "undefined" || navigator.onLine !== false;
+
+        if (!isOnline) {
+            updateOfflineBanners("Offline - Records will be saved and synced when internet returns.");
+            copy.textContent = stats.waiting || stats.failed
+                ? `Offline - ${stats.waiting + stats.failed} record${stats.waiting + stats.failed === 1 ? "" : "s"} waiting to sync`
+                : "Offline - Records will sync when connection returns";
+            element.dataset.state = "offline";
+        } else if (stats.failed) {
+            updateOfflineBanners(`${stats.failed} offline record${stats.failed === 1 ? "" : "s"} need attention.`);
+            copy.textContent = `${stats.failed} record${stats.failed === 1 ? "" : "s"} need attention`;
+            element.dataset.state = "failed";
+        } else if (stats.waiting) {
+            updateOfflineBanners(`${stats.waiting} offline record${stats.waiting === 1 ? "" : "s"} waiting to sync.`);
+            copy.textContent = `${stats.waiting} record${stats.waiting === 1 ? "" : "s"} waiting to sync`;
+            element.dataset.state = "waiting";
+        } else {
+            document.querySelectorAll("#offlineStatusBanner").forEach(banner => {
+                banner.hidden = true;
+            });
+            const lastSync = localStorage.getItem("recordOfflineLastSync");
+            const lastSyncText = lastSync
+                ? ` - Last sync ${new Date(lastSync).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                : "";
+            copy.textContent = `Online${lastSyncText}`;
+            element.dataset.state = "online";
+        }
+    }
+
+    async function syncForCurrentUser(options = {}) {
+        ensureStatusElement();
+        const before = await getQueueStats();
+        if (before.waiting || before.failed) {
+            const copy = statusElement?.querySelector(".offline-sync-copy");
+            if (copy) copy.textContent = `Syncing ${before.waiting + before.failed} records...`;
+            if (statusElement) statusElement.dataset.state = "syncing";
+        }
+
         const result = await syncPendingRecords({
             token: localStorage.getItem("token") || "",
-            ownerKey: getCurrentUserKey()
+            ownerKey: getCurrentUserKey(),
+            force: options.force === true
         });
 
         if (result.syncedCount > 0) {
+            localStorage.setItem("recordOfflineLastSync", new Date().toISOString());
             showSyncMessage(
                 `${result.syncedCount} offline record${result.syncedCount === 1 ? "" : "s"} synced successfully.`,
                 "success"
@@ -489,10 +640,13 @@
             );
         }
 
+        await refreshStatusIndicator();
+
         return result;
     }
 
     window.addEventListener("online", () => {
+        updateOfflineBanners("Online - syncing pending records...");
         showSyncMessage(
             "You are back online. Syncing pending records...",
             "success"
@@ -504,6 +658,7 @@
     });
 
     window.addEventListener("offline", () => {
+        updateOfflineBanners("Offline - Records will be saved and synced when internet returns.");
         showSyncMessage(
             "You are Offline - Records will be saved and synced when internet returns.",
             "warning"
@@ -516,12 +671,29 @@
         });
     }
 
+    window.setInterval(() => {
+        if (typeof document !== "undefined" && document.visibilityState === "visible") {
+            syncForCurrentUser().catch(() => {});
+        }
+    }, 30000);
+
+    window.addEventListener("focus", () => {
+        syncForCurrentUser().catch(() => {});
+    });
+
+    window.setTimeout(() => {
+        ensureStatusElement();
+        refreshStatusIndicator().catch(() => {});
+    }, 0);
+
     window.RecordOfflineQueue = {
         isSupported: isIndexedDbSupported,
         getCurrentUserKey,
         queueRecord,
         syncPendingRecords,
         syncForCurrentUser,
-        countPendingRecords
+        countPendingRecords,
+        getQueueStats,
+        getPendingRecords
     };
 })();

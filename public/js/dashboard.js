@@ -1288,6 +1288,9 @@ function renderRecentRecords(records, pagination, metadata = {}) {
         const registrar = record.registrar || "-";
         const name = record.name || "-";
         const id = record.id || "";
+        const viewAction = record.is_offline
+            ? `<span class="record-status status-pending">Pending Sync</span>`
+            : `<a class="table-action-link" href="case-details.html?id=${encodeURIComponent(id)}">View</a>`;
 
         row.innerHTML = `
             <td>${((page - 1) * 10) + index + 1}</td>
@@ -1312,12 +1315,7 @@ function renderRecentRecords(records, pagination, metadata = {}) {
             </td>
             <td>${escapeHtml(registrar)}</td>
             <td>
-                <a
-                    class="table-action-link"
-                    href="case-details.html?id=${encodeURIComponent(id)}"
-                >
-                    View
-                </a>
+                ${viewAction}
             </td>
         `;
 
@@ -1484,7 +1482,36 @@ async function loadDashboardSummary() {
         renderSummaryCounts({});
         renderAdminOverview({});
 
-        if (recentRecordsBody) {
+        let showedOfflineRecords = false;
+
+        if (window.RecordOfflineQueue && typeof window.RecordOfflineQueue.getPendingRecords === "function") {
+            try {
+                const pendingRecords = await window.RecordOfflineQueue.getPendingRecords();
+                const localRecords = pendingRecords.map(entry => ({
+                    ...entry.payload,
+                    id: `offline_${entry.uuid}`,
+                    is_offline: true,
+                    status: "Pending Sync"
+                }));
+
+                showedOfflineRecords = localRecords.length > 0;
+
+                renderRecentRecords(
+                    localRecords.slice(0, 10),
+                    {
+                        page: 1,
+                        limit: 10,
+                        total: localRecords.length,
+                        totalPages: localRecords.length ? 1 : 0
+                    },
+                    { selectedDate: "", isToday: false }
+                );
+            } catch (offlineError) {
+                console.error("OFFLINE DASHBOARD ERROR:", offlineError);
+            }
+        }
+
+        if (recentRecordsBody && !showedOfflineRecords) {
             recentRecordsBody.innerHTML = `
                 <tr>
                     <td colspan="8" class="empty">
@@ -1592,6 +1619,15 @@ async function loadDashboard() {
     } catch (error) {
 
         console.error(error);
+
+        const cachedUser = JSON.parse(localStorage.getItem("user") || "null");
+
+        if (cachedUser && cachedUser.role) {
+            currentUserRole = String(cachedUser.role).trim().toLowerCase();
+            renderDashboardProfile(getDashboardProfile(cachedUser));
+            await loadDashboardSummary();
+            return;
+        }
 
         localStorage.removeItem("token");
         localStorage.removeItem("user");

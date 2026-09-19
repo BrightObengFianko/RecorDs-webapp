@@ -1,0 +1,79 @@
+.offline-sync-indicator {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: min(420px, calc(100vw - 24px));
+    padding: 10px 12px;
+    border: 1px solid var(--app-border, #dfe3ea);
+    border-radius: 10px;
+    background: var(--app-surface, #ffffff);
+    color: var(--app-text, #1f2937);
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.offline-sync-copy {
+    min-width: 0;
+}
+
+.offline-sync-button {
+    flex: 0 0 auto;
+    min-height: 32px;
+    padding: 6px 10px;
+    border: 1px solid var(--accent, #5b4df5);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--accent-ink, #4338ca);
+    cursor: pointer;
+    font: inherit;
+}
+
+.offline-sync-button:disabled {
+    cursor: wait;
+    opacity: 0.6;
+}
+
+.offline-sync-indicator[data-state="offline"] {
+    border-color: #f59e0b;
+}
+
+.offline-sync-indicator[data-state="failed"] {
+    border-color: #dc2626;
+}
+
+.offline-sync-indicator[data-state="syncing"] .offline-sync-copy::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-right: 7px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: offline-sync-spin 0.8s linear infinite;
+}
+
+@keyframes offline-sync-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 600px) {
+    .offline-sync-indicator {
+        right: 12px;
+        bottom: 12px;
+        left: 12px;
+        max-width: none;
+        justify-content: space-between;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .offline-sync-indicator[data-state="syncing"] .offline-sync-copy::before {
+        animation: none;
+    }
+}

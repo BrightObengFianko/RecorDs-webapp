@@ -35,6 +35,28 @@
         branch_id: ""
     };
 
+    function registerOfflineSupport() {
+        if (!document.querySelector('link[href="css/offline.css"]')) {
+            const stylesheet = document.createElement("link");
+            stylesheet.rel = "stylesheet";
+            stylesheet.href = "css/offline.css";
+            document.head.appendChild(stylesheet);
+        }
+
+        if (!document.querySelector('link[rel="manifest"]')) {
+            const manifest = document.createElement("link");
+            manifest.rel = "manifest";
+            manifest.href = "/manifest.webmanifest";
+            document.head.appendChild(manifest);
+        }
+
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("/service-worker.js").catch(error => {
+                console.warn("Offline shell registration failed:", error.message);
+            });
+        }
+    }
+
     function normalizeHex(value) {
         const raw = String(value || "").trim();
 
@@ -503,6 +525,13 @@
             const data = await response.json().catch(() => ({}));
 
             if (!response.ok || !data || !data.user || !data.user.role) {
+                const cachedUser = readStoredUser();
+
+                if (response.status >= 500 && cachedUser && cachedUser.role) {
+                    document.body.dataset.connectionState = "offline";
+                    return true;
+                }
+
                 window.location.replace("index.html");
                 return false;
             }
@@ -541,6 +570,13 @@
             return true;
         } catch (error) {
             console.error("Auth bootstrap failed:", error);
+            const cachedUser = readStoredUser();
+
+            if (cachedUser && cachedUser.role) {
+                document.body.dataset.connectionState = "offline";
+                return true;
+            }
+
             localStorage.removeItem("token");
             localStorage.removeItem("user");
             window.location.replace("index.html");
@@ -836,6 +872,7 @@
     }
 
     (async function initializeAppShell() {
+        registerOfflineSupport();
         const ready = await ensureAuthenticatedRole();
 
         if (!ready) {

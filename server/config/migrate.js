@@ -182,6 +182,14 @@ async function ensureDatabaseSchema() {
 
     await pool.query(
         `
+            CREATE UNIQUE INDEX IF NOT EXISTS records_client_uuid_unique_idx
+            ON records (client_uuid)
+            WHERE client_uuid IS NOT NULL
+        `
+    );
+
+    await pool.query(
+        `
             UPDATE users
             SET role = LOWER(role)
             WHERE role IS NOT NULL

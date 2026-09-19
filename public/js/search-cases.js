@@ -1233,6 +1233,52 @@ function scheduleAutomaticSearch() {
     }, AUTOMATIC_SEARCH_DEBOUNCE_MS);
 }
 
+async function getOfflineSearchResults(filters) {
+    if (!window.RecordOfflineQueue || typeof window.RecordOfflineQueue.getPendingRecords !== "function") {
+        return [];
+    }
+
+    const entries = await window.RecordOfflineQueue.getPendingRecords();
+    const name = String(filters.name || "").trim().toLowerCase();
+    const category = String(filters.category || "").trim().toLowerCase();
+    const status = String(filters.status || "").trim().toLowerCase().replace(/[_-]+/g, " ");
+    const registrar = String(filters.registrar || "").trim().toLowerCase();
+
+    return entries
+        .filter(entry => ["PENDING_SYNC", "SYNC_FAILED", "SYNCING"].includes(entry.status))
+        .map(entry => ({
+            ...entry.payload,
+            id: `offline_${entry.uuid}`,
+            is_offline: true,
+            offline_sync_status: entry.status,
+            offline_sync_error: entry.lastError || ""
+        }))
+        .filter(record => {
+            const recordName = String(record.name || "").toLowerCase();
+            const recordCategory = String(record.category || "").toLowerCase();
+            const recordStatus = String(record.status || "Pending").toLowerCase().replace(/[_-]+/g, " ");
+            const recordRegistrar = String(record.registrar || "").toLowerCase();
+            const dateMatches = !filters.dateOfBirth || (
+                (category.includes("death") && !category.includes("birth")
+                    ? record.date_of_death === filters.dateOfBirth
+                    : category.includes("birth") && !category.includes("death")
+                        ? record.date_of_birth === filters.dateOfBirth
+                        : record.date_of_birth === filters.dateOfBirth || record.date_of_death === filters.dateOfBirth)
+            );
+            const registrationDate = String(record.registration_date || "").slice(0, 10);
+            const fromMatches = !filters.fromDate || registrationDate >= filters.fromDate;
+            const toMatches = !filters.toDate || registrationDate <= filters.toDate;
+
+            return (!name || recordName.includes(name))
+                && (!category || recordCategory === category)
+                && (!status || recordStatus === status)
+                && (!registrar || recordRegistrar === registrar)
+                && dateMatches
+                && fromMatches
+                && toMatches;
+        });
+}
+
 async function searchCases({ silent = false, automatic = false } = {}) {
 
     const name =
@@ -1565,6 +1611,32 @@ async function searchCases({ silent = false, automatic = false } = {}) {
         if (silent) {
             setResultsSyncStatus("Offline - showing last updated data", "offline");
             return;
+        }
+
+        try {
+            const offlineResults = await getOfflineSearchResults({
+                name,
+                dateOfBirth,
+                status,
+                category,
+                registrar,
+                fromDate,
+                toDate
+            });
+
+            if (name || dateOfBirth || status || category || registrar || fromDate || toDate) {
+                const changed = recordsHaveChanged(allResults, offlineResults);
+                allResults = offlineResults;
+                hasActiveSearch = true;
+                currentPage = 1;
+                if (changed || !allResults.length) {
+                    displayResults();
+                }
+                setResultsSyncStatus("Offline - showing pending local records", "offline");
+                return;
+            }
+        } catch (offlineSearchError) {
+            console.error("OFFLINE SEARCH ERROR:", offlineSearchError);
         }
 
         resultsBody.innerHTML = `
@@ -1905,7 +1977,7 @@ function displayResults() {
                 canManageRecords();
 
 
-            const actionMenuHtml = canManage
+            const actionMenuHtml = canManage && !record.is_offline
                 ? `
                     <div
                         class="action-menu"
@@ -2102,11 +2174,7 @@ function displayResults() {
                         class="status ${statusClass}"
                     >
 
-                        ${escapeHtml(
-                            formatStatusLabel(
-                                status
-                            )
-                        )}
+                        ${escapeHtml(record.is_offline ? "Pending Sync" : formatStatusLabel(status))}
 
                     </span>
 

@@ -389,6 +389,8 @@ function assertBranchAccess(user, record) {
 // =========================================
 
 const createRecord = async (req, res) => {
+    let clientUuid = null;
+
     try {
         if (!canCreateRecords(req.user)) {
             return res.status(403).json({
@@ -480,8 +482,7 @@ const createRecord = async (req, res) => {
             });
         }
 
-        const clientUuid =
-            normalizeClientUuid(client_uuid);
+        clientUuid = normalizeClientUuid(client_uuid);
 
         if (client_uuid && !clientUuid) {
             return res.status(400).json({
@@ -587,6 +588,26 @@ const createRecord = async (req, res) => {
             record: result.rows[0]
         });
     } catch (error) {
+        if (error.code === "23505" && clientUuid) {
+            const existingRecordResult = await pool.query(
+                `
+                    SELECT *
+                    FROM records
+                    WHERE client_uuid = $1
+                    LIMIT 1
+                `,
+                [clientUuid]
+            );
+
+            if (existingRecordResult.rows[0]) {
+                return res.status(200).json({
+                    success: true,
+                    message: "Record already exists.",
+                    record: existingRecordResult.rows[0]
+                });
+            }
+        }
+
         console.error("CREATE RECORD ERROR:", error);
 
         return res.status(500).json({

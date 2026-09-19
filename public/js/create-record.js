@@ -1204,6 +1204,14 @@ recordForm.addEventListener(
 
         try {
 
+            if (
+                !isEditMode &&
+                typeof navigator !== "undefined" &&
+                navigator.onLine === false
+            ) {
+                throw new Error("offline");
+            }
+
             const endpoint =
                 isEditMode
                     ? `/api/records/${encodeURIComponent(recordId)}`

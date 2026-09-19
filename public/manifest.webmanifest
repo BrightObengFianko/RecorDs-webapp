@@ -1,0 +1,16 @@
+{
+    "name": "RecorDs Records Management",
+    "short_name": "RecorDs",
+    "start_url": "/dashboard.html",
+    "display": "standalone",
+    "background_color": "#f6f7fb",
+    "theme_color": "#5b4df5",
+    "icons": [
+        {
+            "src": "/assets/records-logo.jpeg",
+            "sizes": "512x512",
+            "type": "image/jpeg",
+            "purpose": "any"
+        }
+    ]
+}
