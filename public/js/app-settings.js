@@ -51,7 +51,11 @@
         }
 
         if ("serviceWorker" in navigator) {
-            navigator.serviceWorker.register("/service-worker.js").catch(error => {
+            navigator.serviceWorker.register("/service-worker.js?v=5", {
+                updateViaCache: "none"
+            }).then(registration => {
+                registration.update();
+            }).catch(error => {
                 console.warn("Offline shell registration failed:", error.message);
             });
         }
