@@ -104,6 +104,37 @@ function closeActionMenus() {
     });
 }
 
+function positionAccountActionMenu(menu, trigger) {
+    if (!menu || !trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const viewportPadding = 8;
+    const gap = 6;
+    const menuWidth = menu.offsetWidth || 138;
+    const menuHeight = menu.offsetHeight || 0;
+    const belowTop = rect.bottom + gap;
+    const aboveTop = rect.top - gap - menuHeight;
+    const top = belowTop + menuHeight <= window.innerHeight - viewportPadding
+        ? belowTop
+        : Math.max(viewportPadding, aboveTop);
+    const left = Math.max(
+        viewportPadding,
+        Math.min(rect.right - menuWidth, window.innerWidth - viewportPadding - menuWidth)
+    );
+
+    menu.style.top = `${Math.round(top)}px`;
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.bottom = "auto";
+}
+
+function repositionAccountActionMenus() {
+    document.querySelectorAll(".account-action-menu.is-open").forEach(menu => {
+        const trigger = [...document.querySelectorAll("[data-menu-id]")]
+            .find(button => button.dataset.menuId === menu.dataset.actionMenu);
+        positionAccountActionMenu(menu, trigger);
+    });
+}
+
 function renderRegistrarOptions() {
     const current = registrarFilter.value;
     const registrars = [...new Set(records.map(record => String(record.registrar || "").trim()).filter(Boolean))].sort();
@@ -250,19 +281,14 @@ if (!accountToken) {
                 .find(item => item.dataset.actionMenu === menuButton.dataset.menuId);
 
             if (menu) {
-                const buttonRect = menuButton.getBoundingClientRect();
-                const menuWidth = 138;
-
                 const placeholder = document.createComment("account-action-menu");
                 menu.before(placeholder);
                 menu.__accountMenuPlaceholder = placeholder;
                 document.body.appendChild(menu);
 
                 menu.style.position = "fixed";
-                menu.style.top = "auto";
-                menu.style.left = `${Math.max(8, buttonRect.right - menuWidth)}px`;
-                menu.style.bottom = `${Math.max(8, window.innerHeight - buttonRect.top + 6)}px`;
                 menu.classList.add("is-open");
+                positionAccountActionMenu(menu, menuButton);
             }
 
             return;
@@ -303,5 +329,8 @@ if (!accountToken) {
             closeActionMenus();
         }
     });
+    window.addEventListener("resize", repositionAccountActionMenus, { passive: true });
+    window.addEventListener("scroll", repositionAccountActionMenus, { passive: true });
+    processingBody.addEventListener("scroll", repositionAccountActionMenus, { passive: true });
     loadRecords();
 }

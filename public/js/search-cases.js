@@ -674,9 +674,7 @@ function getActionDropdown(menu) {
     }
 
 
-    return menu.querySelector(
-        ".action-dropdown"
-    );
+    return menu.__actionDropdown || menu.querySelector(".action-dropdown");
 
 }
 
@@ -751,6 +749,13 @@ function positionActionMenu(menu) {
 
     }
 
+
+    const maxTop = Math.max(
+        viewportPadding,
+        window.innerHeight - viewportPadding - menuHeight
+    );
+
+    top = Math.max(viewportPadding, Math.min(top, maxTop));
 
     let left =
         rect.right -
@@ -831,7 +836,7 @@ function closeActionMenus() {
             ".action-menu.is-open"
         )
         .forEach(
-            menu => {
+                menu => {
 
                 menu.classList.remove(
                     "is-open"
@@ -861,6 +866,14 @@ function closeActionMenus() {
 
 
                 if (dropdown) {
+
+                    if (menu.__actionDropdownPlaceholder) {
+                        menu.__actionDropdownPlaceholder.replaceWith(dropdown);
+                        menu.__actionDropdownPlaceholder = null;
+                    }
+
+                    menu.__actionDropdown = null;
+                    dropdown.classList.remove("is-portal-open");
 
                     dropdown.style.top =
                         "";
@@ -930,6 +943,16 @@ function openActionMenu(menu) {
 
 
     if (dropdown) {
+
+        if (!menu.__actionDropdownPlaceholder) {
+            const placeholder = document.createComment("action-dropdown");
+            dropdown.before(placeholder);
+            menu.__actionDropdownPlaceholder = placeholder;
+            menu.__actionDropdown = dropdown;
+            document.body.appendChild(dropdown);
+        }
+
+        dropdown.classList.add("is-portal-open");
 
         dropdown.style.visibility =
             "hidden";
@@ -2583,7 +2606,7 @@ if (nextPage) {
 
 if (resultsBody) {
 
-    resultsBody.addEventListener(
+    document.addEventListener(
         "click",
         async event => {
 
@@ -3154,6 +3177,9 @@ function openSmsDetailsModal(record) {
         "flex";
 
 }
+
+window.addEventListener("resize", scheduleActionMenuPosition, { passive: true });
+window.addEventListener("scroll", scheduleActionMenuPosition, { passive: true });
 
 
 async function clearSmsOrNote(kind) {

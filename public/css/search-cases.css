@@ -1182,6 +1182,10 @@ tbody tr:hover {
     will-change: top, left;
 }
 
+.action-dropdown.is-portal-open {
+    display: block;
+}
+
 .action-menu.is-open .action-dropdown {
     display: block;
 }
@@ -1223,6 +1227,13 @@ tbody tr:hover {
     background: var(--app-dropdown-hover);
 
     color: var(--app-text);
+}
+
+@media (max-width: 600px) {
+    .action-item {
+        min-height: 40px;
+        font-size: 13px;
+    }
 }
 
 .action-item.is-primary:hover {

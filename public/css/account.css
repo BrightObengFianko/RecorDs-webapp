@@ -469,6 +469,13 @@ body.account-page {
     height: 15px;
 }
 
+@media (max-width: 600px) {
+    .account-action-menu button {
+        min-height: 40px;
+        font-size: 13px;
+    }
+}
+
 .account-footer {
     color: var(--app-muted);
     font-size: 12px;
