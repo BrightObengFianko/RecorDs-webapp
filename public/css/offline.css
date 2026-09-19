@@ -14,6 +14,10 @@
     white-space: nowrap;
 }
 
+.offline-sync-indicator[hidden] {
+    display: none !important;
+}
+
 .offline-sync-copy {
     min-width: 0;
 }

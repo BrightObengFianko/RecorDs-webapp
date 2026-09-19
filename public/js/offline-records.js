@@ -602,6 +602,7 @@
 
         statusElement = document.createElement("aside");
         statusElement.className = "offline-sync-indicator";
+        statusElement.hidden = true;
         statusElement.setAttribute("aria-live", "polite");
         statusElement.innerHTML = `
             <span class="offline-sync-copy"></span>
