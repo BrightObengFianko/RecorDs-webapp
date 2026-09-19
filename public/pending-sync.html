@@ -11,21 +11,58 @@
     <link rel="stylesheet" href="css/pending-sync.css">
 </head>
 <body>
+    <svg aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+        <symbol id="icon-chevron-left" viewBox="0 0 24 24">
+            <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+        </symbol>
+        <symbol id="icon-chevron-right" viewBox="0 0 24 24">
+            <path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+        </symbol>
+    </svg>
+
     <div class="page">
         <aside class="sidebar">
-            <div class="brand"><div class="brand-icon">R</div><span>RecorDs</span></div>
+            <div class="brand">
+                <div class="brand-icon">R</div>
+                <span>RecorDs</span>
+            </div>
             <nav class="navigation">
-                <a href="dashboard.html" class="nav-item">Dashboard</a>
-                <a href="create-record.html" class="nav-item">Record Case</a>
-                <a href="search-cases.html" class="nav-item">Search Cases</a>
-                <a href="pending-sync.html" class="nav-item active" aria-current="page">Pending Sync</a>
-                <a href="reports.html" class="nav-item">Reports</a>
-                <a href="settings.html" class="nav-item">Settings</a>
+                <a href="dashboard.html" class="nav-item">
+                    <svg class="ui-icon nav-icon" aria-hidden="true"><use href="/assets/navigation-icons.svg#icon-home"></use></svg>
+                    <span>Dashboard</span>
+                </a>
+                <a href="create-record.html" class="nav-item">
+                    <svg class="ui-icon nav-icon" aria-hidden="true"><use href="/assets/navigation-icons.svg#icon-plus"></use></svg>
+                    <span>Record Case</span>
+                </a>
+                <a href="search-cases.html" class="nav-item">
+                    <svg class="ui-icon nav-icon" aria-hidden="true"><use href="/assets/navigation-icons.svg#icon-search"></use></svg>
+                    <span>Search Cases</span>
+                </a>
+                <a href="reports.html" class="nav-item nav-item-admin-only">
+                    <svg class="ui-icon nav-icon" aria-hidden="true"><use href="/assets/navigation-icons.svg#icon-chart"></use></svg>
+                    <span>Reports</span>
+                </a>
+                <a href="users.html" class="nav-item nav-item-admin-only">
+                    <svg class="ui-icon nav-icon" aria-hidden="true"><use href="/assets/navigation-icons.svg#icon-users"></use></svg>
+                    <span>Users</span>
+                </a>
+                <a href="account.html" class="nav-item nav-item-staff-admin-only">
+                    <svg class="ui-icon nav-icon" aria-hidden="true"><use href="/assets/navigation-icons.svg#icon-user"></use></svg>
+                    <span>Account</span>
+                </a>
+                <a href="settings.html" class="nav-item">
+                    <svg class="ui-icon nav-icon" aria-hidden="true"><use href="/assets/navigation-icons.svg#icon-gear"></use></svg>
+                    <span>Settings</span>
+                </a>
             </nav>
             <div class="sidebar-bottom">
                 <div class="user-box">
-                    <div class="avatar" id="sidebarAvatar">R</div>
-                    <div class="user-info"><strong id="sidebarUserName">Admin</strong><small id="sidebarUserRole">Staff</small></div>
+                    <div class="avatar" id="sidebarAvatar">A</div>
+                    <div class="user-info">
+                        <strong id="sidebarUserName">Admin</strong>
+                        <small id="sidebarUserRole">Administrator</small>
+                    </div>
                 </div>
                 <button class="logout" id="logoutButton" type="button">Logout</button>
             </div>
@@ -33,8 +70,13 @@
 
         <main class="main pending-sync-main">
             <header class="pending-sync-heading">
-                <div>
-                    <h1>Pending Sync</h1>
+                <div class="pending-sync-heading-copy">
+                    <div class="pending-sync-title-row">
+                        <button class="sidebar-toggle page-toggle" id="sidebarToggle" type="button" title="Toggle sidebar" aria-label="Toggle sidebar">
+                            <svg class="ui-icon toggle-icon" aria-hidden="true"><use href="#icon-chevron-left"></use></svg>
+                        </button>
+                        <h1>Pending Sync</h1>
+                    </div>
                     <p>Cases saved on this device that have not reached the server.</p>
                 </div>
                 <button type="button" class="pending-sync-button" id="pendingSyncButton">Sync Now</button>

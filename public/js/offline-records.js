@@ -577,6 +577,12 @@
             navigation.appendChild(pendingLink);
         }
 
+        const currentPage = (window.location.pathname.split("/").pop() || "index.html").toLowerCase();
+        if (currentPage === "pending-sync.html") {
+            pendingLink.classList.add("active");
+            pendingLink.setAttribute("aria-current", "page");
+        }
+
         return pendingLink;
     }
 
