@@ -1,3 +1,7 @@
+body {
+    font-family: Arial, sans-serif;
+}
+
 .pending-sync-main {
     min-height: 100vh;
     padding: 28px clamp(18px, 4vw, 48px);
