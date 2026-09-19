@@ -5,6 +5,7 @@ const APP_SHELL = [
     "/dashboard.html",
     "/create-record.html",
     "/search-cases.html",
+    "/pending-sync.html",
     "/account.html",
     "/case-details.html",
     "/reports.html",
@@ -23,6 +24,7 @@ const APP_SHELL = [
     "/css/reports.css",
     "/css/settings.css",
     "/css/users.css",
+    "/css/pending-sync.css",
     "/js/app-settings.js",
     "/js/offline-records.js",
     "/js/notification.js",
@@ -34,6 +36,7 @@ const APP_SHELL = [
     "/js/reports.js",
     "/js/settings.js",
     "/js/users.js",
+    "/js/pending-sync.js",
     "/assets/navigation-icons.svg",
     "/assets/records-logo.jpeg",
     "/manifest.webmanifest"

@@ -559,9 +559,23 @@
         statusElement.setAttribute("aria-live", "polite");
         statusElement.innerHTML = `
             <span class="offline-sync-copy"></span>
-            <button type="button" class="offline-sync-button">Sync Now</button>
+            <a class="offline-sync-link" href="pending-sync.html">Pending Sync</a>
+            <button type="button" class="offline-sync-button">Sync</button>
         `;
-        document.body.appendChild(statusElement);
+        const host = document.querySelector(".topbar-right, .page-top-right, .account-heading, .page-heading") || document.body;
+        host.appendChild(statusElement);
+
+        if (!document.querySelector('a[href="pending-sync.html"]')) {
+            const navigation = document.querySelector(".navigation");
+            if (navigation) {
+                const pendingLink = document.createElement("a");
+                pendingLink.href = "pending-sync.html";
+                pendingLink.className = "nav-item offline-pending-nav-link";
+                pendingLink.textContent = "Pending Sync";
+                navigation.appendChild(pendingLink);
+            }
+        }
+
         statusElement.querySelector("button").addEventListener("click", async () => {
             const button = statusElement.querySelector("button");
             button.disabled = true;
@@ -581,31 +595,33 @@
 
         const stats = await getQueueStats();
         const copy = element.querySelector(".offline-sync-copy");
+        const pendingLink = element.querySelector(".offline-sync-link");
         const isOnline = typeof navigator === "undefined" || navigator.onLine !== false;
+        const pendingCount = stats.waiting + stats.syncing + stats.failed;
+
+        pendingLink.hidden = pendingCount === 0;
+        pendingLink.textContent = pendingCount ? `Pending ${pendingCount}` : "Pending Sync";
 
         if (!isOnline) {
             updateOfflineBanners("Offline - Records will be saved and synced when internet returns.");
-            copy.textContent = stats.waiting || stats.failed
-                ? `Offline - ${stats.waiting + stats.failed} record${stats.waiting + stats.failed === 1 ? "" : "s"} waiting to sync`
-                : "Offline - Records will sync when connection returns";
+            copy.textContent = `Offline · ${pendingCount} pending`;
             element.dataset.state = "offline";
         } else if (stats.failed) {
             updateOfflineBanners(`${stats.failed} offline record${stats.failed === 1 ? "" : "s"} need attention.`);
-            copy.textContent = `${stats.failed} record${stats.failed === 1 ? "" : "s"} need attention`;
+            copy.textContent = `Online · ${pendingCount} pending`;
             element.dataset.state = "failed";
         } else if (stats.waiting) {
             updateOfflineBanners(`${stats.waiting} offline record${stats.waiting === 1 ? "" : "s"} waiting to sync.`);
-            copy.textContent = `${stats.waiting} record${stats.waiting === 1 ? "" : "s"} waiting to sync`;
+            copy.textContent = `Online · ${pendingCount} pending`;
             element.dataset.state = "waiting";
+        } else if (stats.syncing) {
+            copy.textContent = `Syncing ${stats.syncing}...`;
+            element.dataset.state = "syncing";
         } else {
             document.querySelectorAll("#offlineStatusBanner").forEach(banner => {
                 banner.hidden = true;
             });
-            const lastSync = localStorage.getItem("recordOfflineLastSync");
-            const lastSyncText = lastSync
-                ? ` - Last sync ${new Date(lastSync).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                : "";
-            copy.textContent = `Online${lastSyncText}`;
+            copy.textContent = "Online · 0 pending";
             element.dataset.state = "online";
         }
     }

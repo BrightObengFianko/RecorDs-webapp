@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RecorDs - Pending Sync</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/sidebar.css">
+    <link rel="stylesheet" href="css/notification.css">
+    <link rel="stylesheet" href="css/offline.css">
+    <link rel="stylesheet" href="css/pending-sync.css">
+</head>
+<body>
+    <div class="page">
+        <aside class="sidebar">
+            <div class="brand"><div class="brand-icon">R</div><span>RecorDs</span></div>
+            <nav class="navigation">
+                <a href="dashboard.html" class="nav-item">Dashboard</a>
+                <a href="create-record.html" class="nav-item">Record Case</a>
+                <a href="search-cases.html" class="nav-item">Search Cases</a>
+                <a href="pending-sync.html" class="nav-item active" aria-current="page">Pending Sync</a>
+                <a href="reports.html" class="nav-item">Reports</a>
+                <a href="settings.html" class="nav-item">Settings</a>
+            </nav>
+            <div class="sidebar-bottom">
+                <div class="user-box">
+                    <div class="avatar" id="sidebarAvatar">R</div>
+                    <div class="user-info"><strong id="sidebarUserName">Admin</strong><small id="sidebarUserRole">Staff</small></div>
+                </div>
+                <button class="logout" id="logoutButton" type="button">Logout</button>
+            </div>
+        </aside>
+
+        <main class="main pending-sync-main">
+            <header class="pending-sync-heading">
+                <div>
+                    <h1>Pending Sync</h1>
+                    <p>Cases saved on this device that have not reached the server.</p>
+                </div>
+                <button type="button" class="pending-sync-button" id="pendingSyncButton">Sync Now</button>
+            </header>
+
+            <section class="pending-sync-summary" aria-live="polite">
+                <strong id="pendingSyncCount">0 records waiting to sync</strong>
+                <span id="pendingSyncState">Loading local queue...</span>
+            </section>
+
+            <section class="pending-sync-list" id="pendingSyncList" aria-live="polite"></section>
+        </main>
+    </div>
+
+    <script src="js/notification.js"></script>
+    <script src="js/app-settings.js"></script>
+    <script src="js/offline-records.js"></script>
+    <script src="js/pending-sync.js"></script>
+</body>
+</html>

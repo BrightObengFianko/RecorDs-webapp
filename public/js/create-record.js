@@ -1325,6 +1325,15 @@ recordForm.addEventListener(
                         "You are Offline - Record saved and will sync when internet returns."
                     );
 
+                    const offlineStatusBanner = document.getElementById("offlineStatusBanner");
+                    if (offlineStatusBanner) {
+                        offlineStatusBanner.innerHTML = `
+                            <span>Record saved offline. It will automatically sync when internet returns.</span>
+                            <a href="pending-sync.html">View Pending Records</a>
+                        `;
+                        offlineStatusBanner.hidden = false;
+                    }
+
                     resetFormForNextRecord();
                     return;
                 } catch (offlineError) {

@@ -284,6 +284,7 @@
                 "dashboard.html",
                 "create-record.html",
                 "search-cases.html",
+                "pending-sync.html",
                 "account.html",
                 "users.html",
                 "reports.html",
@@ -297,6 +298,7 @@
                 "dashboard.html",
                 "create-record.html",
                 "search-cases.html",
+                "pending-sync.html",
                 "settings.html",
                 "case-details.html"
             ]);
@@ -306,6 +308,7 @@
             "dashboard.html",
             "create-record.html",
             "search-cases.html",
+            "pending-sync.html",
             "account.html",
             "settings.html",
             "case-details.html"
