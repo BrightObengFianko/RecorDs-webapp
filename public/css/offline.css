@@ -39,6 +39,27 @@
     text-decoration: underline;
 }
 
+.offline-pending-nav-link .offline-nav-icon {
+    display: block;
+    width: 12px;
+    height: 12px;
+    flex: 0 0 12px;
+    border-radius: 50%;
+    background: #16a34a;
+    box-shadow: 0 0 0 3px rgb(22 163 74 / 16%);
+}
+
+.offline-pending-nav-link[data-state="offline"] .offline-nav-icon {
+    background: #dc2626;
+    box-shadow: 0 0 0 3px rgb(220 38 38 / 16%);
+}
+
+body.sidebar-collapsed .offline-pending-nav-link .offline-nav-icon {
+    width: 14px;
+    height: 14px;
+    flex-basis: 14px;
+}
+
 .offline-sync-button:disabled {
     cursor: wait;
     opacity: 0.6;

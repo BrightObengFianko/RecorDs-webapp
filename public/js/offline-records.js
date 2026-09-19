@@ -551,6 +551,52 @@
         });
     }
 
+    function ensureOfflineNavigationItem() {
+        const navigation = document.querySelector(".navigation");
+        if (!navigation) return null;
+
+        let pendingLink = navigation.querySelector('a[href="pending-sync.html"]');
+        if (!pendingLink) {
+            pendingLink = document.createElement("a");
+            pendingLink.href = "pending-sync.html";
+            pendingLink.className = "nav-item offline-pending-nav-link";
+        }
+
+        pendingLink.classList.add("offline-pending-nav-link");
+        if (!pendingLink.querySelector(".offline-nav-icon")) {
+            pendingLink.innerHTML = `
+                <i class="offline-nav-icon" aria-hidden="true"></i>
+                <span class="offline-nav-label">Online</span>
+            `;
+        }
+
+        const settingsLink = navigation.querySelector('a[href="settings.html"]');
+        if (settingsLink) {
+            settingsLink.after(pendingLink);
+        } else if (pendingLink.parentElement !== navigation) {
+            navigation.appendChild(pendingLink);
+        }
+
+        return pendingLink;
+    }
+
+    function updateOfflineNavigation(state, pendingCount) {
+        const pendingLink = ensureOfflineNavigationItem();
+        if (!pendingLink) return;
+
+        const isOffline = state === "offline";
+        const label = pendingLink.querySelector(".offline-nav-label");
+        if (label) label.textContent = isOffline ? "Offline" : "Online";
+
+        pendingLink.dataset.state = isOffline ? "offline" : "online";
+        pendingLink.title = pendingCount > 0
+            ? `${isOffline ? "Offline" : "Online"} - ${pendingCount} pending record${pendingCount === 1 ? "" : "s"}`
+            : isOffline
+                ? "Offline - records will sync when internet returns"
+                : "Online";
+        pendingLink.setAttribute("aria-label", pendingLink.title);
+    }
+
     function ensureStatusElement() {
         if (statusElement || !document.body) return statusElement;
 
@@ -565,16 +611,7 @@
         const host = document.querySelector(".topbar-right, .page-top-right, .account-heading, .page-heading") || document.body;
         host.appendChild(statusElement);
 
-        if (!document.querySelector('a[href="pending-sync.html"]')) {
-            const navigation = document.querySelector(".navigation");
-            if (navigation) {
-                const pendingLink = document.createElement("a");
-                pendingLink.href = "pending-sync.html";
-                pendingLink.className = "nav-item offline-pending-nav-link";
-                pendingLink.textContent = "Pending Sync";
-                navigation.appendChild(pendingLink);
-            }
-        }
+        ensureOfflineNavigationItem();
 
         statusElement.querySelector("button").addEventListener("click", async () => {
             const button = statusElement.querySelector("button");
@@ -624,6 +661,8 @@
             copy.textContent = "Online · 0 pending";
             element.dataset.state = "online";
         }
+
+        updateOfflineNavigation(isOnline ? "online" : "offline", pendingCount);
     }
 
     async function syncForCurrentUser(options = {}) {
@@ -662,6 +701,7 @@
     }
 
     window.addEventListener("online", () => {
+        updateOfflineNavigation("online", 0);
         updateOfflineBanners("Online - syncing pending records...");
         showSyncMessage(
             "You are back online. Syncing pending records...",
@@ -674,6 +714,7 @@
     });
 
     window.addEventListener("offline", () => {
+        updateOfflineNavigation("offline", 0);
         updateOfflineBanners("Offline - Records will be saved and synced when internet returns.");
         showSyncMessage(
             "You are Offline - Records will be saved and synced when internet returns.",
