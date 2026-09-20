@@ -2631,6 +2631,7 @@ module.exports = {
     getDashboardSummary,
     getRecentTodayRecords,
     searchRecords,
+    exportRecords,
     getRecordRegistrars,
     getSmsStatus,
     getRecordById,
