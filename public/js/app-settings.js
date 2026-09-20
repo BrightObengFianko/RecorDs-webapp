@@ -69,7 +69,7 @@
         }
 
         if ("serviceWorker" in navigator) {
-            navigator.serviceWorker.register("/service-worker.js?v=6", {
+        navigator.serviceWorker.register("/service-worker.js?v=7", {
                 updateViaCache: "none"
             }).then(registration => {
                 registration.update();

@@ -1171,7 +1171,12 @@ function renderRecentPagination(pagination) {
         return;
     }
 
-    const totalPages = Number(pagination?.totalPages || 0);
+    const total = Number(pagination?.total || 0);
+    const limit = Math.max(1, Number(pagination?.limit || 10));
+    const reportedTotalPages = Number(pagination?.totalPages || 0);
+    const totalPages = reportedTotalPages > 0
+        ? reportedTotalPages
+        : Math.ceil(total / limit);
     const page = Number(pagination?.page || 1);
 
     recentRecordsState.page = page;
@@ -1460,6 +1465,12 @@ async function loadDashboardSummary() {
                 total: recentRecords.length,
                 totalPages: recentRecords.length ? 1 : 0
             };
+
+        if (!Number(recentPagination.totalPages) && Number(recentPagination.total) > 0) {
+            recentPagination.totalPages = Math.ceil(
+                Number(recentPagination.total) / Math.max(1, Number(recentPagination.limit || 10))
+            );
+        }
 
         if (
             recentPagination.totalPages > 0 &&
