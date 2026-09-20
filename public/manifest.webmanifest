@@ -1,6 +1,6 @@
 {
     "name": "RercorDs",
-    "short_name": "RecorDs",
+    "short_name": "RercorDs",
     "start_url": "/dashboard.html",
     "scope": "/",
     "display": "standalone",
