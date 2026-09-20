@@ -1560,6 +1560,17 @@ body.sidebar-collapsed .content {
     padding: 20px;
 }
 
+/* Keep the Search Cases header in normal document flow so it scrolls with the page. */
+body.search-page .main {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+body.search-page .content {
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
 .table-copyright-footer {
     padding: 12px 0 2px;
     border-top: 1px solid var(--app-border);
