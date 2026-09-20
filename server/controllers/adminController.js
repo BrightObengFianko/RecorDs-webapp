@@ -315,7 +315,7 @@ async function listAuthActivity(req, res) {
                 FROM auth_activity_logs
                 LEFT JOIN branches b ON b.id = auth_activity_logs.branch_id
                 ${whereClause}
-                ORDER BY occurred_at ${String(sort).toLowerCase() === "oldest" ? "ASC" : "DESC"}, id ${String(sort).toLowerCase() === "oldest" ? "ASC" : "DESC"}
+                ORDER BY auth_activity_logs.occurred_at ${String(sort).toLowerCase() === "oldest" ? "ASC" : "DESC"}, auth_activity_logs.id ${String(sort).toLowerCase() === "oldest" ? "ASC" : "DESC"}
                 LIMIT $${queryValues.length - 1}
                 OFFSET $${queryValues.length}
             `,
