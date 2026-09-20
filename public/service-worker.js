@@ -39,6 +39,9 @@ const APP_SHELL = [
     "/js/pending-sync.js",
     "/assets/navigation-icons.svg",
     "/assets/records-logo.jpeg",
+    "/assets/records-icon-192.png",
+    "/assets/records-icon-512.png",
+    "/assets/records-icon-maskable-512.png",
     "/manifest.webmanifest"
 ];
 
