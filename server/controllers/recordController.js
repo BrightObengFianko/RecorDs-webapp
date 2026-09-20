@@ -229,11 +229,11 @@ function dashboardBranchClause(user) {
     return {
         clause: `
             WHERE r.branch_id = $1
-              AND r.registration_date >= date_trunc(
+              AND COALESCE(r.registration_date, r.created_at) >= date_trunc(
                   'year',
                   (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date
               )::date
-              AND r.registration_date < (
+              AND COALESCE(r.registration_date, r.created_at) < (
                   date_trunc(
                       'year',
                       (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date
@@ -307,8 +307,8 @@ async function queryRecentTodayRecords(user, requestedPage) {
     const offsetParameter = values.length + 3;
     const offset = (page - 1) * RECENT_RECORDS_PAGE_SIZE;
     const selectedDateClause = clause
-        ? `${clause} AND r.registration_date >= $${dateParameter}::date AND r.registration_date < ($${dateParameter}::date + INTERVAL '1 day')`
-        : `WHERE r.registration_date >= $${dateParameter}::date AND r.registration_date < ($${dateParameter}::date + INTERVAL '1 day')`;
+        ? `${clause} AND COALESCE(r.registration_date, r.created_at) >= $${dateParameter}::date AND COALESCE(r.registration_date, r.created_at) < ($${dateParameter}::date + INTERVAL '1 day')`
+        : `WHERE COALESCE(r.registration_date, r.created_at) >= $${dateParameter}::date AND COALESCE(r.registration_date, r.created_at) < ($${dateParameter}::date + INTERVAL '1 day')`;
     const dateValues = [
         ...values,
         selectedDateText
@@ -334,7 +334,7 @@ async function queryRecentTodayRecords(user, requestedPage) {
             `
                 ${recordSelectSql()}
                 ${filteredDateClause}
-                ORDER BY r.registration_date DESC NULLS LAST, r.id DESC
+                ORDER BY COALESCE(r.registration_date, r.created_at) DESC NULLS LAST, r.id DESC
                 LIMIT $${limitParameter}
                 OFFSET $${offsetParameter}
             `,
@@ -575,7 +575,7 @@ const createRecord = async (req, res) => {
                     client_uuid
                 )
                 VALUES
-                ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+                ($1,$2,$3,$4,$5,$6,COALESCE($7::date, (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date),$8,$9,$10,$11)
                 RETURNING *
             `,
             [
@@ -1887,7 +1887,7 @@ const updateRecord = async (req, res) => {
                         date_of_birth = $3,
                         date_of_death = $4,
                         phone_number = $5,
-                        registration_date = $6,
+                registration_date = COALESCE($6::date, (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date),
                         status = $7,
                         registrar = $8,
                         notes = $9,
