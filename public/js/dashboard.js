@@ -82,6 +82,8 @@ const recentRecordsState = {
     loading: false
 };
 
+let offlineRecentRecords = null;
+
 let dashboardSummaryLoading = false;
 
 function readStoredUser() {
@@ -1356,6 +1358,25 @@ async function loadRecentRecordsPage(page) {
     });
 
     try {
+        if (offlineRecentRecords && navigator.onLine === false) {
+            const limit = 10;
+            const totalPages = Math.ceil(offlineRecentRecords.length / limit);
+            const safePage = Math.min(page, Math.max(1, totalPages));
+            const start = (safePage - 1) * limit;
+
+            renderRecentRecords(
+                offlineRecentRecords.slice(start, start + limit),
+                {
+                    page: safePage,
+                    limit,
+                    total: offlineRecentRecords.length,
+                    totalPages
+                },
+                { selectedDate: "", isToday: false }
+            );
+            return;
+        }
+
         const response = await fetch(
             `/api/records/recent-today?page=${encodeURIComponent(page)}`,
             {
@@ -1389,6 +1410,7 @@ async function loadRecentRecordsPage(page) {
                 isToday: data.isToday
             }
         );
+        offlineRecentRecords = null;
     } catch (error) {
         console.error("RECENT RECORDS ERROR:", error);
     } finally {
@@ -1502,18 +1524,26 @@ async function loadDashboardSummary() {
                     ...entry.payload,
                     id: `offline_${entry.uuid}`,
                     is_offline: true,
-                    status: "Pending Sync"
+                    status: "Pending Sync",
+                    offline_created_at: entry.createdAt
                 }));
 
-                showedOfflineRecords = localRecords.length > 0;
+                offlineRecentRecords = localRecords.sort((left, right) =>
+                    new Date(right.offline_created_at || 0).getTime() -
+                    new Date(left.offline_created_at || 0).getTime()
+                );
+
+                showedOfflineRecords = offlineRecentRecords.length > 0;
 
                 renderRecentRecords(
-                    localRecords.slice(0, 10),
+                    offlineRecentRecords.slice(0, 10),
                     {
                         page: 1,
                         limit: 10,
-                        total: localRecords.length,
-                        totalPages: localRecords.length ? 1 : 0
+                        total: offlineRecentRecords.length,
+                        totalPages: offlineRecentRecords.length
+                            ? Math.ceil(offlineRecentRecords.length / 10)
+                            : 0
                     },
                     { selectedDate: "", isToday: false }
                 );

@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v9";
+const CACHE_NAME = "records-shell-v10";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -97,6 +97,6 @@ self.addEventListener("fetch", event => {
                 }
                 return response;
             })
-            .catch(() => caches.match(request))
+            .catch(() => caches.match(request, { ignoreSearch: true }))
     );
 });
