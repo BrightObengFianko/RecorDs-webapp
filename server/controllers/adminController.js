@@ -5,6 +5,19 @@ const {
     validatePassword
 } = require("../utils/authSecurity");
 const { boundedText, isIsoDate } = require("../utils/inputValidation");
+const { ACTIVITY_TYPES, recordActivity } = require("../utils/authActivity");
+
+function logAdminActivity(req, activityType, data = {}) {
+    return recordActivity({
+        request: req,
+        userId: req.user?.id,
+        name: req.user?.name,
+        email: req.user?.email,
+        role: req.user?.role,
+        activityType,
+        ...data
+    });
+}
 
 const VALID_ROLES = new Set([
     "admin",
@@ -156,9 +169,14 @@ async function listAuthActivity(req, res) {
     try {
         const {
             date,
+            from_date: fromDate,
+            to_date: toDate,
             user,
             role,
-            activity_type: activityType
+            activity_type: activityType,
+            branch,
+            search,
+            sort
         } = req.query;
 
         const requestedPage = Number.parseInt(req.query.page || "1", 10);
@@ -173,17 +191,30 @@ async function listAuthActivity(req, res) {
         const conditions = [];
         const values = [];
 
-        if (date) {
-            if (!isIsoDate(date)) {
+        const startDate = fromDate || date;
+        const endDate = toDate || date || fromDate;
+
+        if (startDate) {
+            if (!isIsoDate(startDate)) {
                 return res.status(400).json({
                     success: false,
-                    message: "Invalid activity date."
+                    message: "Invalid activity start date."
                 });
             }
 
-            values.push(date);
+            values.push(startDate);
             conditions.push(`occurred_at >= $${values.length}::date`);
-            values.push(date);
+        }
+
+        if (endDate) {
+            if (!isIsoDate(endDate)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid activity end date."
+                });
+            }
+
+            values.push(endDate);
             conditions.push(`occurred_at < ($${values.length}::date + INTERVAL '1 day')`);
         }
 
@@ -217,11 +248,7 @@ async function listAuthActivity(req, res) {
 
         if (activityType) {
             const normalizedActivity = String(activityType).trim().toUpperCase();
-            const allowedActivities = new Set([
-                "LOGIN_SUCCESS",
-                "LOGIN_FAILURE",
-                "LOGOUT_SUCCESS"
-            ]);
+            const allowedActivities = new Set(Object.values(ACTIVITY_TYPES));
 
             if (!allowedActivities.has(normalizedActivity)) {
                 return res.status(400).json({
@@ -232,6 +259,24 @@ async function listAuthActivity(req, res) {
 
             values.push(normalizedActivity);
             conditions.push(`activity_type = $${values.length}`);
+        }
+
+        if (branch) {
+            const branchFilter = boundedText(branch, 100);
+            if (!branchFilter) {
+                return res.status(400).json({ success: false, message: "Invalid branch filter." });
+            }
+            values.push(branchFilter);
+            conditions.push(`(CAST(branch_id AS TEXT) = $${values.length} OR branch_name ILIKE $${values.length} OR EXISTS (SELECT 1 FROM branches fb WHERE fb.id = auth_activity_logs.branch_id AND fb.name ILIKE $${values.length}))`);
+        }
+
+        if (search) {
+            const searchFilter = boundedText(search, 200);
+            if (!searchFilter) {
+                return res.status(400).json({ success: false, message: "Invalid activity search." });
+            }
+            values.push(`%${searchFilter}%`);
+            conditions.push(`(user_name ILIKE $${values.length} OR user_email ILIKE $${values.length} OR activity_type ILIKE $${values.length} OR details ILIKE $${values.length} OR affected_user_name ILIKE $${values.length} OR CAST(record_id AS TEXT) ILIKE $${values.length})`);
         }
 
         const whereClause = conditions.length
@@ -255,10 +300,22 @@ async function listAuthActivity(req, res) {
                     user_email,
                     user_role,
                     activity_type,
-                    occurred_at
+                    occurred_at,
+                    branch_id,
+                    COALESCE(branch_name, b.name) AS branch_name,
+                    record_id,
+                    affected_user_id,
+                    affected_user_name,
+                    details,
+                    previous_value,
+                    new_value,
+                    success,
+                    ip_address,
+                    user_agent
                 FROM auth_activity_logs
+                LEFT JOIN branches b ON b.id = auth_activity_logs.branch_id
                 ${whereClause}
-                ORDER BY occurred_at DESC, id DESC
+                ORDER BY occurred_at ${String(sort).toLowerCase() === "oldest" ? "ASC" : "DESC"}, id ${String(sort).toLowerCase() === "oldest" ? "ASC" : "DESC"}
                 LIMIT $${queryValues.length - 1}
                 OFFSET $${queryValues.length}
             `,
@@ -271,7 +328,8 @@ async function listAuthActivity(req, res) {
             pagination: {
                 page,
                 limit,
-                total: countResult.rows[0]?.total || 0
+                total: countResult.rows[0]?.total || 0,
+                totalPages: Math.max(1, Math.ceil((countResult.rows[0]?.total || 0) / limit))
             }
         });
     } catch (error) {
@@ -281,6 +339,16 @@ async function listAuthActivity(req, res) {
             success: false,
             message: "Unable to load authentication activity."
         });
+    }
+}
+
+async function clearAuthActivity(req, res) {
+    try {
+        await pool.query("DELETE FROM auth_activity_logs");
+        return res.json({ success: true, message: "Activity logs cleared successfully." });
+    } catch (error) {
+        console.error("CLEAR AUTH ACTIVITY ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to clear activity logs." });
     }
 }
 
@@ -354,6 +422,16 @@ async function changeAccountStatus(req, res, nextStatus) {
         );
 
         const user = await fetchUserById(id);
+
+        await logAdminActivity(req, desiredStatus === "APPROVED" ? ACTIVITY_TYPES.USER_ENABLED : ACTIVITY_TYPES.USER_DISABLED, {
+            affectedUserId: user.id,
+            affectedUserName: user.name,
+            branchId: user.branch_id,
+            branchName: user.branch,
+            previousValue: currentStatus,
+            newValue: desiredStatus,
+            details: `User account status changed to ${desiredStatus}.`
+        });
 
         return res.json({
             success: true,
@@ -494,6 +572,14 @@ async function createUser(req, res) {
         );
 
         const user = await fetchUserById(created.rows[0].id);
+
+        await logAdminActivity(req, ACTIVITY_TYPES.USER_CREATED, {
+            affectedUserId: user.id,
+            affectedUserName: user.name,
+            branchId: user.branch_id,
+            branchName: user.branch,
+            details: "User account created."
+        });
 
         return res.status(201).json({
             success: true,
@@ -679,6 +765,28 @@ async function updateUser(req, res) {
         }
 
         const user = await fetchUserById(id);
+
+        if (existing.is_active !== user.is_active) {
+            await logAdminActivity(req, user.is_active ? ACTIVITY_TYPES.USER_ENABLED : ACTIVITY_TYPES.USER_DISABLED, {
+                affectedUserId: user.id,
+                affectedUserName: user.name,
+                branchId: user.branch_id,
+                branchName: user.branch,
+                details: `User ${user.is_active ? "enabled" : "disabled"}.`
+            });
+        }
+
+        if (String(existing.branch_id) !== String(user.branch_id)) {
+            await logAdminActivity(req, ACTIVITY_TYPES.BRANCH_ASSIGNMENT_CHANGED, {
+                affectedUserId: user.id,
+                affectedUserName: user.name,
+                branchId: user.branch_id,
+                branchName: user.branch,
+                previousValue: existing.branch,
+                newValue: user.branch,
+                details: "User branch assignment changed."
+            });
+        }
 
         return res.json({
             success: true,
@@ -947,6 +1055,7 @@ async function deleteBranch(req, res) {
 
 module.exports = {
     listAuthActivity,
+    clearAuthActivity,
     listUsers,
     listPendingUsers,
     approveUser,

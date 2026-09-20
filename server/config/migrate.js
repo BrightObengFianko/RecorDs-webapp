@@ -389,7 +389,16 @@ async function ensureDatabaseSchema() {
         `
             ALTER TABLE auth_activity_logs
             ADD COLUMN IF NOT EXISTS ip_address VARCHAR(64),
-            ADD COLUMN IF NOT EXISTS user_agent VARCHAR(500)
+            ADD COLUMN IF NOT EXISTS user_agent VARCHAR(500),
+            ADD COLUMN IF NOT EXISTS branch_id INTEGER,
+            ADD COLUMN IF NOT EXISTS branch_name VARCHAR(100),
+            ADD COLUMN IF NOT EXISTS record_id INTEGER,
+            ADD COLUMN IF NOT EXISTS affected_user_id INTEGER,
+            ADD COLUMN IF NOT EXISTS affected_user_name VARCHAR(100),
+            ADD COLUMN IF NOT EXISTS details TEXT,
+            ADD COLUMN IF NOT EXISTS previous_value TEXT,
+            ADD COLUMN IF NOT EXISTS new_value TEXT,
+            ADD COLUMN IF NOT EXISTS success BOOLEAN NOT NULL DEFAULT TRUE
         `
     );
 
@@ -419,6 +428,13 @@ async function ensureDatabaseSchema() {
         `
             CREATE INDEX IF NOT EXISTS idx_auth_activity_logs_activity_type
             ON auth_activity_logs(activity_type)
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_auth_activity_logs_branch_id
+            ON auth_activity_logs(branch_id)
         `
     );
 

@@ -59,20 +59,24 @@
 
             <section class="reports-content">
                 <div class="reports-card reports-filters">
-                    <label>Date<input id="dateFilter" type="date"></label>
+                    <label>From<input id="fromDateFilter" type="date"></label>
+                    <label>To<input id="toDateFilter" type="date"></label>
                     <label>User<input id="userFilter" type="search" placeholder="Name or email"></label>
+                    <label>Search logs<input id="searchFilter" type="search" placeholder="Activity, case, details"></label>
+                    <label>Branch<select id="branchFilter"><option value="">All branches</option></select></label>
                     <label>Role<select id="roleFilter"><option value="">All roles</option><option value="admin">Admin</option><option value="staff">Staff</option><option value="branch_staff">Branch Staff</option></select></label>
-                    <label>Activity<select id="activityFilter"><option value="">All activity</option><option value="LOGIN_SUCCESS">Successful login</option><option value="LOGOUT_SUCCESS">Successful logout</option><option value="LOGIN_FAILURE">Failed login</option></select></label>
+                    <label>Activity<select id="activityFilter"><option value="">All activity</option><option value="LOGIN_SUCCESS">Successful login</option><option value="LOGOUT_SUCCESS">Successful logout</option><option value="LOGIN_FAILURE">Failed login</option><option value="RECORD_CREATED">Record created</option><option value="RECORD_EDITED">Record edited</option><option value="RECORD_APPROVED">Record approved</option><option value="RECORD_DELETED">Record deleted</option><option value="SMS_ACTIVITY">SMS activity</option><option value="USER_CREATED">User created</option><option value="USER_DISABLED">User disabled</option><option value="USER_ENABLED">User enabled</option><option value="SETTINGS_CHANGED">Settings changed</option><option value="BRANCH_ASSIGNMENT_CHANGED">Branch assignment changed</option></select></label>
+                    <label>Sort<select id="sortFilter"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
                     <button class="reports-primary" id="filterButton" type="button"><svg class="ui-icon"><use href="#icon-filter"></use></svg>Filter</button>
                     <button class="reports-secondary" id="resetButton" type="button">Reset</button>
                 </div>
 
                 <section class="reports-card activity-card">
-                    <div class="activity-heading"><div><h2>Authentication Activity</h2><p id="activitySummary">Loading activity...</p></div></div>
+                    <div class="activity-heading"><div><h2>Activity Logs</h2><p id="activitySummary">Loading activity...</p></div><button class="reports-danger" id="clearLogsButton" type="button">Clear Logs</button></div>
                     <div class="activity-table-wrap">
                         <table>
-                            <thead><tr><th>User</th><th>Role</th><th>Activity</th><th>Date</th><th>Time</th></tr></thead>
-                            <tbody id="activityBody"><tr><td colspan="5" class="reports-empty">Loading activity...</td></tr></tbody>
+                            <thead><tr><th>User</th><th>Role</th><th>Activity</th><th>Branch</th><th>Case</th><th>Details</th><th>Date</th><th>Time</th></tr></thead>
+                            <tbody id="activityBody"><tr><td colspan="8" class="reports-empty">Loading activity...</td></tr></tbody>
                         </table>
                     </div>
                     <div class="activity-pagination">

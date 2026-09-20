@@ -134,8 +134,24 @@ body.reports-page {
 }
 
 .activity-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding: 20px;
     border-bottom: 1px solid var(--app-border);
+}
+
+.reports-danger {
+    min-height: 36px;
+    padding: 0 13px;
+    border: 1px solid #e3a0a0;
+    border-radius: 7px;
+    color: #a33b3b;
+    background: #fff5f5;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
 }
 
 .activity-heading h2 {
@@ -194,6 +210,11 @@ body.reports-page {
 .activity-badge.login-success { color: #137a4b; background: #e4f7ed; }
 .activity-badge.logout-success { color: #315f9e; background: #e8f0ff; }
 .activity-badge.login-failure { color: #a33b3b; background: #fdebec; }
+.activity-badge.record-deleted,
+.activity-badge.user-disabled { color: #a33b3b; background: #fdebec; }
+.activity-badge.record-created,
+.activity-badge.record-approved,
+.activity-badge.user-enabled { color: #137a4b; background: #e4f7ed; }
 
 .reports-empty {
     padding: 36px 20px !important;
@@ -243,6 +264,8 @@ body.reports-page {
     .reports-refresh { padding: 0 10px; }
     .reports-refresh .ui-icon { display: none; }
     .reports-filters { grid-template-columns: 1fr; }
+    .activity-heading { align-items: flex-start; gap: 12px; }
+    .reports-danger { flex: 0 0 auto; }
 }
 
 @media (max-width: 480px) {
@@ -286,4 +309,33 @@ body.reports-page {
     .reports-card .table-wrapper table {
         min-width: 700px;
     }
+
+    .activity-table-wrap { overflow: visible; }
+    .activity-table-wrap table,
+    .activity-table-wrap thead,
+    .activity-table-wrap tbody,
+    .activity-table-wrap tr,
+    .activity-table-wrap td { display: block; width: 100%; }
+    .activity-table-wrap table { min-width: 0; }
+    .activity-table-wrap thead { display: none; }
+    .activity-table-wrap tr {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--app-border);
+    }
+    .activity-table-wrap td {
+        display: grid;
+        grid-template-columns: 76px minmax(0, 1fr);
+        gap: 10px;
+        padding: 5px 0;
+        border: 0;
+        font-size: 13px;
+    }
+    .activity-table-wrap td::before {
+        content: attr(data-label);
+        color: var(--app-muted);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .activity-heading { padding: 16px; }
 }

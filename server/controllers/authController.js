@@ -1,6 +1,7 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const pool = require("../config/database");
+const { ACTIVITY_TYPES, recordActivity, recordAuthActivity } = require("../utils/authActivity");
 const { getDefaultBranchId } = require("../utils/branchUtils");
 const {
     JWT_EXPIRES_IN,
@@ -14,11 +15,6 @@ const {
     clearLoginFailures,
     recordLoginFailure
 } = require("../middleware/loginRateLimiter");
-const {
-    ACTIVITY_TYPES,
-    recordAuthActivity
-} = require("../utils/authActivity");
-
 function normalizeRole(role) {
     return String(role || "")
         .trim()
@@ -677,6 +673,16 @@ const updateAccountSettings = async (req, res) => {
             [fullName, email, JSON.stringify(settings), req.user.id]
         );
         await client.query("COMMIT");
+
+        await recordActivity({
+            request: req,
+            userId: req.user?.id,
+            name: req.user?.name,
+            email: req.user?.email,
+            role: req.user?.role,
+            activityType: ACTIVITY_TYPES.SETTINGS_CHANGED,
+            details: "Account settings changed."
+        });
 
         return res.json({ success: true, settings });
     } catch (error) {

@@ -11,6 +11,7 @@ const { sendToN8N } = require("../services/n8nService");
 const { getDefaultBranchId } = require("../utils/branchUtils");
 const { formatPhoneNumber, isValidPhoneNumber } = require("../utils/phoneUtils");
 const { boundedText, isIsoDate } = require("../utils/inputValidation");
+const { ACTIVITY_TYPES, recordActivity } = require("../utils/authActivity");
 const {
     normalizeRegistrar,
     normalizedRegistrarSql,
@@ -591,6 +592,19 @@ const createRecord = async (req, res) => {
                 clientUuid
             ]
         );
+
+        await recordActivity({
+            request: req,
+            userId: req.user?.id,
+            name: req.user?.name,
+            email: req.user?.email,
+            role: req.user?.role,
+            activityType: ACTIVITY_TYPES.RECORD_CREATED,
+            recordId: result.rows[0].id,
+            branchId,
+            branchName: req.user?.branch,
+            details: "Record created."
+        });
 
         return res.status(201).json({
             success: true,
@@ -1774,6 +1788,19 @@ const updateRecord = async (req, res) => {
             });
         }
 
+        await recordActivity({
+            request: req,
+            userId: req.user?.id,
+            name: req.user?.name,
+            email: req.user?.email,
+            role: req.user?.role,
+            activityType: ACTIVITY_TYPES.RECORD_EDITED,
+            recordId: result.rows[0].id,
+            branchId: result.rows[0].branch_id,
+            branchName: req.user?.branch,
+            details: "Record edited."
+        });
+
         // =========================================
         // TRIGGER n8n WHEN STATUS CHANGES TO READY
         // =========================================
@@ -1920,6 +1947,19 @@ const updateSmsDetails = async (req, res) => {
             });
         }
 
+        await recordActivity({
+            request: req,
+            userId: req.user?.id,
+            name: req.user?.name,
+            email: req.user?.email,
+            role: req.user?.role,
+            activityType: ACTIVITY_TYPES.RECORD_EDITED,
+            recordId: result.rows[0].id,
+            branchId: result.rows[0].branch_id,
+            branchName: req.user?.branch,
+            details: "Record SMS details or note edited."
+        });
+
         return res.json({
             success: true,
             message: clearSms && clearNote
@@ -2016,6 +2056,21 @@ const approveRecord = async (req, res) => {
                     "Record not found."
             });
         }
+
+        await recordActivity({
+            request: req,
+            userId: req.user?.id,
+            name: req.user?.name,
+            email: req.user?.email,
+            role: req.user?.role,
+            activityType: ACTIVITY_TYPES.RECORD_APPROVED,
+            recordId: result.rows[0].id,
+            branchId: result.rows[0].branch_id,
+            branchName: req.user?.branch,
+            previousValue: existingResult.rows[0].status,
+            newValue: result.rows[0].status,
+            details: "Processing record approved."
+        });
 
         // =========================================
         // TRIGGER n8n WHEN RECORD BECOMES READY
@@ -2142,6 +2197,21 @@ const approveProcessingRecord = async (req, res) => {
             });
         }
 
+        await recordActivity({
+            request: req,
+            userId: req.user?.id,
+            name: req.user?.name,
+            email: req.user?.email,
+            role: req.user?.role,
+            activityType: ACTIVITY_TYPES.RECORD_APPROVED,
+            recordId: result.rows[0].id,
+            branchId: result.rows[0].branch_id,
+            branchName: req.user?.branch,
+            previousValue: "Processing",
+            newValue: result.rows[0].status,
+            details: "Processing record approved."
+        });
+
         return res.json({
             success: true,
             message: "Case approved and moved to Pending.",
@@ -2190,6 +2260,19 @@ const deleteRecord = async (req, res) => {
                     "Record not found."
             });
         }
+
+        await recordActivity({
+            request: req,
+            userId: req.user?.id,
+            name: req.user?.name,
+            email: req.user?.email,
+            role: req.user?.role,
+            activityType: ACTIVITY_TYPES.RECORD_DELETED,
+            recordId: result.rows[0].id,
+            branchId: result.rows[0].branch_id,
+            branchName: req.user?.branch,
+            details: "Record deleted."
+        });
 
         return res.json({
             success: true,
@@ -2346,6 +2429,20 @@ const sendSms = async (req, res) => {
             });
 
             const smsSent = await saveSmsWorkflowState(record.id, workflowResult);
+
+            await recordActivity({
+                request: req,
+                userId: req.user?.id,
+                name: req.user?.name,
+                email: req.user?.email,
+                role: req.user?.role,
+                activityType: ACTIVITY_TYPES.SMS_ACTIVITY,
+                recordId: record.id,
+                branchId: record.branch_id,
+                branchName: req.user?.branch,
+                success: smsSent,
+                details: smsSent ? "SMS sent successfully." : "SMS queued for processing."
+            });
 
             const updatedResult = await pool.query(
                 `
