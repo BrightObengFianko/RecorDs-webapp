@@ -294,24 +294,24 @@ async function listAuthActivity(req, res) {
         const result = await pool.query(
             `
                 SELECT
-                    id,
-                    user_id,
-                    user_name,
-                    user_email,
-                    user_role,
-                    activity_type,
-                    occurred_at,
-                    branch_id,
-                    COALESCE(branch_name, b.name) AS branch_name,
-                    record_id,
-                    affected_user_id,
-                    affected_user_name,
-                    details,
-                    previous_value,
-                    new_value,
-                    success,
-                    ip_address,
-                    user_agent
+                    auth_activity_logs.id,
+                    auth_activity_logs.user_id,
+                    auth_activity_logs.user_name,
+                    auth_activity_logs.user_email,
+                    auth_activity_logs.user_role,
+                    auth_activity_logs.activity_type,
+                    auth_activity_logs.occurred_at,
+                    auth_activity_logs.branch_id,
+                    COALESCE(auth_activity_logs.branch_name, b.name) AS branch_name,
+                    auth_activity_logs.record_id,
+                    auth_activity_logs.affected_user_id,
+                    auth_activity_logs.affected_user_name,
+                    auth_activity_logs.details,
+                    auth_activity_logs.previous_value,
+                    auth_activity_logs.new_value,
+                    auth_activity_logs.success,
+                    auth_activity_logs.ip_address,
+                    auth_activity_logs.user_agent
                 FROM auth_activity_logs
                 LEFT JOIN branches b ON b.id = auth_activity_logs.branch_id
                 ${whereClause}
