@@ -1565,6 +1565,135 @@ const searchRecords = async (req, res) => {
     }
 };
 
+const exportRecords = async (req, res) => {
+    try {
+        const {
+            name, dateOfBirth, status, category, registrar, fromDate, toDate,
+            branch
+        } = req.query;
+        const role = normalizeRole(req.user?.role);
+        const isAdmin = role === "admin";
+        const isRestrictedUser = role !== "admin";
+
+        if (!isAdmin && !req.user?.branch_id) {
+            return res.status(403).json({
+                success: false,
+                message: "You have not been assigned to a branch. Please contact an administrator."
+            });
+        }
+
+        let branchId = null;
+        if (isRestrictedUser) {
+            if (branch && branch !== "all" && String(branch) !== String(req.user.branch_id)) {
+                await recordActivity({
+                    request: req,
+                    userId: req.user.id,
+                    name: req.user.name,
+                    email: req.user.email,
+                    role,
+                    activityType: ACTIVITY_TYPES.UNAUTHORIZED_EXPORT_ATTEMPT,
+                    branchId: req.user.branch_id,
+                    details: "Attempted export from an unauthorized branch.",
+                    success: false
+                });
+                return res.status(403).json({ success: false, message: "You can only export records from your assigned branch." });
+            }
+            branchId = req.user.branch_id;
+        } else if (isAdmin && branch && branch !== "all") {
+            branchId = Number.parseInt(branch, 10);
+            if (!Number.isInteger(branchId) || branchId < 1) {
+                return res.status(400).json({ success: false, message: "Invalid branch filter." });
+            }
+        }
+
+        for (const textValue of [name, category, registrar, status]) {
+            if (textValue !== undefined && boundedText(textValue, 150) === null) {
+                return res.status(400).json({ success: false, message: "An export filter is too long." });
+            }
+        }
+        for (const dateValue of [dateOfBirth, fromDate, toDate]) {
+            if (dateValue && !isIsoDate(dateValue)) {
+                return res.status(400).json({ success: false, message: "Export dates must use YYYY-MM-DD format." });
+            }
+        }
+        if (fromDate && toDate && fromDate > toDate) {
+            return res.status(400).json({ success: false, message: "Registered From date cannot be later than Registered To date." });
+        }
+
+        let query = `${recordSelectSql()} WHERE LOWER(REPLACE(REPLACE(COALESCE(r.status, ''), '_', ' '), '-', ' ')) <> 'processing'`;
+        const values = [];
+        let parameter = 1;
+        const add = (clause, value) => {
+            query += ` AND ${clause.replace(/\$(\d+)/g, () => `$${parameter}`)}`;
+            values.push(value);
+            parameter += 1;
+        };
+
+        if (branchId) add("r.branch_id = $1", branchId);
+        if (name) add("r.name ILIKE $1", `%${name}%`);
+        if (dateOfBirth) {
+            const normalizedCategory = String(category || "").toLowerCase();
+            if (normalizedCategory.includes("death") && !normalizedCategory.includes("birth")) {
+                add("r.date_of_death::date = $1::date", dateOfBirth);
+            } else if (normalizedCategory.includes("birth") && !normalizedCategory.includes("death")) {
+                add("r.date_of_birth::date = $1::date", dateOfBirth);
+            } else {
+                query += ` AND (r.date_of_birth::date = $${parameter}::date OR r.date_of_death::date = $${parameter}::date)`;
+                values.push(dateOfBirth);
+                parameter += 1;
+            }
+        }
+        if (status) add("LOWER(REPLACE(r.status, '_', ' ')) = LOWER(REPLACE($1, '_', ' '))", status);
+        if (category) add("LOWER(r.category) = LOWER($1)", category);
+        if (registrar) add(`${normalizedRegistrarSql("r")} = $1`, normalizeRegistrar(registrar));
+        if (fromDate) add("r.registration_date >= $1::date", fromDate);
+        if (toDate) add("r.registration_date < ($1::date + INTERVAL '1 day')", toDate);
+        query += " ORDER BY r.registration_date DESC NULLS LAST, r.id DESC";
+
+        const result = await pool.query(query, values);
+        const records = normalizeRecordRows(result.rows);
+        const csvEscape = value => `"${String(value ?? "").replace(/"/g, '""')}"`;
+        const csvRows = [
+            ["No", "Category", "Name", "Date of Birth/Death", "Phone", "Registration Date", "Registrar", "Status", "SMS Sent"],
+            ...records.map((record, index) => [
+                index + 1,
+                record.category,
+                record.name,
+                String(record.category || "").toLowerCase().trim() === "death" ? record.date_of_death : record.date_of_birth,
+                record.phone_number,
+                record.registration_date,
+                record.registrar,
+                record.status,
+                String(record.sms_sent).toLowerCase() === "true" ? "Yes" : "No"
+            ])
+        ].map(row => row.map(csvEscape).join(",")).join("\n");
+
+        await recordActivity({
+            request: req,
+            userId: req.user?.id,
+            name: req.user?.name,
+            email: req.user?.email,
+            role,
+            activityType: ACTIVITY_TYPES.DATA_EXPORT,
+            branchId: branchId || null,
+            branchName: req.user?.branch,
+            details: `CSV export completed. ${records.length} records exported.`,
+            newValue: JSON.stringify({
+                branchId: branchId || "all",
+                filters: { hasNameFilter: Boolean(name), hasDateFilter: Boolean(dateOfBirth), status, category, registrar, fromDate, toDate },
+                count: records.length
+            })
+        });
+
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", "attachment; filename=RecorDs-cases.csv");
+        return res.send(csvRows);
+    } catch (error) {
+        console.error("EXPORT RECORDS ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to export records." });
+    }
+};
+
 // =========================================
 // GET SINGLE RECORD
 // =========================================

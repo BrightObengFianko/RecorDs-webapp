@@ -10,6 +10,7 @@ const {
     getRecordRegistrars,
     getSmsStatus,
     searchRecords,
+    exportRecords,
     getRecordById,
     createRecord,
     updateRecord,
@@ -68,6 +69,11 @@ router.get(
 router.get(
     "/search",
     searchRecords
+);
+
+router.get(
+    "/export",
+    exportRecords
 );
 
 // REGISTRARS USED BY RECORDS

@@ -21,6 +21,8 @@ const categorySelect =
 
 const registrarSelect =
     document.getElementById("registrar");
+const exportBranchSelect =
+    document.getElementById("exportBranch");
 
 const fromDateInput =
     document.getElementById("fromDate");
@@ -254,6 +256,36 @@ function loadUser() {
 
 
 loadUser();
+
+async function configureExportBranchFilter() {
+    const field = document.getElementById("exportBranchField");
+    if (!field || !exportBranchSelect) return;
+
+    let user = {};
+    try { user = JSON.parse(localStorage.getItem("user") || "{}"); } catch (_) {}
+    const role = String(user.role || "").toLowerCase().replace(/[-\s]+/g, "_");
+
+    if (role === "branch_staff") {
+        field.hidden = false;
+        exportBranchSelect.innerHTML = `<option value="${String(user.branch_id || "")}">${user.branch || "Assigned branch"}</option>`;
+        exportBranchSelect.disabled = true;
+        return;
+    }
+
+    if (role !== "admin") return;
+    try {
+        const response = await fetch("/api/admin/branches", { headers: { Authorization: `Bearer ${token}` } });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) return;
+        field.hidden = false;
+        exportBranchSelect.innerHTML = '<option value="all">All Branches</option>' +
+            (data.branches || []).map(branch => `<option value="${branch.id}">${String(branch.name).replace(/[&<>"']/g, "")}</option>`).join("");
+    } catch (_) {
+        // Export remains available; the backend still enforces admin access.
+    }
+}
+
+configureExportBranchFilter();
 
 
 // =========================================
@@ -3443,182 +3475,48 @@ document.addEventListener(
 // =========================================
 
 if (exportButton) {
-
-    exportButton.addEventListener(
-        "click",
-        () => {
-
-            if (
-                !allResults.length
-            ) {
-
-                Notification.warning(
-                    "There are no records to export."
-                );
-
-                return;
-
-            }
-
-
-            const headers = [
-
-                "No",
-
-                "Category",
-
-                "Name",
-
-                "Date of Birth/Death",
-
-                "Phone",
-
-                "Registration Date",
-
-                "Registrar",
-
-                "Status",
-
-                "SMS Sent"
-
-            ];
-
-
-            const rows =
-                allResults.map(
-                    (record, index) => {
-
-                        const category =
-                            record.category ||
-                            "";
-
-
-                        const isDeath =
-                            String(category)
-                                .toLowerCase()
-                                .trim() ===
-                            "death";
-
-
-                        const date =
-                            isDeath
-                                ? record.date_of_death
-                                : record.date_of_birth;
-
-
-                        return [
-
-                            index + 1,
-
-                            category,
-
-                            record.name ||
-                                "",
-
-                            date ||
-                                "",
-
-                            record.phone_number ||
-                                "",
-
-                            record.registration_date ||
-                                "",
-
-                            window.RecordRegistrar?.normalize(record.registrar) ||
-                                "",
-
-                            record.status ||
-                                "",
-
-                            record.sms_sent
-                                ? "Yes"
-                                : "No"
-
-                        ];
-
-                    }
-                );
-
-
-            const csv = [
-
-                headers,
-
-                ...rows
-
-            ]
-
-            .map(
-                row =>
-
-                    row
-                        .map(
-                            value =>
-
-                                `"${String(value)
-                                    .replace(
-                                        /"/g,
-                                        '""'
-                                    )}"`
-                        )
-
-                        .join(",")
-
-            )
-
-            .join("\n");
-
-
-            const blob =
-                new Blob(
-                    [csv],
-                    {
-                        type:
-                            "text/csv;charset=utf-8;"
-                    }
-                );
-
-
-            const url =
-                URL.createObjectURL(
-                    blob
-                );
-
-
-            const link =
-                document.createElement(
-                    "a"
-                );
-
-
-            link.href =
-                url;
-
-
-            link.download =
-                "RecorDs-cases.csv";
-
-
-            document.body.appendChild(
-                link
-            );
-
-
-            link.click();
-
-
-            document.body.removeChild(
-                link
-            );
-
-
-            URL.revokeObjectURL(
-                url
-            );
-
+    exportButton.addEventListener("click", async () => {
+        const params = new URLSearchParams();
+        const dateOfBirth = parseDateInput(dateOfBirthInput.value.trim());
+        const filters = [
+            ["name", nameInput.value.trim()],
+            ["dateOfBirth", dateOfBirth],
+            ["status", statusSelect.value],
+            ["category", categorySelect.value],
+            ["registrar", registrarSelect?.value || ""],
+            ["fromDate", fromDateInput.value],
+            ["toDate", toDateInput.value],
+            ["branch", exportBranchSelect?.value || ""]
+        ];
+        if (dateOfBirthInput.value.trim() && !dateOfBirth) {
+            Notification.warning("Enter a valid Date of Birth / Death in DD-MM-YYYY format.");
+            return;
         }
-    );
-
+        filters.forEach(([key, value]) => { if (value) params.set(key, value); });
+        exportButton.disabled = true;
+        try {
+            const response = await fetch(`/api/records/export?${params.toString()}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.message || "Unable to export records.");
+            }
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "RecorDs-cases.csv";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            Notification.error(error.message);
+        } finally {
+            exportButton.disabled = false;
+        }
+    });
 }
 
 
