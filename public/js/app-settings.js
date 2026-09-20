@@ -972,21 +972,23 @@
 
         const originalNextSibling = logoutButton.nextSibling;
         const mobileQuery = window.matchMedia("(max-width: 1100px)");
-        const header = document.querySelector(
-            ".users-topbar, .reports-topbar, .account-heading"
+        const desktopParent = document.querySelector(
+            ".users-topbar-profile, .page-top-right, .reports-topbar, " +
+            ".account-heading, .pending-sync-heading, .page-heading, .settings-main .hero"
         );
 
-        if (!header) {
+        if (!desktopParent) {
             return;
         }
 
-        const desktopParent = header.matches(".users-topbar")
-            ? header.querySelector(".users-topbar-profile") || header
-            : header;
+        const isFloatingHeader = desktopParent.matches(
+            ".page-heading, .settings-main .hero"
+        );
 
         const placeLogout = () => {
             if (mobileQuery.matches) {
                 logoutButton.classList.remove("header-logout-button");
+                logoutButton.classList.remove("header-logout-floating");
                 logoutButton.classList.add("logout");
 
                 if (originalNextSibling && originalNextSibling.parentNode === sidebarBottom) {
@@ -999,6 +1001,7 @@
 
             logoutButton.classList.remove("logout");
             logoutButton.classList.add("header-logout-button");
+            logoutButton.classList.toggle("header-logout-floating", isFloatingHeader);
             desktopParent.appendChild(logoutButton);
         };
 

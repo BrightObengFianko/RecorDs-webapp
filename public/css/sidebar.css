@@ -335,6 +335,16 @@ a {
     height: 16px;
 }
 
+@media (min-width: 1101px) {
+    .header-logout-floating {
+        position: fixed;
+        top: 16px;
+        right: 30px;
+        z-index: 1100;
+        margin-left: 0;
+    }
+}
+
 .avatar.has-photo,
 .top-avatar.has-photo {
     background-size: cover;
