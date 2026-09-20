@@ -321,18 +321,28 @@ a {
     background: var(--app-surface);
     color: var(--app-text);
     cursor: pointer;
-    transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    transition:
+        background-color 180ms ease,
+        color 180ms ease,
+        border-color 180ms ease,
+        transform 180ms ease;
 }
 
 .header-logout-button:hover {
-    border-color: var(--accent);
+    background: var(--accent-soft);
     color: var(--accent-ink);
+    border-color: var(--accent-soft);
     transform: translateY(-1px);
 }
 
 .header-logout-button .logout-icon {
     width: 16px;
     height: 16px;
+}
+
+.header-logout-button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 @media (min-width: 1101px) {
