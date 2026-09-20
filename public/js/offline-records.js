@@ -777,6 +777,9 @@
     window.RecordOfflineQueue = {
         isSupported: isIndexedDbSupported,
         getCurrentUserKey,
+        getRecord,
+        removeRecord: deleteRecord,
+        restoreRecord: saveRecord,
         queueRecord,
         syncPendingRecords,
         syncForCurrentUser,

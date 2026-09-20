@@ -4,6 +4,9 @@
     const count = document.getElementById("pendingSyncCount");
     const state = document.getElementById("pendingSyncState");
     const syncButton = document.getElementById("pendingSyncButton");
+    let openCard = null;
+    let deletedEntry = null;
+    let undoTimer = null;
 
     if (!token) {
         window.location.replace("index.html");
@@ -42,6 +45,88 @@
         return `<div class="pending-sync-detail"><label>${escapeHtml(label)}</label><span>${escapeHtml(value || "-")}</span></div>`;
     }
 
+    function closeOpenCard() {
+        if (!openCard) return;
+        openCard.classList.remove("is-open-left", "is-open-right");
+        openCard.querySelector(".pending-sync-swipe-content").style.transform = "";
+        openCard = null;
+    }
+
+    function showUndoNotice() {
+        const notice = document.createElement("div");
+        notice.className = "pending-sync-undo";
+        notice.innerHTML = `<span>Case deleted</span><button type="button">Undo</button>`;
+        document.body.appendChild(notice);
+        notice.querySelector("button").addEventListener("click", async () => {
+            if (!deletedEntry) return;
+            await window.RecordOfflineQueue.restoreRecord(deletedEntry);
+            deletedEntry = null;
+            window.clearTimeout(undoTimer);
+            notice.remove();
+            await renderQueue();
+            Notification.success("Case restored.");
+        });
+        undoTimer = window.setTimeout(() => {
+            deletedEntry = null;
+            notice.remove();
+        }, 6000);
+    }
+
+    async function deleteOfflineCase(card) {
+        const uuid = card.dataset.offlineUuid;
+        const entry = await window.RecordOfflineQueue.getRecord(uuid);
+        if (!entry) return;
+        if (!window.confirm("Are you sure you want to delete this recorded case?")) return;
+
+        await window.RecordOfflineQueue.removeRecord(uuid);
+        deletedEntry = entry;
+        closeOpenCard();
+        await renderQueue();
+        showUndoNotice();
+    }
+
+    function enableSwipe(card) {
+        const content = card.querySelector(".pending-sync-swipe-content");
+        let startX = 0;
+        let startY = 0;
+        let dragging = false;
+
+        card.addEventListener("pointerdown", event => {
+            if (event.pointerType === "mouse") return;
+            startX = event.clientX;
+            startY = event.clientY;
+            dragging = false;
+            card.setPointerCapture?.(event.pointerId);
+        });
+
+        card.addEventListener("pointermove", event => {
+            if (event.pointerType === "mouse") return;
+            const deltaX = event.clientX - startX;
+            const deltaY = event.clientY - startY;
+            if (!dragging && Math.abs(deltaX) < 12) return;
+            if (!dragging && Math.abs(deltaY) > Math.abs(deltaX)) return;
+            dragging = true;
+            event.preventDefault();
+            const offset = Math.max(-104, Math.min(104, deltaX));
+            content.style.transform = `translateX(${offset}px)`;
+        });
+
+        card.addEventListener("pointerup", event => {
+            if (!dragging || event.pointerType === "mouse") return;
+            const deltaX = event.clientX - startX;
+            dragging = false;
+            if (Math.abs(deltaX) < 56) {
+                closeOpenCard();
+                return;
+            }
+            closeOpenCard();
+            openCard = card;
+            const direction = deltaX < 0 ? "is-open-left" : "is-open-right";
+            card.classList.add(direction);
+            content.style.transform = deltaX < 0 ? "translateX(-104px)" : "translateX(104px)";
+        });
+    }
+
     async function renderQueue() {
         const queue = window.RecordOfflineQueue;
         if (!queue || typeof queue.getPendingRecords !== "function") {
@@ -68,6 +153,14 @@
                 : record.date_of_birth;
 
             return `
+                <article class="pending-sync-swipe-card" data-offline-uuid="${escapeHtml(entry.uuid)}">
+                    <div class="pending-sync-swipe-actions pending-sync-swipe-actions-left">
+                        <button type="button" data-offline-action="delete" aria-label="Delete case">Delete</button>
+                    </div>
+                    <div class="pending-sync-swipe-actions pending-sync-swipe-actions-right">
+                        <a href="create-record.html" data-offline-action="edit" aria-label="Open Record Case">Edit</a>
+                    </div>
+                    <div class="pending-sync-swipe-content">
                 <details class="pending-sync-card">
                     <summary>
                         <div>
@@ -91,8 +184,15 @@
                         ${detail("Notes", record.notes)}
                     </div>
                 </details>
+                    </div>
+                </article>
             `;
         }).join("");
+
+        list.querySelectorAll(".pending-sync-swipe-card").forEach(enableSwipe);
+        list.querySelectorAll('[data-offline-action="delete"]').forEach(button => {
+            button.addEventListener("click", () => deleteOfflineCase(button.closest(".pending-sync-swipe-card")));
+        });
     }
 
     async function syncNow() {
@@ -120,6 +220,9 @@
 
     syncButton.addEventListener("click", syncNow);
     window.addEventListener("online", renderQueue);
+    document.addEventListener("pointerdown", event => {
+        if (openCard && !openCard.contains(event.target)) closeOpenCard();
+    });
     window.setInterval(() => {
         if (document.visibilityState === "visible") renderQueue().catch(() => {});
     }, 5000);

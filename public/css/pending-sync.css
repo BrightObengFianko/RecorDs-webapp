@@ -80,6 +80,86 @@ body {
     padding: 16px;
 }
 
+.pending-sync-swipe-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    touch-action: pan-y;
+}
+
+.pending-sync-swipe-content {
+    position: relative;
+    z-index: 1;
+    transition: transform 180ms ease;
+}
+
+.pending-sync-swipe-actions {
+    position: absolute;
+    inset: 0 auto 0 0;
+    display: flex;
+    align-items: center;
+    width: 104px;
+    padding: 8px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.pending-sync-swipe-actions-left {
+    justify-content: flex-start;
+    background: #dc2626;
+}
+
+.pending-sync-swipe-actions-right {
+    inset: 0 0 0 auto;
+    justify-content: flex-end;
+    background: var(--accent, #5b4df5);
+}
+
+.pending-sync-swipe-actions button,
+.pending-sync-swipe-actions a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 72px;
+    min-height: 44px;
+    border: 0;
+    border-radius: 8px;
+    color: #fff;
+    background: transparent;
+    font: inherit;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.pending-sync-swipe-card.is-open-left .pending-sync-swipe-actions-left,
+.pending-sync-swipe-card.is-open-right .pending-sync-swipe-actions-right {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.pending-sync-undo {
+    position: fixed;
+    right: 16px;
+    bottom: 18px;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    color: #fff;
+    background: #1f2937;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, .24);
+}
+
+.pending-sync-undo button {
+    border: 0;
+    color: #a5b4fc;
+    background: transparent;
+    font: inherit;
+    font-weight: 700;
+}
+
 .pending-sync-card summary {
     display: flex;
     align-items: center;
