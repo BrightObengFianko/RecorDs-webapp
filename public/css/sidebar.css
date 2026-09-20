@@ -99,6 +99,7 @@ a {
     gap: 10px;
 
     padding: 20px 18px;
+    flex: 0 0 auto;
 }
 
 .brand-icon {
@@ -146,7 +147,9 @@ a {
 .navigation {
     padding: 10px 12px;
 
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .menu {
@@ -217,6 +220,7 @@ a {
     padding: 15px 17px;
 
     border-top: 1px solid var(--app-sidebar-border);
+    flex: 0 0 auto;
 }
 
 .user-box {
@@ -226,6 +230,7 @@ a {
     gap: 10px;
 
     margin-bottom: 12px;
+    min-width: 0;
 }
 
 .avatar,
@@ -245,6 +250,7 @@ a {
 
     background: var(--accent);
     color: var(--accent-foreground);
+    flex: 0 0 auto;
 }
 
 .avatar.logo-avatar,
@@ -256,6 +262,7 @@ a {
 
 .user-info {
     min-width: 0;
+    overflow: hidden;
 }
 
 .user-info strong {
