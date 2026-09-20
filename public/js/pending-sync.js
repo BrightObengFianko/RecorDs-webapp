@@ -85,6 +85,58 @@
         showUndoNotice();
     }
 
+    async function editOfflineCase(card) {
+        const entry = await window.RecordOfflineQueue.getRecord(card.dataset.offlineUuid);
+        const record = entry?.payload;
+        if (!record) return;
+
+        const overlay = document.createElement("div");
+        overlay.className = "pending-sync-editor-overlay";
+        overlay.innerHTML = `
+            <section class="pending-sync-editor" role="dialog" aria-modal="true" aria-labelledby="offlineEditorTitle">
+                <div class="pending-sync-editor-heading">
+                    <div><h2 id="offlineEditorTitle">Edit offline case</h2><p>Changes stay on this device until synchronization.</p></div>
+                    <button type="button" class="pending-sync-editor-close" aria-label="Close editor">&times;</button>
+                </div>
+                <form class="pending-sync-editor-form">
+                    <label>Customer name<input name="name" required value="${escapeHtml(record.name || "")}"></label>
+                    <label>Category<select name="category">
+                        <option value="Birth" ${record.category === "Birth" ? "selected" : ""}>Birth</option>
+                        <option value="Death" ${record.category === "Death" ? "selected" : ""}>Death</option>
+                    </select></label>
+                    <label>Phone number<input name="phone_number" inputmode="tel" value="${escapeHtml(record.phone_number || "")}"></label>
+                    <label>Date of birth<input name="date_of_birth" placeholder="YYYY-MM-DD" value="${escapeHtml(record.date_of_birth || "")}"></label>
+                    <label>Date of death<input name="date_of_death" placeholder="YYYY-MM-DD" value="${escapeHtml(record.date_of_death || "")}"></label>
+                    <label class="pending-sync-editor-wide">Notes<textarea name="notes">${escapeHtml(record.notes || "")}</textarea></label>
+                    <div class="pending-sync-editor-actions"><button type="button" class="pending-sync-editor-cancel">Cancel</button><button type="submit">Save changes</button></div>
+                </form>
+            </section>
+        `;
+        document.body.appendChild(overlay);
+        const close = () => overlay.remove();
+        overlay.querySelector(".pending-sync-editor-close").addEventListener("click", close);
+        overlay.querySelector(".pending-sync-editor-cancel").addEventListener("click", close);
+        overlay.addEventListener("click", event => { if (event.target === overlay) close(); });
+        overlay.querySelector("form").addEventListener("submit", async event => {
+            event.preventDefault();
+            const values = new FormData(event.currentTarget);
+            const updatedPayload = {
+                ...record,
+                name: String(values.get("name") || "").trim().toUpperCase(),
+                category: String(values.get("category") || record.category || "Birth"),
+                phone_number: String(values.get("phone_number") || "").trim(),
+                date_of_birth: String(values.get("date_of_birth") || "").trim() || null,
+                date_of_death: String(values.get("date_of_death") || "").trim() || null,
+                notes: String(values.get("notes") || "").trim()
+            };
+            if (!updatedPayload.name) return;
+            await window.RecordOfflineQueue.queueRecord(updatedPayload, { operationType: "CREATE" });
+            close();
+            await renderQueue();
+            Notification.success("Offline case updated.");
+        });
+    }
+
     function enableSwipe(card) {
         const content = card.querySelector(".pending-sync-swipe-content");
         let startX = 0;
@@ -158,7 +210,7 @@
                         <button type="button" data-offline-action="delete" aria-label="Delete case">Delete</button>
                     </div>
                     <div class="pending-sync-swipe-actions pending-sync-swipe-actions-right">
-                        <a href="create-record.html" data-offline-action="edit" aria-label="Open Record Case">Edit</a>
+                        <button type="button" data-offline-action="edit" aria-label="Edit case">Edit</button>
                     </div>
                     <div class="pending-sync-swipe-content">
                 <details class="pending-sync-card">
@@ -167,7 +219,11 @@
                             <div class="pending-sync-name">${escapeHtml(record.name || "Unnamed record")}</div>
                             <div class="pending-sync-meta">${escapeHtml(record.category || "-")} · ${escapeHtml(formatDate(date))}</div>
                         </div>
-                        <span class="pending-sync-state ${syncState.className}">${escapeHtml(syncState.label)}</span>
+                        <div class="pending-sync-card-controls">
+                            <span class="pending-sync-state ${syncState.className}">${escapeHtml(syncState.label)}</span>
+                            <button type="button" data-offline-action="edit" aria-label="Edit case">Edit</button>
+                            <button type="button" data-offline-action="delete" aria-label="Delete case">Delete</button>
+                        </div>
                     </summary>
                     <div class="pending-sync-details">
                         ${detail("Customer name", record.name)}
@@ -191,7 +247,16 @@
 
         list.querySelectorAll(".pending-sync-swipe-card").forEach(enableSwipe);
         list.querySelectorAll('[data-offline-action="delete"]').forEach(button => {
-            button.addEventListener("click", () => deleteOfflineCase(button.closest(".pending-sync-swipe-card")));
+            button.addEventListener("click", event => {
+                event.stopPropagation();
+                deleteOfflineCase(button.closest(".pending-sync-swipe-card"));
+            });
+        });
+        list.querySelectorAll('[data-offline-action="edit"]').forEach(button => {
+            button.addEventListener("click", event => {
+                event.stopPropagation();
+                editOfflineCase(button.closest(".pending-sync-swipe-card"));
+            });
         });
     }
 

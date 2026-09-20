@@ -173,6 +173,72 @@ body {
     display: none;
 }
 
+.pending-sync-card-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.pending-sync-card-controls button {
+    min-height: 32px;
+    padding: 0 9px;
+    border: 1px solid var(--app-border, #e2e8f0);
+    border-radius: 7px;
+    color: var(--app-text, #1f2937);
+    background: var(--app-surface-2, #fafafd);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.pending-sync-card-controls button:last-child {
+    color: #b91c1c;
+}
+
+.pending-sync-editor-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1300;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(15, 23, 42, .48);
+}
+
+.pending-sync-editor {
+    width: min(560px, 100%);
+    max-height: min(720px, 92vh);
+    overflow: auto;
+    padding: 22px;
+    border: 1px solid var(--app-border, #e2e8f0);
+    border-radius: 14px;
+    background: var(--app-surface, #fff);
+    box-shadow: 0 20px 60px rgba(15, 23, 42, .25);
+}
+
+.pending-sync-editor-heading,
+.pending-sync-editor-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.pending-sync-editor-heading h2 { margin: 0; color: var(--app-text, #1f2937); font-size: 20px; }
+.pending-sync-editor-heading p { margin: 6px 0 0; color: var(--app-muted, #64748b); font-size: 12px; }
+.pending-sync-editor-close { border: 0; background: transparent; color: var(--app-muted, #64748b); font-size: 26px; }
+.pending-sync-editor-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
+.pending-sync-editor-form label { display: grid; gap: 6px; color: var(--app-text, #1f2937); font-size: 12px; font-weight: 700; }
+.pending-sync-editor-form input,
+.pending-sync-editor-form select,
+.pending-sync-editor-form textarea { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid var(--app-border, #e2e8f0); border-radius: 7px; color: var(--app-text, #1f2937); background: var(--app-input-bg, #fff); font: inherit; }
+.pending-sync-editor-form textarea { min-height: 88px; resize: vertical; }
+.pending-sync-editor-wide { grid-column: 1 / -1; }
+.pending-sync-editor-actions { justify-content: flex-end; grid-column: 1 / -1; }
+.pending-sync-editor-actions button { min-height: 40px; padding: 0 14px; border: 1px solid var(--app-border, #e2e8f0); border-radius: 7px; background: var(--app-surface-2, #fafafd); font: inherit; font-weight: 700; }
+.pending-sync-editor-actions button[type="submit"] { border-color: var(--accent, #5b4df5); color: #fff; background: var(--accent, #5b4df5); }
+
 .pending-sync-name {
     color: var(--app-text, #1f2937);
     font-size: 15px;
@@ -253,5 +319,18 @@ body {
 
     .pending-sync-details {
         grid-template-columns: 1fr;
+    }
+
+    .pending-sync-card-controls button {
+        display: none;
+    }
+
+    .pending-sync-editor-form {
+        grid-template-columns: 1fr;
+    }
+
+    .pending-sync-editor-wide,
+    .pending-sync-editor-actions {
+        grid-column: auto;
     }
 }
