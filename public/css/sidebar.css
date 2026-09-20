@@ -632,6 +632,9 @@ body.sidebar-collapsed .logout span {
         transform: translateX(-105%);
         transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
         box-shadow: 18px 0 44px rgba(8, 19, 45, 0.2);
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(215, 217, 228, 0.32) transparent;
     }
 
     .sidebar.mobile-open {
@@ -657,6 +660,33 @@ body.sidebar-collapsed .logout span {
 
     .sidebar-toggle .toggle-icon {
         display: none;
+    }
+
+    .sidebar .navigation,
+    .sidebar .menu {
+        flex: 0 0 auto;
+        min-height: auto;
+        overflow: visible;
+        gap: 8px;
+        padding: 14px 12px 10px;
+    }
+
+    .sidebar .navigation .nav-item,
+    .sidebar .menu a {
+        min-height: 48px;
+        margin-bottom: 0;
+        padding: 12px 14px;
+    }
+
+    .sidebar .sidebar-bottom {
+        flex: 0 0 auto;
+        margin-top: 14px;
+        padding: 18px 17px 24px;
+    }
+
+    .sidebar .logout {
+        min-height: 44px;
+        padding: 10px 2px;
     }
 
     .sidebar-toggle::before {
