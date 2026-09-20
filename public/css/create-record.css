@@ -341,6 +341,17 @@ a {
     gap: 20px;
 
     width: 100%;
+    min-width: 0;
+}
+
+.form-group {
+    min-width: 0;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    max-width: 100%;
 }
 
 
@@ -729,6 +740,13 @@ textarea:focus-visible {
         font-size: 15px;
     }
 
+    .form-group input[type="date"] {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        appearance: auto;
+    }
+
 
     .form-actions {
         flex-direction: column-reverse;
@@ -792,6 +810,7 @@ textarea:focus-visible {
     .form-card {
         padding: 16px 13px;
         border-radius: 10px;
+        min-width: 0;
     }
 
     .form-card h2 {
