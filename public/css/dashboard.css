@@ -148,6 +148,8 @@ a {
     justify-content: flex-end;
     gap: 8px;
     margin-top: 14px;
+    width: 100%;
+    min-width: 0;
     min-height: 32px;
 }
 
@@ -1511,10 +1513,21 @@ th {
 @media (max-width: 380px) {
 
     .recent-records-pagination {
-        justify-content: center;
+        justify-content: space-between;
         gap: 5px;
-        overflow-x: auto;
+        width: 100%;
+        overflow: visible;
         padding-bottom: 2px;
+    }
+
+    .recent-records-pagination > .recent-page-button {
+        flex: 0 0 auto;
+        min-width: 58px;
+    }
+
+    .recent-page-numbers {
+        flex: 0 1 auto;
+        min-width: 0;
     }
 
     .recent-page-button {
