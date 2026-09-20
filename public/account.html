@@ -83,7 +83,6 @@
                         <p>View cases recorded by Branch Staff waiting for approval.</p>
                     </div>
                 </div>
-                <button class="refresh-button" id="refreshButton" type="button"><svg class="ui-icon"><use href="#account-refresh"></use></svg><span>Refresh</span></button>
             </header>
 
             <section class="account-filters">
@@ -95,7 +94,7 @@
             </section>
 
             <section class="account-card">
-                <div class="account-card-heading"><div><span class="processing-badge">Waiting for Approval</span><button class="account-primary-button" id="approveSelectedButton" type="button"><svg class="ui-icon"><use href="#account-check"></use></svg><span>Approved</span></button></div><strong id="totalCases">0 Cases</strong></div>
+                <div class="account-card-heading"><div><span class="processing-badge">Waiting for Approval</span><button class="account-primary-button" id="approveSelectedButton" type="button"><svg class="ui-icon"><use href="#account-check"></use></svg><span>Approved</span></button></div><div class="account-card-total"><strong id="totalCases">0 Cases</strong><button class="account-card-refresh" id="refreshButton" type="button" aria-label="Refresh cases" title="Refresh cases"><svg class="ui-icon"><use href="#account-refresh"></use></svg></button></div></div>
                 <div class="account-bulk-row"><label><input id="selectAll" type="checkbox"><span>Select All</span></label><span id="selectedCount">0 selected</span><p>Approve cases one by one or in bulk.</p></div>
                 <div class="account-table-wrap">
                     <table>

@@ -310,6 +310,43 @@ body.account-page {
     font-weight: 500;
 }
 
+.account-card-total {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    flex: 0 0 auto;
+}
+
+.account-card-refresh {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: var(--app-surface);
+    color: var(--app-text);
+    cursor: pointer;
+}
+
+.account-card-refresh:hover {
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    background: var(--app-surface-2);
+}
+
+.account-card-refresh .ui-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.account-card-refresh:disabled {
+    cursor: wait;
+    opacity: .55;
+}
+
 .processing-badge,
 .category-badge {
     border-radius: 999px;
@@ -512,6 +549,14 @@ body.account-page {
     .account-bulk-row {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .account-card-heading {
+        align-items: flex-start;
+    }
+
+    .account-card-total {
+        align-self: flex-end;
     }
 
     .account-heading h1 {
