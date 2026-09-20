@@ -480,7 +480,7 @@
                     };
                 }
 
-                if (response.status === 409 && isUpdate) {
+                if (response.status === 409) {
                     await saveRecord({
                         ...entry,
                         status: CONFLICT_STATUS,

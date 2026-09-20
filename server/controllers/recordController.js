@@ -157,54 +157,61 @@ function normalizeName(name) {
         .replace(/\s+/g, " ");
 }
 
+function duplicateLockKey(category, name, dateOfBirth, dateOfDeath) {
+    const isDeathCategory =
+        String(category || "").toLowerCase().trim() === "death";
+    const identifyingDate = isDeathCategory ? dateOfDeath : dateOfBirth;
+
+    return [
+        isDeathCategory ? "death" : "birth",
+        normalizeName(name),
+        String(identifyingDate || "").trim()
+    ].join("|");
+}
+
 /**
  * Checks if a record is a duplicate
  * - Normal cases: same normalized Name + Date of Birth
  * - Death cases: same normalized Name + Date of Death
  */
 async function checkDuplicateRecord(pool, category, name, dateOfBirth, dateOfDeath) {
-    try {
-        const isDeathCategory =
-            category &&
-            String(category).toLowerCase().trim() === "death";
+    const isDeathCategory =
+        category &&
+        String(category).toLowerCase().trim() === "death";
 
-        const normalizedName = normalizeName(name);
+    const normalizedName = normalizeName(name);
 
-        if (!normalizedName || (!dateOfBirth && !dateOfDeath)) {
-            return null;
-        }
-
-        let query;
-        let params;
-
-        if (isDeathCategory) {
-            // Death cases: check name + date_of_death
-            query = `
-                SELECT id, name, category, date_of_death
-                FROM records
-                WHERE LOWER(TRIM(name)) = LOWER(TRIM($1))
-                  AND date_of_death = $2
-                LIMIT 1
-            `;
-            params = [name, dateOfDeath];
-        } else {
-            // Normal cases: check name + date_of_birth
-            query = `
-                SELECT id, name, category, date_of_birth
-                FROM records
-                WHERE LOWER(TRIM(name)) = LOWER(TRIM($1))
-                  AND date_of_birth = $2
-                LIMIT 1
-            `;
-            params = [name, dateOfBirth];
-        }
-
-        const result = await pool.query(query, params);
-        return result.rows[0] || null;
-    } catch (error) {
-        console.error("DUPLICATE CHECK ERROR:", error);
+    if (!normalizedName || (!dateOfBirth && !dateOfDeath)) {
         return null;
     }
+
+    let query;
+    let params;
+
+    if (isDeathCategory) {
+        // Death cases: check name + date_of_death
+        query = `
+            SELECT id, name, category, date_of_death
+            FROM records
+            WHERE LOWER(TRIM(name)) = LOWER(TRIM($1))
+              AND date_of_death = $2
+            LIMIT 1
+        `;
+        params = [name, dateOfDeath];
+    } else {
+        // Normal cases: check name + date_of_birth
+        query = `
+            SELECT id, name, category, date_of_birth
+            FROM records
+            WHERE LOWER(TRIM(name)) = LOWER(TRIM($1))
+              AND date_of_birth = $2
+            LIMIT 1
+        `;
+        params = [name, dateOfBirth];
+    }
+
+    const result = await pool.query(query, params);
+    return result.rows[0] || null;
 }
 
 function recordSelectSql() {
@@ -403,6 +410,7 @@ function assertBranchAccess(user, record) {
 
 const createRecord = async (req, res) => {
     let clientUuid = null;
+    let transactionClient = null;
 
     try {
         if (!canCreateRecords(req.user)) {
@@ -502,9 +510,19 @@ const createRecord = async (req, res) => {
             });
         }
 
+        transactionClient = await pool.connect();
+        await transactionClient.query("BEGIN");
+
+        // Serialize the existing duplicate check and insert for the same case.
+        // This closes the race where two users submit identical cases together.
+        await transactionClient.query(
+            "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+            [duplicateLockKey(category, name, date_of_birth, date_of_death)]
+        );
+
         if (clientUuid) {
             const existingRecordResult =
-                await pool.query(
+                await transactionClient.query(
                     `
                         SELECT *
                         FROM records
@@ -515,6 +533,9 @@ const createRecord = async (req, res) => {
                 );
 
             if (existingRecordResult.rows[0]) {
+                await transactionClient.query("COMMIT");
+                transactionClient.release();
+                transactionClient = null;
                 return res.status(200).json({
                     success: true,
                     message: "Record already exists.",
@@ -531,7 +552,7 @@ const createRecord = async (req, res) => {
         // =========================================
 
         const duplicateRecord = await checkDuplicateRecord(
-            pool,
+            transactionClient,
             category,
             name,
             date_of_birth,
@@ -539,6 +560,9 @@ const createRecord = async (req, res) => {
         );
 
         if (duplicateRecord) {
+            await transactionClient.query("ROLLBACK");
+            transactionClient.release();
+            transactionClient = null;
             return res.status(409).json({
                 success: false,
                 message: "Case Already Recorded.",
@@ -558,7 +582,7 @@ const createRecord = async (req, res) => {
                 ? "Processing"
                 : "Pending";
 
-        const result = await pool.query(
+        const result = await transactionClient.query(
             `
                 INSERT INTO records
                 (
@@ -593,6 +617,10 @@ const createRecord = async (req, res) => {
             ]
         );
 
+        await transactionClient.query("COMMIT");
+        transactionClient.release();
+        transactionClient = null;
+
         await recordActivity({
             request: req,
             userId: req.user?.id,
@@ -612,6 +640,15 @@ const createRecord = async (req, res) => {
             record: normalizeRecordRows(result.rows)[0]
         });
     } catch (error) {
+        if (transactionClient) {
+            try {
+                await transactionClient.query("ROLLBACK");
+            } catch (rollbackError) {
+                console.error("CREATE RECORD ROLLBACK ERROR:", rollbackError);
+            }
+            transactionClient.release();
+        }
+
         if (error.code === "23505" && clientUuid) {
             const existingRecordResult = await pool.query(
                 `
