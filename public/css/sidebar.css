@@ -128,7 +128,7 @@ a {
     align-items: center;
     justify-content: flex-start;
 
-    padding: 15px 19px;
+    padding: 10px 14px;
 
     background: transparent;
 }
@@ -136,9 +136,9 @@ a {
 .sidebar .shared-sidebar-logo img {
     display: block;
 
-    width: 100px;
+    width: 78px;
     height: auto;
-    max-height: 70px;
+    max-height: 50px;
 
     object-fit: contain;
 }
@@ -149,21 +149,21 @@ a {
 
     flex: 1 1 auto;
     min-height: 0;
-    overflow-y: auto;
+    overflow: visible;
 }
 
 .menu {
     display: flex;
     flex-direction: column;
 
-    gap: 7px;
+    gap: 4px;
 }
 
 .navigation {
     display: flex;
     flex-direction: column;
 
-    gap: 7px;
+    gap: 4px;
 }
 
 .menu a,
@@ -177,11 +177,11 @@ a {
 
     text-decoration: none;
 
-    padding: 12px 14px;
+    padding: 10px 12px;
 
     border-radius: 8px;
 
-    margin-bottom: 5px;
+    margin-bottom: 3px;
 
     font-size: 14px;
 

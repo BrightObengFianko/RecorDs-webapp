@@ -37,14 +37,14 @@ a {
 .logo {
     display: flex;
     align-items: center;
-    padding: 15px 19px;
+    padding: 10px 14px;
     background: transparent;
 }
 
 .logo img {
-    width: 100px;
+    width: 78px;
     height: auto;
-    max-height: 70px;
+    max-height: 50px;
     object-fit: contain;
     background:transparent;
 }
