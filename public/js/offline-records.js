@@ -1,10 +1,11 @@
 (function () {
     const DB_NAME = "recor_ds_offline_records";
-    const DB_VERSION = 2;
+    const DB_VERSION = 3;
     const STORE_NAME = "pending_records";
     const PENDING_STATUS = "PENDING_SYNC";
     const FAILED_STATUS = "SYNC_FAILED";
     const SYNCING_STATUS = "SYNCING";
+    const CONFLICT_STATUS = "SYNC_CONFLICT";
     const MAX_RETRY_DELAY_MS = 5 * 60 * 1000;
 
     let dbPromise = null;
@@ -267,7 +268,7 @@
         return records.filter(
             record =>
                 record &&
-                [PENDING_STATUS, FAILED_STATUS, SYNCING_STATUS].includes(record.status) &&
+                [PENDING_STATUS, FAILED_STATUS, SYNCING_STATUS, CONFLICT_STATUS].includes(record.status) &&
                 (
                     !normalizedOwnerKey ||
                     record.ownerKey === normalizedOwnerKey
@@ -285,6 +286,7 @@
             waiting: records.filter(record => record.status === PENDING_STATUS).length,
             syncing: records.filter(record => record.status === SYNCING_STATUS).length,
             failed: records.filter(record => record.status === FAILED_STATUS).length,
+            conflicts: records.filter(record => record.status === CONFLICT_STATUS).length,
             total: records.length
         };
     }
@@ -296,20 +298,24 @@
             .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
     }
 
-    async function queueRecord(recordData) {
+    async function queueRecord(recordData, options = {}) {
         const payload =
             clonePayload(recordData);
 
+        const operationType = options.operationType === "UPDATE"
+            ? "UPDATE"
+            : "CREATE";
+        const recordId = String(options.recordId || payload.record_id || "").trim();
         const uuid =
             String(
                 payload.client_uuid ||
-                ""
+                (operationType === "UPDATE" ? `update_${recordId}` : "")
             )
                 .trim();
 
-        if (!uuid) {
+        if (!uuid || (operationType === "UPDATE" && !recordId)) {
             throw new Error(
-                "A client UUID is required for offline records."
+                "Offline operation is missing its record identity."
             );
         }
 
@@ -326,6 +332,8 @@
 
         const entry = {
             uuid,
+            operationType,
+            recordId: recordId || null,
             ownerKey,
             status: PENDING_STATUS,
             payload: {
@@ -423,20 +431,24 @@
                     updatedAt: new Date().toISOString()
                 });
 
+                const requestPayload = { ...entry.payload };
+                delete requestPayload.record_id;
+
+                const isUpdate = entry.operationType === "UPDATE";
                 const response =
                     await fetch(
-                        "/api/records",
+                        isUpdate
+                            ? `/api/records/${encodeURIComponent(entry.recordId)}`
+                            : "/api/records",
                         {
-                            method: "POST",
+                            method: isUpdate ? "PATCH" : "POST",
                             headers: {
                                 "Content-Type":
                                     "application/json",
                                 "Authorization":
                                     `Bearer ${token}`
                             },
-                            body: JSON.stringify(
-                                entry.payload
-                            )
+                            body: JSON.stringify(requestPayload)
                         }
                     );
 
@@ -466,6 +478,17 @@
                         authError: true,
                         networkError: false
                     };
+                }
+
+                if (response.status === 409 && isUpdate) {
+                    await saveRecord({
+                        ...entry,
+                        status: CONFLICT_STATUS,
+                        updatedAt: new Date().toISOString(),
+                        lastError: data?.message || "The server record changed while this edit was offline."
+                    });
+                    failedCount++;
+                    continue;
                 }
 
                 if (
@@ -641,7 +664,7 @@
         const copy = element.querySelector(".offline-sync-copy");
         const pendingLink = element.querySelector(".offline-sync-link");
         const isOnline = typeof navigator === "undefined" || navigator.onLine !== false;
-        const pendingCount = stats.waiting + stats.syncing + stats.failed;
+        const pendingCount = stats.waiting + stats.syncing + stats.failed + stats.conflicts;
 
         pendingLink.hidden = pendingCount === 0;
         pendingLink.textContent = pendingCount ? `Pending ${pendingCount}` : "Pending Sync";
@@ -650,8 +673,9 @@
             updateOfflineBanners("Offline - Records will be saved and synced when internet returns.");
             copy.textContent = `Offline · ${pendingCount} pending`;
             element.dataset.state = "offline";
-        } else if (stats.failed) {
-            updateOfflineBanners(`${stats.failed} offline record${stats.failed === 1 ? "" : "s"} need attention.`);
+        } else if (stats.failed || stats.conflicts) {
+            const attentionCount = stats.failed + stats.conflicts;
+            updateOfflineBanners(`${attentionCount} offline change${attentionCount === 1 ? "" : "s"} need attention.`);
             copy.textContent = `Online · ${pendingCount} pending`;
             element.dataset.state = "failed";
         } else if (stats.waiting) {

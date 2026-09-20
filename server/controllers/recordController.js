@@ -1779,7 +1779,8 @@ const updateRecord = async (req, res) => {
             registration_date,
             status,
             registrar,
-            notes
+            notes,
+            expected_updated_at
         } = req.body;
 
         if (
@@ -1809,7 +1810,8 @@ const updateRecord = async (req, res) => {
                     SELECT
                         id,
                         status,
-                        registrar
+                        registrar,
+                        updated_at
                     FROM records
                     WHERE id = $1
                     LIMIT 1
@@ -1847,6 +1849,16 @@ const updateRecord = async (req, res) => {
                 success: false,
                 message:
                     "Record not found."
+            });
+        }
+
+        if (
+            expected_updated_at &&
+            new Date(existingRecord.updated_at).getTime() !== new Date(expected_updated_at).getTime()
+        ) {
+            return res.status(409).json({
+                success: false,
+                message: "This record changed while the edit was offline. Review the latest record before retrying."
             });
         }
 

@@ -56,6 +56,7 @@ const editReturnPage =
 
 let isSubmitting = false;
 
+let editBaseUpdatedAt = null;
 function createClientUuid() {
     if (window.crypto && typeof window.crypto.randomUUID === "function") {
         return window.crypto.randomUUID();
@@ -660,6 +661,8 @@ async function loadRecordForEdit() {
             );
 
         }
+        editBaseUpdatedAt = record.updated_at || record.updatedAt || null;
+
 
 
         if (categoryInput) {
@@ -1156,6 +1159,10 @@ recordForm.addEventListener(
 
             status: status,
 
+            ...(isEditMode && editBaseUpdatedAt
+                ? { expected_updated_at: editBaseUpdatedAt }
+                : {}),
+
             registrar: registrar,
 
             notes: notes,
@@ -1319,7 +1326,10 @@ recordForm.addEventListener(
                 typeof window.RecordOfflineQueue.queueRecord === "function"
             ) {
                 try {
-                    await window.RecordOfflineQueue.queueRecord(recordData);
+                    await window.RecordOfflineQueue.queueRecord(recordData, {
+                        operationType: isEditMode ? "UPDATE" : "CREATE",
+                        recordId: isEditMode ? recordId : null
+                    });
 
                     Notification.warning(
                         "You are Offline - Record saved and will sync when internet returns."

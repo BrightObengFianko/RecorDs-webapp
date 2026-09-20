@@ -33,6 +33,7 @@
 
     function getState(entry) {
         if (entry.status === "SYNC_FAILED") return { label: "Sync failed - Retry", className: "failed" };
+        if (entry.status === "SYNC_CONFLICT") return { label: "Conflict - Review required", className: "failed" };
         if (entry.status === "SYNCING") return { label: "Syncing...", className: "" };
         return { label: "Waiting to sync", className: "" };
     }
@@ -50,7 +51,7 @@
         }
 
         const entries = await queue.getPendingRecords();
-        const activeEntries = entries.filter(entry => ["PENDING_SYNC", "SYNC_FAILED", "SYNCING"].includes(entry.status));
+        const activeEntries = entries.filter(entry => ["PENDING_SYNC", "SYNC_FAILED", "SYNCING", "SYNC_CONFLICT"].includes(entry.status));
         count.textContent = `${activeEntries.length} record${activeEntries.length === 1 ? "" : "s"} waiting to sync`;
         state.textContent = activeEntries.length ? "Stored securely on this device until the server confirms synchronization." : "All local records are synchronized.";
 

@@ -1278,7 +1278,7 @@ async function getOfflineSearchResults(filters) {
         .toLowerCase();
 
     return entries
-        .filter(entry => ["PENDING_SYNC", "SYNC_FAILED", "SYNCING"].includes(entry.status))
+        .filter(entry => ["PENDING_SYNC", "SYNC_FAILED", "SYNCING", "SYNC_CONFLICT"].includes(entry.status))
         .map(entry => ({
             ...entry.payload,
             id: `offline_${entry.uuid}`,
