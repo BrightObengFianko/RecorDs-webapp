@@ -1242,7 +1242,8 @@ async function getOfflineSearchResults(filters) {
     const name = String(filters.name || "").trim().toLowerCase();
     const category = String(filters.category || "").trim().toLowerCase();
     const status = String(filters.status || "").trim().toLowerCase().replace(/[_-]+/g, " ");
-    const registrar = String(filters.registrar || "").trim().toLowerCase();
+    const registrar = (window.RecordRegistrar?.normalize(filters.registrar) || "")
+        .toLowerCase();
 
     return entries
         .filter(entry => ["PENDING_SYNC", "SYNC_FAILED", "SYNCING"].includes(entry.status))
@@ -1257,7 +1258,8 @@ async function getOfflineSearchResults(filters) {
             const recordName = String(record.name || "").toLowerCase();
             const recordCategory = String(record.category || "").toLowerCase();
             const recordStatus = String(record.status || "Pending").toLowerCase().replace(/[_-]+/g, " ");
-            const recordRegistrar = String(record.registrar || "").toLowerCase();
+            const recordRegistrar = (window.RecordRegistrar?.normalize(record.registrar) || "")
+                .toLowerCase();
             const dateMatches = !filters.dateOfBirth || (
                 (category.includes("death") && !category.includes("birth")
                     ? record.date_of_death === filters.dateOfBirth
@@ -1844,7 +1846,7 @@ function displayResults() {
 
 
             const registrar =
-                record.registrar ||
+                window.RecordRegistrar?.normalize(record.registrar) ||
                 "-";
 
 
@@ -3522,7 +3524,7 @@ if (exportButton) {
                             record.registration_date ||
                                 "",
 
-                            record.registrar ||
+                            window.RecordRegistrar?.normalize(record.registrar) ||
                                 "",
 
                             record.status ||

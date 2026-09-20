@@ -11,6 +11,11 @@ const { sendToN8N } = require("../services/n8nService");
 const { getDefaultBranchId } = require("../utils/branchUtils");
 const { formatPhoneNumber, isValidPhoneNumber } = require("../utils/phoneUtils");
 const { boundedText, isIsoDate } = require("../utils/inputValidation");
+const {
+    normalizeRegistrar,
+    normalizedRegistrarSql,
+    normalizeRecordRows
+} = require("../utils/registrarUtils");
 
 function normalizeRole(role) {
     return String(role || "")
@@ -344,7 +349,7 @@ async function queryRecentTodayRecords(user, requestedPage) {
     const totalPages = Math.ceil(total / RECENT_RECORDS_PAGE_SIZE);
 
     return {
-        records: recordsResult.rows || [],
+        records: normalizeRecordRows(recordsResult.rows || []),
         selectedDate: selectedDateText,
         isToday,
         pagination: {
@@ -474,13 +479,11 @@ const createRecord = async (req, res) => {
                 : registrar ?? req.user?.name;
 
         const nextRegistrar =
-            String(
+            normalizeRegistrar(
                 requestedRegistrar ||
+                req.user?.name ||
                 "Unknown"
-            )
-                .trim() ||
-            req.user?.name ||
-                "Unknown";
+            ) || "Unknown";
 
         if (nextRegistrar.length > 150) {
             return res.status(400).json({
@@ -592,7 +595,7 @@ const createRecord = async (req, res) => {
         return res.status(201).json({
             success: true,
             message: "Record created successfully.",
-            record: result.rows[0]
+            record: normalizeRecordRows(result.rows)[0]
         });
     } catch (error) {
         if (error.code === "23505" && clientUuid) {
@@ -648,7 +651,7 @@ const getRecords = async (req, res) => {
 
         return res.json({
             success: true,
-            records: result.rows
+            records: normalizeRecordRows(result.rows)
         });
     } catch (error) {
         console.error("GET RECORDS ERROR:", error);
@@ -709,8 +712,8 @@ const getProcessingRecords = async (req, res) => {
         }
 
         if (registrar) {
-            query += ` AND r.registrar ILIKE $${parameter}`;
-            values.push(`%${registrar}%`);
+            query += ` AND ${normalizedRegistrarSql("r")} ILIKE $${parameter}`;
+            values.push(`%${normalizeRegistrar(registrar)}%`);
         }
 
         query += " ORDER BY r.registration_date DESC NULLS LAST, r.id DESC";
@@ -719,7 +722,7 @@ const getProcessingRecords = async (req, res) => {
 
         return res.json({
             success: true,
-            records: result.rows,
+            records: normalizeRecordRows(result.rows),
             count: result.rows.length
         });
     } catch (error) {
@@ -824,10 +827,7 @@ const getDashboardSummary = async (req, res) => {
             parameter++;
         };
 
-        const requestedRegistrar =
-            String(req.query?.registrar || "")
-                .trim()
-                .toUpperCase();
+        const requestedRegistrar = normalizeRegistrar(req.query?.registrar);
 
         const requestedYear = branchStaff
             ? new Date().getFullYear()
@@ -843,7 +843,7 @@ const getDashboardSummary = async (req, res) => {
                 : " WHERE FALSE";
         } else if (requestedRegistrar) {
             addSummaryFilter(
-                `LOWER(BTRIM(COALESCE(r.registrar, ''))) = LOWER(BTRIM($${parameter}))`,
+                `${normalizedRegistrarSql("r")} = $${parameter}`,
                 requestedRegistrar
             );
         }
@@ -886,12 +886,12 @@ const getDashboardSummary = async (req, res) => {
             ? `${summaryClause} AND ${overviewDateCondition}`
             : `WHERE ${overviewDateCondition}`;
 
-        const validRegistrarCondition = `LOWER(BTRIM(COALESCE(r.registrar, ''))) IN (
-            'admin',
-            'office',
-            'new office',
-            'new market',
-            'polyclinic'
+        const validRegistrarCondition = `${normalizedRegistrarSql("r")} IN (
+            'ADMIN',
+            'OFFICE',
+            'NEW OFFICE',
+            'NEW MARKET',
+            'POLYCLINIC'
         )`;
 
         const registrarPerformanceDateCondition = period === "daily"
@@ -1044,13 +1044,7 @@ const getDashboardSummary = async (req, res) => {
             pool.query(
                 `
                     SELECT
-                        CASE LOWER(BTRIM(r.registrar))
-                            WHEN 'admin' THEN 'ADMIN'
-                            WHEN 'office' THEN 'OFFICE'
-                            WHEN 'new office' THEN 'NEW OFFICE'
-                            WHEN 'new market' THEN 'NEW MARKET'
-                            WHEN 'polyclinic' THEN 'POLYCLINIC'
-                        END AS label,
+                        ${normalizedRegistrarSql("r")} AS label,
                         COUNT(*)::int AS count
                     FROM records r
                     ${registrarPerformanceClause}
@@ -1476,11 +1470,10 @@ const searchRecords = async (req, res) => {
 
         if (registrar) {
             query += `
-                AND LOWER(BTRIM(COALESCE(r.registrar, ''))) =
-                    LOWER(BTRIM($${parameter}))
+                AND ${normalizedRegistrarSql("r")} = $${parameter}
             `;
 
-            values.push(registrar);
+            values.push(normalizeRegistrar(registrar));
             parameter++;
         }
 
@@ -1540,7 +1533,7 @@ const searchRecords = async (req, res) => {
         return res.json({
             success: true,
             results:
-                result.rows,
+                normalizeRecordRows(result.rows),
             count:
                 result.rows.length
         });
@@ -1577,7 +1570,7 @@ const getRecordById = async (req, res) => {
             );
 
         const record =
-            result.rows[0];
+            normalizeRecordRows(result.rows)[0];
 
         if (!record) {
             return res.status(404).json({
@@ -1728,16 +1721,15 @@ const updateRecord = async (req, res) => {
                     ? normalizeStatusValue(status)
                     : existingStatus;
 
-        const nextRegistrar =
+        const nextRegistrar = normalizeRegistrar(
             registrar !== undefined &&
             registrar !== null &&
             String(registrar).trim() !== ""
-                ? String(registrar).trim()
-                : String(
-                    existingRecord.registrar ||
+                ? registrar
+                : existingRecord.registrar ||
                     req.user?.name ||
                     "Unknown"
-                ).trim() || "Unknown";
+        ) || "Unknown";
 
         // Format phone number to Ghana format (233...)
         const formattedPhone = formatPhoneNumber(phone_number);
@@ -1849,7 +1841,7 @@ const updateRecord = async (req, res) => {
             message:
                 "Record updated successfully.",
             record:
-                result.rows[0]
+                normalizeRecordRows(result.rows)[0]
         });
     } catch (error) {
         console.error(
@@ -1935,7 +1927,7 @@ const updateSmsDetails = async (req, res) => {
                 : clearSms
                     ? "SMS details cleared successfully."
                     : "Note cleared successfully.",
-            record: result.rows[0]
+            record: normalizeRecordRows(result.rows)[0]
         });
     } catch (error) {
         console.error("UPDATE SMS DETAILS ERROR:", error);
@@ -2089,7 +2081,7 @@ const approveRecord = async (req, res) => {
                     ? "status is Ready"
                     : "status is not ready",
             record:
-                result.rows[0]
+                normalizeRecordRows(result.rows)[0]
         });
     } catch (error) {
         console.error(
@@ -2153,7 +2145,7 @@ const approveProcessingRecord = async (req, res) => {
         return res.json({
             success: true,
             message: "Case approved and moved to Pending.",
-            record: result.rows[0]
+            record: normalizeRecordRows(result.rows)[0]
         });
     } catch (error) {
         console.error("APPROVE PROCESSING RECORD ERROR:", error);
@@ -2204,7 +2196,7 @@ const deleteRecord = async (req, res) => {
             message:
                 "Record deleted successfully.",
             record:
-                result.rows[0]
+                normalizeRecordRows(result.rows)[0]
         });
     } catch (error) {
         console.error(

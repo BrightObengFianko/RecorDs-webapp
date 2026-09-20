@@ -232,7 +232,10 @@ async function loadRecord() {
         setText(detailsDate, formatDateOnly(dateValue));
         setText(detailsPhone, record.phone_number || "-");
         setText(detailsRegistration, formatDateOnly(record.registration_date));
-        setText(detailsRegistrar, record.registrar || "-");
+        setText(
+            detailsRegistrar,
+            window.RecordRegistrar?.normalize(record.registrar) || "-"
+        );
         setText(detailsSms, formatSmsDetails(record.sms_sent, record.sms_date));
         setText(detailsBranchName, branchName);
         setText(detailsNotes, record.notes || "-");

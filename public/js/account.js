@@ -137,7 +137,9 @@ function repositionAccountActionMenus() {
 
 function renderRegistrarOptions() {
     const current = registrarFilter.value;
-    const registrars = [...new Set(records.map(record => String(record.registrar || "").trim()).filter(Boolean))].sort();
+    const registrars = [...new Set(records.map(record =>
+        window.RecordRegistrar?.normalize(record.registrar) || ""
+    ).filter(Boolean))].sort();
     registrarFilter.innerHTML = `<option value="">All Registrars</option>${registrars.map(registrar => `<option value="${escapeHtml(registrar)}">${escapeHtml(registrar)}</option>`).join("")}`;
     registrarFilter.value = registrars.includes(current) ? current : "";
 }
@@ -165,7 +167,7 @@ function renderRecords() {
             <td>${escapeHtml(formatDate(record.date_of_birth))}</td>
             <td>${escapeHtml(formatDate(record.date_of_death))}</td>
             <td><span class="category-badge" style="--category-color:${window.RecordCategoryColors ? window.RecordCategoryColors.getColor(record.category) : "#6b5bff"}">${escapeHtml(record.category || "-")}</span></td>
-            <td>${escapeHtml(record.registrar || "-")}</td>
+            <td>${escapeHtml(window.RecordRegistrar?.normalize(record.registrar) || "-")}</td>
             <td>${escapeHtml(formatDateTime(record.registration_date))}</td>
             <td class="${record.notes ? "account-note" : "account-note is-empty"}">${escapeHtml(record.notes || "-")}</td>
             <td>

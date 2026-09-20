@@ -81,7 +81,7 @@
                         ${detail("Date of birth", formatDate(record.date_of_birth))}
                         ${detail("Date of death", formatDate(record.date_of_death))}
                         ${detail("Category", record.category)}
-                        ${detail("Registrar", record.registrar)}
+                        ${detail("Registrar", window.RecordRegistrar?.normalize(record.registrar))}
                         ${detail("Registration date", formatDate(record.registration_date))}
                         ${detail("Branch", entry.branchId)}
                         ${detail("Current status", record.status)}

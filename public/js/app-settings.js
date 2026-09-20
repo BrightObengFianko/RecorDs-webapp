@@ -3,6 +3,24 @@
     const USER_KEY = "user";
     const STORAGE_PREFIX = `${STORAGE_KEY}:`;
 
+    function normalizeRegistrar(value) {
+        const raw = String(value || "").trim().replace(/\s+/g, " ");
+        const normalized = raw.toUpperCase();
+
+        return {
+            BOSCO: "NEW MARKET",
+            POLY: "POLYCLINIC",
+            SAMMY: "POLYCLINIC",
+            ADMIN: "ADMIN",
+            OFFICE: "OFFICE",
+            "NEW OFFICE": "NEW OFFICE",
+            "NEW MARKET": "NEW MARKET",
+            POLYCLINIC: "POLYCLINIC"
+        }[normalized] || raw;
+    }
+
+    window.RecordRegistrar = Object.freeze({ normalize: normalizeRegistrar });
+
     const DEFAULT_SETTINGS = {
         profile: {
             fullName: "",
