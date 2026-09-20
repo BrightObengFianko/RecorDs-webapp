@@ -673,20 +673,20 @@ body.sidebar-collapsed .logout span {
 
     .sidebar .navigation .nav-item,
     .sidebar .menu a {
-        min-height: 48px;
+        min-height: 54px;
         margin-bottom: 0;
-        padding: 12px 14px;
+        padding: 14px;
     }
 
     .sidebar .sidebar-bottom {
         flex: 0 0 auto;
-        margin-top: 14px;
+        margin-top: auto;
         padding: 18px 17px 24px;
     }
 
     .sidebar .logout {
-        min-height: 44px;
-        padding: 10px 2px;
+        min-height: 54px;
+        padding: 14px 2px;
     }
 
     .sidebar-toggle::before {
