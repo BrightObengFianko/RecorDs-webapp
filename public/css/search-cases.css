@@ -1536,10 +1536,18 @@ tbody tr:hover {
     }
 
     .results-header-right {
-        width: 100%;
-        justify-content: flex-start;
+        width: auto;
+        max-width: 100%;
+        justify-content: flex-end;
         flex-wrap: wrap;
-        margin-left: 0;
+        margin-left: auto;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 7px;
+    }
+
+    .results-header-actions {
+        justify-content: flex-end;
     }
 }
 
@@ -1663,6 +1671,48 @@ body.sidebar-collapsed .content {
 
     .results-header {
         padding: 13px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+    }
+
+    .results-header-main,
+    .results-header-right {
+        min-width: 0;
+    }
+
+    .results-header-right {
+        width: auto;
+        margin-left: auto;
+    }
+
+    .results-footer {
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 16px 0 0;
+    }
+
+    .results-footer #showingInfo {
+        flex: 1 1 110px;
+    }
+
+    .pagination {
+        flex: 0 0 auto;
+    }
+
+    .table-copyright-footer {
+        display: block;
+        width: 100%;
+        min-height: 48px;
+        padding: 14px 4px 10px;
+        margin-top: 6px;
+        text-align: center;
+        white-space: normal;
+        overflow: visible;
+    }
+
+    .content {
+        padding-bottom: 24px;
     }
 
     .results-table {
