@@ -987,7 +987,6 @@
 
         const placeLogout = () => {
             if (mobileQuery.matches) {
-                logoutButton.classList.remove("header-logout-button");
                 logoutButton.classList.remove("header-logout-floating");
                 logoutButton.classList.remove("logout-button");
                 logoutButton.classList.add("logout");
@@ -1002,7 +1001,6 @@
 
             logoutButton.classList.remove("logout");
             logoutButton.classList.add("logout-button");
-            logoutButton.classList.add("header-logout-button");
             logoutButton.classList.toggle("header-logout-floating", isFloatingHeader);
             desktopParent.appendChild(logoutButton);
         };

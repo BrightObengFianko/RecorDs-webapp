@@ -307,8 +307,8 @@ a {
     color: #ffffff;
 }
 
-/* Admin pages reuse the sidebar logout on desktop in their sticky header. */
-.header-logout-button {
+/* Desktop pages reuse Dashboard's logout-button styling in their headers. */
+.logout-button {
     flex: 0 0 auto;
     width: 40px;
     height: 40px;
@@ -328,19 +328,19 @@ a {
         transform 180ms ease;
 }
 
-.header-logout-button:hover {
+.logout-button:hover {
     background: var(--accent-soft);
     color: var(--accent-ink);
     border-color: var(--accent-soft);
     transform: translateY(-1px);
 }
 
-.header-logout-button .logout-icon {
+.logout-button .logout-icon {
     width: 16px;
     height: 16px;
 }
 
-.header-logout-button:focus-visible {
+.logout-button:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
