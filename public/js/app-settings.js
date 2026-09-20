@@ -909,6 +909,7 @@
 
         const state = applySettings(readSettings());
         const profileState = applyProfile(readProfile());
+        initAdminHeaderLogout();
 
         window.RecordSettings = {
             storageKey: getSettingsStorageKey(),
@@ -959,6 +960,56 @@
     // =====================================
     // SIDEBAR TOGGLE
     // =====================================
+
+    function initAdminHeaderLogout() {
+        const logoutButton = document.getElementById("logoutButton");
+        const sidebarBottom = logoutButton?.closest(".sidebar-bottom");
+
+        // Dashboard already owns a purpose-built header logout control.
+        if (!logoutButton || !sidebarBottom || logoutButton.classList.contains("logout-button")) {
+            return;
+        }
+
+        const originalNextSibling = logoutButton.nextSibling;
+        const mobileQuery = window.matchMedia("(max-width: 1100px)");
+        const header = document.querySelector(
+            ".users-topbar, .reports-topbar, .account-heading"
+        );
+
+        if (!header) {
+            return;
+        }
+
+        const desktopParent = header.matches(".users-topbar")
+            ? header.querySelector(".users-topbar-profile") || header
+            : header;
+
+        const placeLogout = () => {
+            if (mobileQuery.matches) {
+                logoutButton.classList.remove("header-logout-button");
+                logoutButton.classList.add("logout");
+
+                if (originalNextSibling && originalNextSibling.parentNode === sidebarBottom) {
+                    sidebarBottom.insertBefore(logoutButton, originalNextSibling);
+                } else {
+                    sidebarBottom.appendChild(logoutButton);
+                }
+                return;
+            }
+
+            logoutButton.classList.remove("logout");
+            logoutButton.classList.add("header-logout-button");
+            desktopParent.appendChild(logoutButton);
+        };
+
+        placeLogout();
+
+        if (typeof mobileQuery.addEventListener === "function") {
+            mobileQuery.addEventListener("change", placeLogout);
+        } else {
+            mobileQuery.addListener(placeLogout);
+        }
+    }
 
     const SIDEBAR_COLLAPSED_KEY = "sidebarCollapsed";
 

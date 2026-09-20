@@ -307,6 +307,34 @@ a {
     color: #ffffff;
 }
 
+/* Admin pages reuse the sidebar logout on desktop in their sticky header. */
+.header-logout-button {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    margin-left: 12px;
+    padding: 0;
+    border: 1px solid var(--app-border);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--app-surface);
+    color: var(--app-text);
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.header-logout-button:hover {
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    transform: translateY(-1px);
+}
+
+.header-logout-button .logout-icon {
+    width: 16px;
+    height: 16px;
+}
+
 .avatar.has-photo,
 .top-avatar.has-photo {
     background-size: cover;
