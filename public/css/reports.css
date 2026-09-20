@@ -23,7 +23,8 @@ body.reports-page {
 }
 
 .reports-main {
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 .reports-topbar {
@@ -81,6 +82,17 @@ body.reports-page {
     background: var(--app-surface);
 }
 
+.reports-icon-button {
+    width: 38px;
+    min-height: 36px;
+    padding: 0;
+}
+
+.reports-icon-button .ui-icon {
+    width: 17px;
+    height: 17px;
+}
+
 .reports-primary {
     border-color: var(--accent);
     color: var(--accent-foreground);
@@ -90,7 +102,7 @@ body.reports-page {
 .reports-content {
     flex: 1;
     min-height: 0;
-    overflow: auto;
+    overflow: visible;
     padding: 26px 30px 40px;
 }
 
@@ -139,6 +151,13 @@ body.reports-page {
     justify-content: space-between;
     padding: 20px;
     border-bottom: 1px solid var(--app-border);
+}
+
+.activity-heading-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
 }
 
 .reports-danger {
@@ -261,10 +280,9 @@ body.reports-page {
     .reports-topbar,
     .reports-content { padding-left: 16px; padding-right: 16px; }
     .reports-topbar { align-items: flex-start; }
-    .reports-refresh { padding: 0 10px; }
-    .reports-refresh .ui-icon { display: none; }
     .reports-filters { grid-template-columns: 1fr; }
     .activity-heading { align-items: flex-start; gap: 12px; }
+    .activity-heading-actions { gap: 6px; }
     .reports-danger { flex: 0 0 auto; }
 }
 
