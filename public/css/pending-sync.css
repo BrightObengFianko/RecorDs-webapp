@@ -3,9 +3,19 @@ body {
 }
 
 .pending-sync-main {
-    min-height: 100vh;
+    height: 100vh;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+    overscroll-behavior-y: contain;
     padding: 28px clamp(18px, 4vw, 48px);
+    padding-bottom: max(28px, env(safe-area-inset-bottom));
     background: var(--app-bg, #f6f7fb);
+}
+
+.pending-sync-main::-webkit-scrollbar {
+    display: none;
 }
 
 .pending-sync-heading {
@@ -329,6 +339,7 @@ body {
 @media (max-width: 600px) {
     .pending-sync-main {
         padding: 20px 14px;
+        padding-bottom: max(28px, env(safe-area-inset-bottom));
     }
 
     .pending-sync-heading {
