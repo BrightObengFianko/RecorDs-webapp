@@ -780,6 +780,11 @@ textarea:focus-visible {
         appearance: auto;
     }
 
+    .phone-status-row #registrationDate {
+        width: calc(100% - 2px);
+        inline-size: calc(100% - 2px);
+    }
+
     .phone-status-row .form-group:last-child {
         width: 100%;
         min-width: 0;
