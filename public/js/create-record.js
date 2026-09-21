@@ -1029,8 +1029,10 @@ applyRegistrarPermissions();
 if (registrationDate) {
     const isBranchStaff = getCurrentRole() === "branch_staff";
     registrationDate.readOnly = isBranchStaff;
+    registrationDate.disabled = isBranchStaff;
     registrationDate.toggleAttribute("readonly", isBranchStaff);
     registrationDate.setAttribute("aria-readonly", String(isBranchStaff));
+    registrationDate.setAttribute("aria-disabled", String(isBranchStaff));
     registrationDate.classList.toggle("branch-staff-locked", isBranchStaff);
 
     if (!isEditMode || isBranchStaff) {

@@ -498,6 +498,13 @@ a {
     max-inline-size: 100%;
 }
 
+.registration-date-control {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
 
 /* =========================================
    REGISTRATION DATE
@@ -517,6 +524,10 @@ a {
     color: var(--app-muted);
 
     cursor: not-allowed;
+}
+
+#registrationDate:disabled {
+    opacity: 1;
 }
 
 
@@ -766,6 +777,12 @@ textarea:focus-visible {
     .phone-status-row .form-group:last-child {
         width: 100%;
         min-width: 0;
+    }
+
+    .registration-date-control {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
     }
 
 
