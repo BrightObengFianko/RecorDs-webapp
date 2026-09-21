@@ -69,10 +69,13 @@
         }
 
         if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/service-worker.js?v=11", {
+        navigator.serviceWorker.register("/service-worker.js?v=12", {
                 updateViaCache: "none"
             }).then(registration => {
-                registration.update();
+                // Do not make offline startup wait on a service-worker update check.
+                if (navigator.onLine !== false) {
+                    registration.update();
+                }
             }).catch(error => {
                 console.warn("Offline shell registration failed:", error.message);
             });
@@ -543,7 +546,7 @@
                 : null;
             const authTimeout = window.setTimeout(
                 () => authController?.abort(),
-                4000
+                1500
             );
             let response;
 
@@ -1196,7 +1199,6 @@
                 return;
             }
 
-            document.body.classList.remove("page-transition-exit");
             document.body.classList.add("page-transition-enter");
 
             const clearEnterTransition = event => {
@@ -1252,15 +1254,12 @@
             event.preventDefault();
             isLeaving = true;
             document.body.classList.remove("page-transition-enter");
-            document.body.classList.add("page-transition-exit");
 
-            const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-                document.body.classList.contains("reduced-motion");
-            const transitionDuration = reducedMotion ? 0 : 160;
-
-            window.setTimeout(() => {
+            // Navigate in the same frame. The destination page owns its short
+            // enter animation; never hold navigation for an exit animation.
+            window.requestAnimationFrame(() => {
                 window.location.assign(destination.href);
-            }, transitionDuration);
+            });
         });
     }
 

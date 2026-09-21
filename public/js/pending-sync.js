@@ -7,6 +7,9 @@
     let openCard = null;
     let deletedEntry = null;
     let undoTimer = null;
+    const pageSize = 10;
+    let currentPage = 1;
+    let activeEntries = [];
 
     if (!token) {
         window.location.replace("index.html");
@@ -35,9 +38,10 @@
     }
 
     function getState(entry) {
-        if (entry.status === "SYNC_FAILED") return { label: "Sync failed - Retry", className: "failed" };
-        if (entry.status === "SYNC_CONFLICT") return { label: "Conflict - Review required", className: "failed" };
-        if (entry.status === "SYNCING") return { label: "Syncing...", className: "" };
+        const status = String(entry.status || "").toUpperCase();
+        if (status === "SYNC_FAILED") return { label: "Sync failed - Retry", className: "failed" };
+        if (status === "SYNC_CONFLICT") return { label: "Conflict - Review required", className: "failed" };
+        if (status === "SYNCING") return { label: "Syncing...", className: "" };
         return { label: "Waiting to sync", className: "" };
     }
 
@@ -122,6 +126,7 @@
             const values = new FormData(event.currentTarget);
             const updatedPayload = {
                 ...record,
+                client_uuid: record.client_uuid || card.dataset.offlineUuid,
                 name: String(values.get("name") || "").trim().toUpperCase(),
                 category: String(values.get("category") || record.category || "Birth"),
                 phone_number: String(values.get("phone_number") || "").trim(),
@@ -173,9 +178,16 @@
             }
             closeOpenCard();
             openCard = card;
-            const direction = deltaX < 0 ? "is-open-left" : "is-open-right";
+            // Swiping left exposes the right-side Edit action; swiping right
+            // exposes the left-side Delete action.
+            const direction = deltaX < 0 ? "is-open-right" : "is-open-left";
             card.classList.add(direction);
             content.style.transform = deltaX < 0 ? "translateX(-104px)" : "translateX(104px)";
+        });
+
+        card.addEventListener("pointercancel", () => {
+            dragging = false;
+            closeOpenCard();
         });
     }
 
@@ -188,16 +200,22 @@
         }
 
         const entries = await queue.getPendingRecords();
-        const activeEntries = entries.filter(entry => ["PENDING_SYNC", "SYNC_FAILED", "SYNCING", "SYNC_CONFLICT"].includes(entry.status));
+        activeEntries = entries;
+        const totalPages = Math.max(1, Math.ceil(activeEntries.length / pageSize));
+        currentPage = Math.min(currentPage, totalPages);
         count.textContent = `${activeEntries.length} record${activeEntries.length === 1 ? "" : "s"} waiting to sync`;
         state.textContent = activeEntries.length ? "Stored securely on this device until the server confirms synchronization." : "All local records are synchronized.";
 
         if (!activeEntries.length) {
             list.innerHTML = `<div class="pending-sync-empty">No pending records.</div>`;
+            renderPagination(1);
             return;
         }
 
-        list.innerHTML = activeEntries.map(entry => {
+        const start = (currentPage - 1) * pageSize;
+        const pageEntries = activeEntries.slice(start, start + pageSize);
+
+        list.innerHTML = pageEntries.map(entry => {
             const record = entry.payload || {};
             const syncState = getState(entry);
             const date = record.category && String(record.category).toLowerCase().includes("death")
@@ -248,14 +266,52 @@
         list.querySelectorAll(".pending-sync-swipe-card").forEach(enableSwipe);
         list.querySelectorAll('[data-offline-action="delete"]').forEach(button => {
             button.addEventListener("click", event => {
+                event.preventDefault();
                 event.stopPropagation();
                 deleteOfflineCase(button.closest(".pending-sync-swipe-card"));
             });
         });
         list.querySelectorAll('[data-offline-action="edit"]').forEach(button => {
             button.addEventListener("click", event => {
+                event.preventDefault();
                 event.stopPropagation();
                 editOfflineCase(button.closest(".pending-sync-swipe-card"));
+            });
+        });
+
+        renderPagination(totalPages);
+    }
+
+    function renderPagination(totalPages) {
+        let pagination = document.getElementById("pendingSyncPagination");
+        if (!pagination) {
+            pagination = document.createElement("nav");
+            pagination.id = "pendingSyncPagination";
+            pagination.className = "pending-sync-pagination";
+            pagination.setAttribute("aria-label", "Pending records pagination");
+            list.insertAdjacentElement("afterend", pagination);
+        }
+
+        if (activeEntries.length <= pageSize) {
+            pagination.hidden = true;
+            pagination.innerHTML = "";
+            return;
+        }
+
+        pagination.hidden = false;
+        pagination.innerHTML = `
+            <button type="button" data-pending-page="${currentPage - 1}" ${currentPage <= 1 ? "disabled" : ""}>Previous</button>
+            <span>Page ${currentPage} of ${totalPages}</span>
+            <button type="button" data-pending-page="${currentPage + 1}" ${currentPage >= totalPages ? "disabled" : ""}>Next</button>
+        `;
+        pagination.querySelectorAll("[data-pending-page]").forEach(button => {
+            button.addEventListener("click", () => {
+                const page = Number(button.dataset.pendingPage);
+                if (page < 1 || page > totalPages || page === currentPage) return;
+                currentPage = page;
+                renderQueue().catch(error => {
+                    state.textContent = error.message || "Unable to load pending records.";
+                });
             });
         });
     }

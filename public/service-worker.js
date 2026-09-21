@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v11";
+const CACHE_NAME = "records-shell-v12";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -75,8 +75,11 @@ self.addEventListener("fetch", event => {
     }
 
     if (request.mode === "navigate") {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 1200);
+
         event.respondWith(
-            fetch(request)
+            fetch(request, { signal: controller.signal })
                 .then(response => {
                     const copy = response.clone();
                     caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
@@ -84,19 +87,26 @@ self.addEventListener("fetch", event => {
                 })
                 .catch(() => caches.match(request, { ignoreSearch: true })
                     .then(cached => cached || caches.match("/index.html")))
+                .finally(() => clearTimeout(timeout))
         );
         return;
     }
 
+    // Shell CSS/JS/images should be available immediately offline. Refresh the
+    // cache in the background when a network is available.
     event.respondWith(
-        fetch(request)
-            .then(response => {
-                if (response.ok) {
-                    const copy = response.clone();
-                    caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-                }
-                return response;
-            })
-            .catch(() => caches.match(request, { ignoreSearch: true }))
+        caches.match(request, { ignoreSearch: true }).then(cached => {
+            const refresh = fetch(request)
+                .then(response => {
+                    if (response.ok) {
+                        const copy = response.clone();
+                        caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+                    }
+                    return response;
+                })
+                .catch(() => null);
+
+            return cached || refresh.then(response => response || Response.error());
+        })
     );
 });

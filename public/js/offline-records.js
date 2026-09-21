@@ -17,24 +17,34 @@
     }
 
     function getCurrentUserKey() {
+        return getCurrentUserKeys()[0] || "";
+    }
+
+    function getCurrentUserKeys() {
         try {
             const storedUser = JSON.parse(
                 localStorage.getItem("user") || "null"
             );
 
             const user = storedUser || {};
-
-            return String(
-                user.id ||
-                user.email ||
-                user.name ||
-                ""
-            )
-                .trim()
-                .toLowerCase();
+            return [...new Set([
+                user.id,
+                user.email,
+                user.name
+            ].map(value => String(value || "").trim().toLowerCase()).filter(Boolean))];
         } catch (error) {
-            return "";
+            return [];
         }
+    }
+
+    function isQueuedStatus(status) {
+        return [
+            "PENDING",
+            PENDING_STATUS,
+            FAILED_STATUS,
+            SYNCING_STATUS,
+            CONFLICT_STATUS
+        ].includes(String(status || "").trim().toUpperCase());
     }
 
     function openDatabase() {
@@ -258,43 +268,45 @@
         const records =
             await getAllRecords();
 
-        const normalizedOwnerKey =
-            String(
-                ownerKey || getCurrentUserKey()
-            )
-                .trim()
-                .toLowerCase();
+        const ownerKeys = ownerKey
+            ? [String(ownerKey).trim().toLowerCase()]
+            : getCurrentUserKeys();
 
         return records.filter(
             record =>
                 record &&
-                [PENDING_STATUS, FAILED_STATUS, SYNCING_STATUS, CONFLICT_STATUS].includes(record.status) &&
+                isQueuedStatus(record.status) &&
                 (
-                    !normalizedOwnerKey ||
-                    record.ownerKey === normalizedOwnerKey
+                    !ownerKeys.length ||
+                    ownerKeys.includes(String(record.ownerKey || "").trim().toLowerCase())
                 )
         ).length;
     }
 
     async function getQueueStats(ownerKey) {
-        const normalizedOwnerKey = String(ownerKey || getCurrentUserKey()).trim().toLowerCase();
+        const ownerKeys = ownerKey
+            ? [String(ownerKey).trim().toLowerCase()]
+            : getCurrentUserKeys();
         const records = (await getAllRecords()).filter(record =>
-            record && (!normalizedOwnerKey || record.ownerKey === normalizedOwnerKey)
+            record && (!ownerKeys.length || ownerKeys.includes(String(record.ownerKey || "").trim().toLowerCase()))
         );
 
         return {
-            waiting: records.filter(record => record.status === PENDING_STATUS).length,
-            syncing: records.filter(record => record.status === SYNCING_STATUS).length,
-            failed: records.filter(record => record.status === FAILED_STATUS).length,
-            conflicts: records.filter(record => record.status === CONFLICT_STATUS).length,
+            waiting: records.filter(record => ["PENDING", PENDING_STATUS].includes(String(record.status || "").toUpperCase())).length,
+            syncing: records.filter(record => String(record.status || "").toUpperCase() === SYNCING_STATUS).length,
+            failed: records.filter(record => String(record.status || "").toUpperCase() === FAILED_STATUS).length,
+            conflicts: records.filter(record => String(record.status || "").toUpperCase() === CONFLICT_STATUS).length,
             total: records.length
         };
     }
 
     async function getPendingRecords(ownerKey) {
-        const normalizedOwnerKey = String(ownerKey || getCurrentUserKey()).trim().toLowerCase();
+        const ownerKeys = ownerKey
+            ? [String(ownerKey).trim().toLowerCase()]
+            : getCurrentUserKeys();
         return (await getAllRecords())
-            .filter(record => record && record.payload && (!normalizedOwnerKey || record.ownerKey === normalizedOwnerKey))
+            .filter(record => record && record.payload && isQueuedStatus(record.status) &&
+                (!ownerKeys.length || ownerKeys.includes(String(record.ownerKey || "").trim().toLowerCase())))
             .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
     }
 
@@ -388,13 +400,9 @@
             options.token ||
             localStorage.getItem("token");
 
-        const ownerKey =
-            String(
-                options.ownerKey ||
-                getCurrentUserKey()
-            )
-                .trim()
-                .toLowerCase();
+        const ownerKey = options.ownerKey
+            ? String(options.ownerKey).trim().toLowerCase()
+            : "";
 
         if (!token) {
             return {
@@ -409,13 +417,14 @@
 
         const now = Date.now();
         const records =
-            (await getPendingRecords(ownerKey))
-                .filter(
-                    record =>
-                        record &&
-                        (record.status === PENDING_STATUS || record.status === FAILED_STATUS || record.status === SYNCING_STATUS) &&
-                        (options.force === true || !record.nextRetryAt || new Date(record.nextRetryAt).getTime() <= now)
-                );
+                (await getPendingRecords(ownerKey || undefined))
+            .filter(
+                record =>
+                    record &&
+                    isQueuedStatus(record.status) &&
+                    String(record.status || "").toUpperCase() !== CONFLICT_STATUS &&
+                    (options.force === true || !record.nextRetryAt || new Date(record.nextRetryAt).getTime() <= now)
+            );
 
         let syncedCount = 0;
         let failedCount = 0;
@@ -707,7 +716,6 @@
 
         const result = await syncPendingRecords({
             token: localStorage.getItem("token") || "",
-            ownerKey: getCurrentUserKey(),
             force: options.force === true
         });
 

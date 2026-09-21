@@ -102,6 +102,7 @@ body {
     padding: 8px;
     opacity: 0;
     pointer-events: none;
+    z-index: 2;
 }
 
 .pending-sync-swipe-actions-left {
@@ -194,6 +195,33 @@ body {
 
 .pending-sync-card-controls button:last-child {
     color: #b91c1c;
+}
+
+.pending-sync-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 16px;
+    color: var(--app-muted, #64748b);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.pending-sync-pagination button {
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--app-border, #e2e8f0);
+    border-radius: 8px;
+    color: var(--app-text, #1f2937);
+    background: var(--app-surface, #fff);
+    font: inherit;
+    cursor: pointer;
+}
+
+.pending-sync-pagination button:disabled {
+    cursor: not-allowed;
+    opacity: .45;
 }
 
 .pending-sync-editor-overlay {
