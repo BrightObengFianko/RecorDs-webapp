@@ -493,6 +493,9 @@ a {
 
 .form-group input[type="date"] {
     cursor: pointer;
+    inline-size: 100%;
+    min-inline-size: 0;
+    max-inline-size: 100%;
 }
 
 
@@ -501,6 +504,14 @@ a {
    ========================================= */
 
 #registrationDate {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+#registrationDate[readonly] {
     background: var(--app-surface-2);
 
     color: var(--app-muted);
@@ -741,10 +752,20 @@ textarea:focus-visible {
     }
 
     .form-group input[type="date"] {
+        display: block;
         width: 100%;
         min-width: 0;
         max-width: 100%;
+        inline-size: 100%;
+        min-inline-size: 0;
+        max-inline-size: 100%;
+        box-sizing: border-box;
         appearance: auto;
+    }
+
+    .phone-status-row .form-group:last-child {
+        width: 100%;
+        min-width: 0;
     }
 
 
