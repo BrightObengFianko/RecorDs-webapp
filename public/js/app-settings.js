@@ -69,7 +69,7 @@
         }
 
         if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/service-worker.js?v=12", {
+        navigator.serviceWorker.register("/service-worker.js?v=14", {
                 updateViaCache: "none"
             }).then(registration => {
                 // Do not make offline startup wait on a service-worker update check.
@@ -471,22 +471,53 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: rgba(15, 23, 42, 0.26);
-                backdrop-filter: blur(4px);
+                background: linear-gradient(135deg, #10162f 0%, #1d2851 100%);
             }
 
             #record-auth-loader .record-auth-loader-box {
-                min-width: 180px;
-                padding: 16px 22px;
-                border-radius: 12px;
+                position: relative;
+                display: grid;
+                place-items: center;
+                width: 104px;
+                height: 104px;
+                border-radius: 28px;
                 background: rgba(255, 255, 255, 0.96);
-                border: 1px solid rgba(148, 163, 184, 0.35);
-                box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
-                color: var(--app-text, #202124);
-                font-size: 0.92rem;
-                font-weight: 700;
-                letter-spacing: 0.02em;
-                text-align: center;
+                box-shadow: 0 18px 44px rgba(5, 10, 32, 0.32);
+                animation: record-brand-transition 360ms ease-out both;
+            }
+
+            #record-auth-loader .record-auth-loader-box::before {
+                content: "";
+                position: absolute;
+                inset: -13px;
+                border: 1px solid rgba(255, 255, 255, 0.28);
+                border-radius: 38px;
+                animation: record-brand-ring 420ms ease-out both;
+            }
+
+            #record-auth-loader .record-auth-loader-logo {
+                display: block;
+                width: 76px;
+                height: 76px;
+                object-fit: contain;
+                border-radius: 20px;
+            }
+
+            @keyframes record-brand-transition {
+                from { opacity: 0; transform: scale(0.9); }
+                to { opacity: 1; transform: scale(1); }
+            }
+
+            @keyframes record-brand-ring {
+                from { opacity: 0; transform: scale(0.82); }
+                to { opacity: 1; transform: scale(1); }
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+                #record-auth-loader .record-auth-loader-box,
+                #record-auth-loader .record-auth-loader-box::before {
+                    animation: none;
+                }
             }
         `;
         document.head.appendChild(style);
@@ -503,7 +534,7 @@
         loader.id = "record-auth-loader";
         loader.setAttribute("aria-live", "polite");
         loader.setAttribute("aria-busy", "true");
-        loader.innerHTML = '<div class="record-auth-loader-box">Loading...</div>';
+        loader.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/records-icon-192.png" alt="RecorDs"></div>';
         document.body.appendChild(loader);
         document.body.classList.add("record-auth-loading");
     }
@@ -1255,11 +1286,18 @@
             isLeaving = true;
             document.body.classList.remove("page-transition-enter");
 
+            // Show the branded shell immediately, but do not wait for it before
+            // loading the destination page.
+            showAuthLoadingState();
+
             // Navigate in the same frame. The destination page owns its short
             // enter animation; never hold navigation for an exit animation.
-            window.requestAnimationFrame(() => {
-                window.location.assign(destination.href);
-            });
+            const continueNavigation = () => window.location.assign(destination.href);
+            if (typeof window.requestAnimationFrame === "function") {
+                window.requestAnimationFrame(continueNavigation);
+            } else {
+                continueNavigation();
+            }
         });
     }
 

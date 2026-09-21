@@ -302,14 +302,24 @@ function setAvatar(element, image, label) {
         : "";
 
     if (safeImage) {
+        element.classList.remove("logo-avatar");
         element.classList.add("has-photo");
         element.style.backgroundImage = `url("${safeImage}")`;
+        element.style.backgroundSize = "cover";
+        element.style.backgroundPosition = "center";
+        element.style.backgroundRepeat = "no-repeat";
+        element.style.backgroundColor = "transparent";
         element.textContent = "";
         return;
     }
 
+    element.classList.add("logo-avatar");
     element.classList.remove("has-photo");
     element.style.backgroundImage = "";
+    element.style.backgroundSize = "";
+    element.style.backgroundPosition = "";
+    element.style.backgroundRepeat = "";
+    element.style.backgroundColor = "";
     element.textContent = label;
 }
 

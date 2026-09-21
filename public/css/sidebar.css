@@ -570,6 +570,13 @@ body.sidebar-collapsed .avatar {
     font-size: 12px;
 }
 
+body.sidebar-collapsed .sidebar .avatar.has-photo {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: transparent;
+}
+
 body.sidebar-collapsed .logout {
     padding: 8px 0;
     gap: 0;
