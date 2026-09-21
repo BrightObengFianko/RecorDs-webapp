@@ -655,8 +655,8 @@ body.sidebar-collapsed .logout span {
     }
 
     .sidebar-toggle {
-        width: 40px;
-        height: 40px;
+        width: 48px;
+        height: 48px;
         margin-right: 8px;
         border-radius: 10px;
     }
@@ -692,14 +692,24 @@ body.sidebar-collapsed .logout span {
     }
 
     .sidebar .logout {
-        min-height: 54px;
-        padding: 14px 2px;
+        width: 56px;
+        min-width: 56px;
+        min-height: 56px;
+        margin-left: 4px;
+        padding: 14px;
+        justify-content: center;
+        border-radius: 12px;
+    }
+
+    .sidebar .logout .logout-icon {
+        width: 24px;
+        height: 24px;
     }
 
     .sidebar-toggle::before {
         content: "\2630";
         color: currentColor;
-        font-size: 23px;
+        font-size: 26px;
         line-height: 1;
     }
 
@@ -729,12 +739,12 @@ body.sidebar-collapsed .logout span {
 
 @media (max-width: 480px) {
     .sidebar-toggle {
-        width: 48px;
-        height: 48px;
+        width: 52px;
+        height: 52px;
         border-radius: 12px;
     }
 
     .sidebar-toggle::before {
-        font-size: 25px;
+        font-size: 28px;
     }
 }
