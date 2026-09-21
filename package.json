@@ -15,7 +15,9 @@
     "backup:db": "node scripts/backup-postgres.js",
     "start:local": "powershell -NoProfile -Command \"$env:ENV_FILE='.env.local'; node server.js\"",
     "sync:local:dry": "powershell -NoProfile -Command \"$env:ENV_FILE='.env'; node syncLocalToOnline.js --dry-run\"",
-    "sync:local": "powershell -NoProfile -Command \"$env:ENV_FILE='.env'; node syncLocalToOnline.js\""
+    "sync:local": "powershell -NoProfile -Command \"$env:ENV_FILE='.env'; node syncLocalToOnline.js\"",
+    "sync:local:registrar-status:dry": "powershell -NoProfile -Command \"$env:ENV_FILE='.env'; node syncLocalToOnline.js --registrar-status-only --dry-run\"",
+    "sync:local:registrar-status": "powershell -NoProfile -Command \"$env:ENV_FILE='.env'; node syncLocalToOnline.js --registrar-status-only\""
   },
   "keywords": [],
   "author": "",

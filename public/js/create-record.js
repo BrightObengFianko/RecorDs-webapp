@@ -42,6 +42,11 @@ const searchParams =
 const recordId =
     searchParams.get("id");
 
+const offlineRecordUuid =
+    searchParams.get("offlineUuid");
+
+let offlineEditMode = Boolean(offlineRecordUuid);
+
 const isEditMode =
     Boolean(recordId);
 
@@ -55,8 +60,8 @@ const editReturnPage =
         : "search-cases.html";
 
 let isSubmitting = false;
-
 let editBaseUpdatedAt = null;
+
 function createClientUuid() {
     if (window.crypto && typeof window.crypto.randomUUID === "function") {
         return window.crypto.randomUUID();
@@ -661,8 +666,8 @@ async function loadRecordForEdit() {
             );
 
         }
-        editBaseUpdatedAt = record.updated_at || record.updatedAt || null;
 
+        editBaseUpdatedAt = record.updated_at || record.updatedAt || null;
 
 
         if (categoryInput) {
@@ -765,6 +770,35 @@ async function loadRecordForEdit() {
 
     }
 
+}
+
+async function loadOfflineRecordForEdit() {
+    if (!offlineRecordUuid || !window.RecordOfflineQueue?.getRecord) return;
+
+    const entry = await window.RecordOfflineQueue.getRecord(offlineRecordUuid);
+    const record = entry?.payload;
+    if (!record) {
+        Notification.error("Offline case is no longer available.");
+        window.location.href = "pending-sync.html";
+        return;
+    }
+
+    if (pageHeadingTitle) pageHeadingTitle.textContent = "EDIT OFFLINE CASE";
+    if (pageHeadingDescription) pageHeadingDescription.textContent = "Update a case saved on this device.";
+    if (cancelButton) cancelButton.href = "pending-sync.html";
+    if (categoryInput) categoryInput.value = normalizeCategoryValue(record.category);
+    if (customerNameInput) customerNameInput.value = record.name || "";
+    if (phoneNumberInput) phoneNumberInput.value = record.phone_number || "";
+    if (notesInput) notesInput.value = record.notes || "";
+    setRegistrarValue(record.registrar || readStoredUser().name || "Unknown");
+    setStatusValue(record.status || "Processing");
+    if (registrationDate) registrationDate.value = formatDateForInput(record.registration_date);
+
+    const dateValue = String(record.category || "").trim().toLowerCase() === "death"
+        ? record.date_of_death
+        : record.date_of_birth;
+    if (dateInput) dateInput.value = formatDateForInput(dateValue);
+    updateDateLabel();
 }
 
 
@@ -872,7 +906,46 @@ if (dateInput) {
 // AUTO-FORMAT PHONE NUMBER
 // =========================================
 
+const MIN_PHONE_DIGITS = 10;
+let phoneLengthNoticeTimer = null;
+let phoneLengthNoticeShown = false;
+
+function getPhoneDigits(value) {
+    return String(value || "").replace(/\D/g, "");
+}
+
+function validatePhoneNumberLength({ notify = false } = {}) {
+    if (!phoneNumberInput) return true;
+
+    const digits = getPhoneDigits(phoneNumberInput.value);
+    const isValid = digits.length >= MIN_PHONE_DIGITS;
+
+    phoneNumberInput.setCustomValidity(
+        digits && !isValid
+            ? "Phone number must contain at least 10 digits."
+            : ""
+    );
+
+    if (notify && digits && !isValid && !phoneLengthNoticeShown) {
+        phoneLengthNoticeShown = true;
+        Notification.warning("Phone number has to be 10 digits.");
+    }
+
+    if (isValid) {
+        phoneLengthNoticeShown = false;
+    }
+
+    return isValid;
+}
+
 if (phoneNumberInput) {
+    phoneNumberInput.addEventListener("input", () => {
+        window.clearTimeout(phoneLengthNoticeTimer);
+        phoneLengthNoticeTimer = window.setTimeout(() => {
+            validatePhoneNumberLength({ notify: true });
+        }, 400);
+    });
+
     phoneNumberInput.addEventListener(
         "blur",
         () => {
@@ -882,6 +955,8 @@ if (phoneNumberInput) {
             if (formatted) {
                 phoneNumberInput.value = formatted;
             }
+
+            validatePhoneNumberLength({ notify: true });
         }
     );
 }
@@ -894,10 +969,8 @@ function setRegistrarValue(value) {
     }
 
 
-    registrarInput.value =
-        String(value || "")
-            .trim()
-            .toUpperCase();
+    registrarInput.value = window.RecordRegistrar?.normalize(value) ||
+        String(value || "").trim().toUpperCase();
 
 }
 
@@ -1003,6 +1076,13 @@ if (isEditMode) {
 
 }
 
+if (offlineEditMode && !isEditMode) {
+    loadOfflineRecordForEdit().catch(error => {
+        console.error("LOAD OFFLINE RECORD ERROR:", error);
+        Notification.error("Unable to load the offline case.");
+    });
+}
+
 
 // =========================================
 // SUBMIT FORM
@@ -1066,7 +1146,8 @@ recordForm.addEventListener(
         const registrar =
             registrarInput &&
             registrarInput.value
-                ? registrarInput.value.trim().toUpperCase()
+                ? (window.RecordRegistrar?.normalize(registrarInput.value) ||
+                    registrarInput.value.trim().toUpperCase())
                 : "";
 
 
@@ -1140,6 +1221,20 @@ recordForm.addEventListener(
 
         }
 
+        if (getPhoneDigits(phoneNumber).length < MIN_PHONE_DIGITS) {
+            Notification.warning(
+                "Phone number has to be 10 digits."
+            );
+
+            phoneNumberInput.setCustomValidity(
+                "Phone number must contain at least 10 digits."
+            );
+            phoneNumberInput.focus();
+            return;
+        }
+
+        phoneNumberInput.setCustomValidity("");
+
 
         // =====================================
         // CREATE RECORD DATA
@@ -1159,18 +1254,20 @@ recordForm.addEventListener(
 
             status: status,
 
-            ...(isEditMode && editBaseUpdatedAt
-                ? { expected_updated_at: editBaseUpdatedAt }
-                : {}),
-
             registrar: registrar,
 
             notes: notes,
 
+            ...(isEditMode && editBaseUpdatedAt
+                ? { expected_updated_at: editBaseUpdatedAt }
+                : {}),
+
             client_uuid:
                 isEditMode
                     ? undefined
-                    : createClientUuid()
+                    : offlineEditMode
+                        ? offlineRecordUuid
+                        : createClientUuid()
 
         };
 
@@ -1212,7 +1309,7 @@ recordForm.addEventListener(
         try {
 
             if (
-                !isEditMode &&
+                (!isEditMode || offlineEditMode) &&
                 typeof navigator !== "undefined" &&
                 navigator.onLine === false
             ) {
@@ -1327,8 +1424,8 @@ recordForm.addEventListener(
             ) {
                 try {
                     await window.RecordOfflineQueue.queueRecord(recordData, {
-                        operationType: isEditMode ? "UPDATE" : "CREATE",
-                        recordId: isEditMode ? recordId : null
+                        operationType: "CREATE",
+                        recordId: null
                     });
 
                     Notification.warning(

@@ -6,6 +6,7 @@
  * Usage:
  *   ENV_FILE=.env.local node syncLocalToOnline.js --dry-run
  *   ENV_FILE=.env.local node syncLocalToOnline.js
+ *   ENV_FILE=.env.local node syncLocalToOnline.js --registrar-status-only
  */
 
 const { Pool } = require("pg");
@@ -20,6 +21,7 @@ const { ensureDatabaseSchema } = require("./server/config/migrate");
 const localPool = require("./server/config/database");
 
 const DRY_RUN = process.argv.includes("--dry-run");
+const REGISTRAR_STATUS_ONLY = process.argv.includes("--registrar-status-only");
 const LIMIT = Math.max(
     1,
     Number.parseInt(
@@ -44,6 +46,10 @@ const RECORD_FIELDS = [
     "notes",
     "branch_id"
 ];
+
+const SYNC_FIELDS = REGISTRAR_STATUS_ONLY
+    ? ["registrar", "status"]
+    : RECORD_FIELDS;
 
 function env(value) {
     return typeof value === "string"
@@ -170,7 +176,14 @@ async function getPendingRecords() {
             FROM records r
             LEFT JOIN local_record_sync_state s
                 ON s.client_uuid = r.client_uuid
-            WHERE (s.state IS NULL OR s.state = 'pending')
+            WHERE s.state IS NULL
+               OR s.state = 'pending'
+               OR (
+                    s.state = 'synced'
+                    AND r.updated_at IS NOT NULL
+                    AND s.synced_at IS NOT NULL
+                    AND r.updated_at > s.synced_at
+               )
             ORDER BY r.updated_at ASC NULLS FIRST, r.id ASC
             LIMIT $1
         `,
@@ -263,6 +276,27 @@ async function insertOnlineRecord(record) {
 }
 
 async function updateOnlineRecord(localRecord, onlineRecord) {
+    if (REGISTRAR_STATUS_ONLY) {
+        const result = await onlinePool.query(
+            `
+                UPDATE records
+                SET registrar = $1,
+                    status = $2,
+                    updated_at = $3
+                WHERE id = $4
+                RETURNING id
+            `,
+            [
+                localRecord.registrar,
+                localRecord.status,
+                localRecord.updated_at || new Date(),
+                onlineRecord.id
+            ]
+        );
+
+        return result.rows[0];
+    }
+
     const values = RECORD_FIELDS.map(
         field => localRecord[field] === undefined ? null : localRecord[field]
     );
@@ -321,6 +355,17 @@ async function processRecord(record, stats) {
     const onlineRecord = await findOnlineRecord(record);
 
     if (!onlineRecord) {
+        if (REGISTRAR_STATUS_ONLY) {
+            stats.notFound++;
+            await saveSyncState(
+                record,
+                "conflict",
+                null,
+                "The matching online record was not found; no record was created in registrar/status-only mode."
+            );
+            return;
+        }
+
         if (!DRY_RUN) {
             const inserted = await insertOnlineRecord(record);
             await saveSyncState(record, "synced", inserted.id, null);
@@ -330,7 +375,9 @@ async function processRecord(record, stats) {
         return;
     }
 
-    if (recordsMatch(record, onlineRecord)) {
+    if (SYNC_FIELDS.every(
+        field => valueKey(record[field]) === valueKey(onlineRecord[field])
+    )) {
         await saveSyncState(record, "synced", onlineRecord.id, null);
         stats.alreadySynced++;
         return;
@@ -362,7 +409,8 @@ async function main() {
         updated: 0,
         alreadySynced: 0,
         conflicts: 0,
-        errors: 0
+        errors: 0,
+        notFound: 0
     };
 
     let lockAcquired = false;
@@ -429,6 +477,7 @@ async function main() {
 
         console.log(JSON.stringify({
             dryRun: DRY_RUN,
+            registrarStatusOnly: REGISTRAR_STATUS_ONLY,
             batchSize: LIMIT,
             ...stats
         }, null, 2));
