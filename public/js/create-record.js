@@ -125,6 +125,20 @@ function getCurrentRole() {
 
 }
 
+function getTodayInAccra() {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Africa/Accra",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).formatToParts(new Date()).reduce((result, part) => {
+        if (part.type !== "literal") result[part.type] = part.value;
+        return result;
+    }, {});
+
+    return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 // =========================================
 // PHONE NUMBER FORMATTING
 // =========================================
@@ -1013,32 +1027,14 @@ applyRegistrarPermissions();
 // =========================================
 
 if (registrationDate) {
+    const isBranchStaff = getCurrentRole() === "branch_staff";
+    registrationDate.readOnly = isBranchStaff;
+    registrationDate.toggleAttribute("readonly", isBranchStaff);
+    registrationDate.setAttribute("aria-readonly", String(isBranchStaff));
+    registrationDate.classList.toggle("branch-staff-locked", isBranchStaff);
 
-    registrationDate.readOnly =
-        true;
-
-
-    if (!isEditMode) {
-
-        const today =
-            new Date();
-
-        const year =
-            today.getFullYear();
-
-        const month =
-            String(
-                today.getMonth() + 1
-            ).padStart(2, "0");
-
-        const day =
-            String(
-                today.getDate()
-            ).padStart(2, "0");
-
-        registrationDate.value =
-            `${year}-${month}-${day}`;
-
+    if (!isEditMode || isBranchStaff) {
+        registrationDate.value = getTodayInAccra();
     }
 
 }

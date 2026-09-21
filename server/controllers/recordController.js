@@ -444,7 +444,11 @@ const createRecord = async (req, res) => {
             });
         }
 
-        for (const dateValue of [date_of_birth, date_of_death, registration_date]) {
+        const submittedDates = isBranchStaff(req.user)
+            ? [date_of_birth, date_of_death]
+            : [date_of_birth, date_of_death, registration_date];
+
+        for (const dateValue of submittedDates) {
             if (dateValue && !isIsoDate(dateValue)) {
                 return res.status(400).json({
                     success: false,
@@ -582,6 +586,10 @@ const createRecord = async (req, res) => {
                 ? "Processing"
                 : "Pending";
 
+        const registrationDateExpression = isBranchStaff(req.user)
+            ? "(CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date"
+            : "COALESCE($7::date, (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date)";
+
         const result = await transactionClient.query(
             `
                 INSERT INTO records
@@ -599,7 +607,7 @@ const createRecord = async (req, res) => {
                     client_uuid
                 )
                 VALUES
-                ($1,$2,$3,$4,$5,$6,COALESCE($7::date, (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date),$8,$9,$10,$11)
+                ($1,$2,$3,$4,$5,$6,${registrationDateExpression},$8,$9,$10,$11)
                 RETURNING *
             `,
             [
