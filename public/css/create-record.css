@@ -502,8 +502,12 @@ a {
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    padding: 0 1px;
-    overflow: hidden;
+    overflow: visible;
+}
+
+#registrationDate {
+    width: calc(100% - 2px);
+    inline-size: calc(100% - 2px);
 }
 
 
