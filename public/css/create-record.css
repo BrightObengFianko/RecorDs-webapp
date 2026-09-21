@@ -781,8 +781,12 @@ textarea:focus-visible {
     }
 
     .phone-status-row #registrationDate {
-        width: calc(100% - 2px);
-        inline-size: calc(100% - 2px);
+        width: 100%;
+        inline-size: 100%;
+        max-width: 100%;
+        max-inline-size: 100%;
+        -webkit-appearance: none;
+        appearance: none;
     }
 
     .phone-status-row .form-group:last-child {
