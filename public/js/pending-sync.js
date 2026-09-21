@@ -80,7 +80,13 @@
         const uuid = card.dataset.offlineUuid;
         const entry = await window.RecordOfflineQueue.getRecord(uuid);
         if (!entry) return;
-        if (!window.confirm("Are you sure you want to delete this recorded case?")) return;
+        const confirmed = await ConfirmDialog.show(
+            "This case will be removed from the offline queue.",
+            "Delete Offline Case",
+            "Delete",
+            "Cancel"
+        );
+        if (!confirmed) return;
 
         await window.RecordOfflineQueue.removeRecord(uuid);
         deletedEntry = entry;

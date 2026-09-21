@@ -1,6 +1,6 @@
 /**
  * Modern Notification System
- * Provides a beautiful, animated notification system to replace window.alert()
+ * Provides a beautiful, animated notification system instead of native browser alerts.
  */
 (function () {
     let notificationContainer = null;

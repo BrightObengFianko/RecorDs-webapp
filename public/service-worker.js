@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v14";
+const CACHE_NAME = "records-shell-v15";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -14,6 +14,7 @@ const APP_SHELL = [
     "/css/style.css",
     "/css/sidebar.css",
     "/css/notification.css",
+    "/css/confirm-dialog.css",
     "/css/offline.css",
     "/css/mobile-form-controls.css",
     "/css/dashboard.css",
@@ -28,6 +29,7 @@ const APP_SHELL = [
     "/js/app-settings.js",
     "/js/offline-records.js",
     "/js/notification.js",
+    "/js/confirm-dialog.js",
     "/js/create-record.js",
     "/js/search-cases.js",
     "/js/dashboard.js",

@@ -175,7 +175,12 @@ if (!reportsToken) {
         }
     });
     document.getElementById("clearLogsButton").addEventListener("click", async () => {
-        const confirmed = window.confirm("Are you sure you want to clear the activity logs? This action cannot be undone.");
+        const confirmed = await ConfirmDialog.show(
+            "Are you sure you want to clear the activity logs? This action cannot be undone.",
+            "Clear Activity Logs",
+            "Clear Logs",
+            "Cancel"
+        );
         if (!confirmed) return;
         const response = await fetch("/api/admin/auth-activity", { method: "DELETE", headers: { Authorization: `Bearer ${reportsToken}` } });
         const data = await response.json().catch(() => ({}));
