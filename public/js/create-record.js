@@ -1039,6 +1039,22 @@ if (registrationDate) {
         registrationDate.value = getTodayInAccra();
     }
 
+    if (isBranchStaff) {
+        const enforceBranchStaffDate = () => {
+            registrationDate.value = getTodayInAccra();
+        };
+
+        registrationDate.addEventListener("beforeinput", event => {
+            event.preventDefault();
+            enforceBranchStaffDate();
+        });
+        registrationDate.addEventListener("change", event => {
+            event.preventDefault();
+            enforceBranchStaffDate();
+        });
+        registrationDate.addEventListener("input", enforceBranchStaffDate);
+    }
+
 }
 
 
