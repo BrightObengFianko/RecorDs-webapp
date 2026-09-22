@@ -627,6 +627,14 @@ a {
     cursor: pointer;
 }
 
+.custom-registrar-field {
+    margin-top: 9px;
+}
+
+.custom-registrar-field label {
+    margin-bottom: 6px;
+}
+
 .filter-title span {
     color: inherit;
 }
@@ -1674,10 +1682,12 @@ body.search-page .content {
     }
 
     .search-field input,
-    .search-field select {
+    .search-field select,
+    .filter-field input,
+    .filter-field select {
         min-height: 42px;
         padding: 10px 11px;
-        font-size: 13px;
+        font-size: 16px;
     }
 
     .results-header {

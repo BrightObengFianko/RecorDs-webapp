@@ -1552,7 +1552,7 @@ const searchRecords = async (req, res) => {
 
         if (registrar) {
             query += `
-                AND ${normalizedRegistrarSql("r")} = $${parameter}
+                AND LOWER(${normalizedRegistrarSql("r")}) = LOWER($${parameter})
             `;
 
             values.push(normalizeRegistrar(registrar));
@@ -1713,7 +1713,7 @@ const exportRecords = async (req, res) => {
         }
         if (status) add("LOWER(REPLACE(r.status, '_', ' ')) = LOWER(REPLACE($1, '_', ' '))", status);
         if (category) add("LOWER(r.category) = LOWER($1)", category);
-        if (registrar) add(`${normalizedRegistrarSql("r")} = $1`, normalizeRegistrar(registrar));
+        if (registrar) add(`LOWER(${normalizedRegistrarSql("r")}) = LOWER($1)`, normalizeRegistrar(registrar));
         if (fromDate) add("r.registration_date >= $1::date", fromDate);
         if (toDate) add("r.registration_date < ($1::date + INTERVAL '1 day')", toDate);
         query += " ORDER BY r.registration_date DESC NULLS LAST, r.id DESC";

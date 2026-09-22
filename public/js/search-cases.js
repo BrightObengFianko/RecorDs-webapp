@@ -21,8 +21,44 @@ const categorySelect =
 
 const registrarSelect =
     document.getElementById("registrar");
+const customRegistrarField =
+    document.getElementById("customRegistrarField");
+const customRegistrarInput =
+    document.getElementById("customRegistrar");
 const exportBranchSelect =
     document.getElementById("exportBranch");
+
+const CUSTOM_REGISTRAR_VALUE = "__custom__";
+
+function getCustomRegistrarValue() {
+    return String(customRegistrarInput?.value || "")
+        .trim()
+        .replace(/\s+/g, " ");
+}
+
+function getSelectedRegistrar() {
+    if (!registrarSelect || registrarSelect.value === CUSTOM_REGISTRAR_VALUE) {
+        return getCustomRegistrarValue();
+    }
+
+    return String(registrarSelect.value || "").trim();
+}
+
+function updateCustomRegistrarField({ focus = false } = {}) {
+    const isCustom = registrarSelect?.value === CUSTOM_REGISTRAR_VALUE;
+
+    if (customRegistrarField) {
+        customRegistrarField.hidden = !isCustom;
+    }
+
+    if (!isCustom && customRegistrarInput) {
+        customRegistrarInput.value = "";
+    }
+
+    if (focus && isCustom) {
+        customRegistrarInput?.focus();
+    }
+}
 
 const fromDateInput =
     document.getElementById("fromDate");
@@ -1192,6 +1228,12 @@ async function loadRegistrars() {
             }
         );
 
+        const customOption = document.createElement("option");
+        customOption.value = CUSTOM_REGISTRAR_VALUE;
+        customOption.textContent = "+ Enter Registrar...";
+        registrarSelect.appendChild(customOption);
+        updateCustomRegistrarField();
+
     } catch (error) {
 
         console.error(
@@ -1245,7 +1287,7 @@ function scheduleAutomaticSearch() {
     const hasOtherCriteria = Boolean(
         statusSelect.value ||
         categorySelect.value ||
-        registrarSelect?.value ||
+        getSelectedRegistrar() ||
         fromDateInput.value ||
         toDateInput.value
     );
@@ -1336,10 +1378,7 @@ async function searchCases({ silent = false, automatic = false } = {}) {
         categorySelect.value;
 
 
-    const registrar =
-        registrarSelect
-            ? registrarSelect.value
-            : "";
+    const registrar = getSelectedRegistrar();
 
 
     const fromDate =
@@ -2531,9 +2570,19 @@ if (registrarSelect) {
 
     registrarSelect.addEventListener(
         "change",
-        searchCases
+        () => {
+            updateCustomRegistrarField({ focus: true });
+            searchCases();
+        }
     );
 
+}
+
+if (customRegistrarInput) {
+    customRegistrarInput.addEventListener("input", () => {
+        customRegistrarInput.value = customRegistrarInput.value.replace(/\s+/g, " ");
+        scheduleAutomaticSearch();
+    });
 }
 
 
@@ -2583,6 +2632,8 @@ if (resetButton) {
                 registrarSelect.value =
                     "";
             }
+
+            updateCustomRegistrarField();
 
             fromDateInput.value =
                 "";
@@ -3483,7 +3534,7 @@ if (exportButton) {
             ["dateOfBirth", dateOfBirth],
             ["status", statusSelect.value],
             ["category", categorySelect.value],
-            ["registrar", registrarSelect?.value || ""],
+            ["registrar", getSelectedRegistrar()],
             ["fromDate", fromDateInput.value],
             ["toDate", toDateInput.value],
             ["branch", exportBranchSelect?.value || ""]
