@@ -11,7 +11,11 @@ const { sendToN8N } = require("../services/n8nService");
 const { getDefaultBranchId } = require("../utils/branchUtils");
 const { formatPhoneNumber, isValidPhoneNumber } = require("../utils/phoneUtils");
 const { boundedText, isIsoDate } = require("../utils/inputValidation");
-const { ACTIVITY_TYPES, recordActivity } = require("../utils/authActivity");
+const {
+    ACTIVITY_TYPES,
+    recordActivity,
+    makeRecordSnapshot
+} = require("../utils/authActivity");
 const {
     normalizeRegistrar,
     normalizedRegistrarSql,
@@ -657,7 +661,8 @@ const createRecord = async (req, res) => {
             recordId: result.rows[0].id,
             branchId,
             branchName: req.user?.branch,
-            details: "Record created."
+            details: "Record created.",
+            recordSnapshot: makeRecordSnapshot(result.rows[0])
         });
 
         return res.status(201).json({
@@ -1870,11 +1875,7 @@ const updateRecord = async (req, res) => {
         const existingResult =
             await pool.query(
                 `
-                    SELECT
-                        id,
-                        status,
-                        registrar,
-                        updated_at
+                    SELECT *
                     FROM records
                     WHERE id = $1
                     LIMIT 1
@@ -1992,6 +1993,26 @@ const updateRecord = async (req, res) => {
             });
         }
 
+        const trackedFields = [
+            ["name", "Name"],
+            ["phone_number", "Phone number"],
+            ["category", "Category"],
+            ["date_of_birth", "Date of birth"],
+            ["date_of_death", "Date of death"],
+            ["registration_date", "Registration date"],
+            ["registrar", "Registrar"],
+            ["status", "Status"],
+            ["notes", "Notes"]
+        ];
+        const changeSet = trackedFields
+            .filter(([field]) => String(existingRecord[field] ?? "") !== String(result.rows[0][field] ?? ""))
+            .map(([field, label]) => ({
+                field,
+                label,
+                oldValue: existingRecord[field] ?? null,
+                newValue: result.rows[0][field] ?? null
+            }));
+
         await recordActivity({
             request: req,
             userId: req.user?.id,
@@ -2002,7 +2023,9 @@ const updateRecord = async (req, res) => {
             recordId: result.rows[0].id,
             branchId: result.rows[0].branch_id,
             branchName: req.user?.branch,
-            details: "Record edited."
+            details: "Record edited.",
+            recordSnapshot: makeRecordSnapshot(result.rows[0]),
+            changeSet: changeSet.length ? changeSet : null
         });
 
         // =========================================
@@ -2475,7 +2498,8 @@ const deleteRecord = async (req, res) => {
             recordId: result.rows[0].id,
             branchId: result.rows[0].branch_id,
             branchName: req.user?.branch,
-            details: "Record deleted."
+            details: "Record deleted. The deleted-case snapshot is preserved in this audit entry.",
+            recordSnapshot: makeRecordSnapshot(result.rows[0])
         });
 
         return res.json({

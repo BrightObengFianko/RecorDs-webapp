@@ -309,6 +309,8 @@ async function listAuthActivity(req, res) {
                     auth_activity_logs.details,
                     auth_activity_logs.previous_value,
                     auth_activity_logs.new_value,
+                    auth_activity_logs.record_snapshot,
+                    auth_activity_logs.change_set,
                     auth_activity_logs.success,
                     auth_activity_logs.ip_address,
                     auth_activity_logs.user_agent
@@ -349,6 +351,114 @@ async function clearAuthActivity(req, res) {
     } catch (error) {
         console.error("CLEAR AUTH ACTIVITY ERROR:", error);
         return res.status(500).json({ success: false, message: "Unable to clear activity logs." });
+    }
+}
+
+async function getAuthActivityDetails(req, res) {
+    try {
+        const result = await pool.query(
+            `
+                SELECT
+                    l.id,
+                    l.user_id,
+                    l.user_name,
+                    l.user_email,
+                    l.user_role,
+                    l.activity_type,
+                    l.occurred_at,
+                    l.branch_id,
+                    COALESCE(l.branch_name, b.name) AS branch_name,
+                    l.record_id,
+                    l.affected_user_id,
+                    l.affected_user_name,
+                    l.details,
+                    l.previous_value,
+                    l.new_value,
+                    l.record_snapshot,
+                    l.change_set,
+                    l.success,
+                    r.id AS current_record_id,
+                    r.name AS current_name,
+                    r.phone_number AS current_phone_number,
+                    r.category AS current_category,
+                    r.date_of_birth AS current_date_of_birth,
+                    r.date_of_death AS current_date_of_death,
+                    r.registration_date AS current_registration_date,
+                    r.registrar AS current_registrar,
+                    r.status AS current_status,
+                    r.sms_sent AS current_sms_sent,
+                    r.sms_status AS current_sms_status,
+                    r.sms_date AS current_sms_date,
+                    r.sms_error AS current_sms_error,
+                    r.notes AS current_notes,
+                    r.branch_id AS current_branch_id
+                FROM auth_activity_logs l
+                LEFT JOIN branches b ON b.id = l.branch_id
+                LEFT JOIN records r ON r.id = l.record_id
+                WHERE l.id = $1
+                LIMIT 1
+            `,
+            [req.params.id]
+        );
+
+        if (!result.rows.length) {
+            return res.status(404).json({
+                success: false,
+                message: "Activity log not found."
+            });
+        }
+
+        const row = result.rows[0];
+        const currentRecord = row.current_record_id
+            ? {
+                id: row.current_record_id,
+                name: row.current_name,
+                phone_number: row.current_phone_number,
+                category: row.current_category,
+                date_of_birth: row.current_date_of_birth,
+                date_of_death: row.current_date_of_death,
+                registration_date: row.current_registration_date,
+                registrar: row.current_registrar,
+                status: row.current_status,
+                sms_sent: row.current_sms_sent,
+                sms_status: row.current_sms_status,
+                sms_date: row.current_sms_date,
+                sms_error: row.current_sms_error,
+                notes: row.current_notes,
+                branch_id: row.current_branch_id
+            }
+            : null;
+
+        return res.json({
+            success: true,
+            activity: {
+                id: row.id,
+                user_id: row.user_id,
+                user_name: row.user_name,
+                user_email: row.user_email,
+                user_role: row.user_role,
+                activity_type: row.activity_type,
+                occurred_at: row.occurred_at,
+                branch_id: row.branch_id,
+                branch_name: row.branch_name,
+                record_id: row.record_id,
+                affected_user_id: row.affected_user_id,
+                affected_user_name: row.affected_user_name,
+                details: row.details,
+                previous_value: row.previous_value,
+                new_value: row.new_value,
+                record_snapshot: row.record_snapshot,
+                change_set: row.change_set,
+                success: row.success,
+                current_record: currentRecord
+            }
+        });
+    } catch (error) {
+        console.error("GET AUTH ACTIVITY DETAILS ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load activity details."
+        });
     }
 }
 
@@ -1055,6 +1165,7 @@ async function deleteBranch(req, res) {
 
 module.exports = {
     listAuthActivity,
+    getAuthActivityDetails,
     clearAuthActivity,
     listUsers,
     listPendingUsers,

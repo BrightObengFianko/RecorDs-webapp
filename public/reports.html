@@ -91,6 +91,20 @@
         </main>
     </div>
 
+    <div class="activity-modal" id="activityDetailsModal" hidden>
+        <div class="activity-modal-backdrop" data-activity-modal-close></div>
+        <section class="activity-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="activityDetailsTitle">
+            <div class="activity-modal-header">
+                <div>
+                    <h2 id="activityDetailsTitle">Activity details</h2>
+                    <p id="activityDetailsSubtitle"></p>
+                </div>
+                <button class="activity-modal-close" type="button" aria-label="Close activity details" data-activity-modal-close>&times;</button>
+            </div>
+            <div class="activity-modal-body" id="activityDetailsBody"></div>
+        </section>
+    </div>
+
     <script src="js/notification.js"></script>
     <script src="js/confirm-dialog.js"></script>
     <script src="js/app-settings.js"></script>

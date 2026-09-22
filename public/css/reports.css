@@ -207,6 +207,21 @@ body.reports-page {
     border-bottom: 0;
 }
 
+.activity-row {
+    cursor: pointer;
+    transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.activity-row:hover,
+.activity-row:focus-visible {
+    background: var(--app-surface-2);
+    outline: none;
+}
+
+.activity-row:active {
+    background: var(--accent-soft);
+}
+
 .activity-user strong,
 .activity-user span {
     display: block;
@@ -271,6 +286,80 @@ body.reports-page {
     font-size: 12px;
     text-align: center;
 }
+
+.activity-modal[hidden] {
+    display: none;
+}
+
+.activity-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+}
+
+.activity-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, .54);
+}
+
+.activity-modal-dialog {
+    position: relative;
+    width: min(720px, 100%);
+    max-height: min(760px, 92vh);
+    overflow: auto;
+    border: 1px solid var(--app-border);
+    border-radius: 14px;
+    background: var(--app-surface);
+    box-shadow: 0 24px 70px rgba(15, 23, 42, .28);
+}
+
+.activity-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px;
+    border-bottom: 1px solid var(--app-border);
+}
+
+.activity-modal-header h2 { margin: 0; font-size: 20px; }
+.activity-modal-header p { margin: 5px 0 0; color: var(--app-muted); font-size: 12px; }
+
+.activity-modal-close {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    border: 1px solid var(--app-border);
+    border-radius: 50%;
+    background: var(--app-surface);
+    color: var(--app-text);
+    font: inherit;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.activity-modal-body { padding: 20px; }
+.activity-detail-section + .activity-detail-section { margin-top: 22px; }
+.activity-detail-section h3 { margin: 0 0 12px; font-size: 14px; }
+.activity-detail-grid { display: grid; gap: 8px; margin: 0; }
+.activity-detail-row { display: grid; grid-template-columns: minmax(130px, .35fr) minmax(0, 1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--app-border); }
+.activity-detail-row dt { color: var(--app-muted); font-size: 12px; font-weight: 700; }
+.activity-detail-row dd { margin: 0; overflow-wrap: anywhere; font-size: 13px; }
+.activity-detail-muted { margin: 0; color: var(--app-muted); font-size: 13px; }
+.activity-deleted-label { margin-bottom: 16px; padding: 9px 11px; border-radius: 8px; color: #a33b3b; background: #fdebec; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.activity-change-list { display: grid; gap: 12px; }
+.activity-change { padding: 12px; border: 1px solid var(--app-border); border-radius: 9px; background: var(--app-surface-2); }
+.activity-change strong { display: block; margin-bottom: 9px; font-size: 13px; }
+.activity-change div + div { margin-top: 8px; }
+.activity-change span { display: block; color: var(--app-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.activity-change p { margin: 3px 0 0; overflow-wrap: anywhere; font-size: 13px; }
+
+body.activity-modal-open { overflow: hidden; }
 
 @media (max-width: 1000px) {
     .reports-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -356,4 +445,9 @@ body.reports-page {
         text-transform: uppercase;
     }
     .activity-heading { padding: 16px; }
+    .activity-modal { padding: 10px; }
+    .activity-modal-dialog { max-height: 94vh; border-radius: 10px; }
+    .activity-modal-header,
+    .activity-modal-body { padding: 16px; }
+    .activity-detail-row { grid-template-columns: 1fr; gap: 3px; }
 }

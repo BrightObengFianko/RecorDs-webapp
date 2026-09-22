@@ -34,6 +34,8 @@ async function recordActivity({
     details = null,
     previousValue = null,
     newValue = null,
+    recordSnapshot = null,
+    changeSet = null,
     success = true
 }) {
     if (!activityType) {
@@ -57,11 +59,13 @@ async function recordActivity({
                     details,
                     previous_value,
                     new_value,
+                    record_snapshot,
+                    change_set,
                     success,
                     ip_address,
                     user_agent
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             `,
             [
                 userId || null,
@@ -77,6 +81,8 @@ async function recordActivity({
                 details ? String(details).slice(0, 5000) : null,
                 previousValue == null ? null : String(previousValue).slice(0, 2000),
                 newValue == null ? null : String(newValue).slice(0, 2000),
+                recordSnapshot || null,
+                changeSet || null,
                 success !== false,
                 request ? (String(request.ip || "").slice(0, 64) || null) : null,
                 request ? (String(request.get("user-agent") || "").slice(0, 500) || null) : null
@@ -88,10 +94,28 @@ async function recordActivity({
     }
 }
 
+function makeRecordSnapshot(record) {
+    if (!record) return null;
+
+    const fields = [
+        "id", "name", "phone_number", "category", "date_of_birth",
+        "date_of_death", "registration_date", "registrar", "branch_id",
+        "status", "sms_sent", "sms_status", "sms_date", "sms_error", "notes"
+    ];
+
+    return fields.reduce((snapshot, field) => {
+        if (Object.prototype.hasOwnProperty.call(record, field)) {
+            snapshot[field] = record[field];
+        }
+        return snapshot;
+    }, {});
+}
+
 const recordAuthActivity = recordActivity;
 
 module.exports = {
     ACTIVITY_TYPES,
     recordActivity,
-    recordAuthActivity
+    recordAuthActivity,
+    makeRecordSnapshot
 };

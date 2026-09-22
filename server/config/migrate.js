@@ -398,6 +398,8 @@ async function ensureDatabaseSchema() {
             ADD COLUMN IF NOT EXISTS details TEXT,
             ADD COLUMN IF NOT EXISTS previous_value TEXT,
             ADD COLUMN IF NOT EXISTS new_value TEXT,
+            ADD COLUMN IF NOT EXISTS record_snapshot JSONB,
+            ADD COLUMN IF NOT EXISTS change_set JSONB,
             ADD COLUMN IF NOT EXISTS success BOOLEAN NOT NULL DEFAULT TRUE
         `
     );

@@ -13,6 +13,7 @@ const {
     deleteUser,
     listBranches,
     listAuthActivity,
+    getAuthActivityDetails,
     clearAuthActivity,
     createBranch,
     updateBranch,
@@ -39,6 +40,7 @@ router.post("/branches", createBranch);
 router.patch("/branches/:id", updateBranch);
 router.delete("/branches/:id", deleteBranch);
 router.get("/auth-activity", listAuthActivity);
+router.get("/auth-activity/:id", getAuthActivityDetails);
 router.delete("/auth-activity", clearAuthActivity);
 
 module.exports = router;
