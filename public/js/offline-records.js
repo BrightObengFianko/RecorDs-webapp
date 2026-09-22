@@ -7,9 +7,13 @@
     const SYNCING_STATUS = "SYNCING";
     const CONFLICT_STATUS = "SYNC_CONFLICT";
     const MAX_RETRY_DELAY_MS = 5 * 60 * 1000;
+    const AUTO_SYNC_DELAY_MS = 1500;
+    const AUTO_SYNC_RETRY_DELAYS_MS = [3000, 10000, 30000];
 
     let dbPromise = null;
     let syncPromise = null;
+    let automaticSyncPromise = null;
+    let automaticSyncTimer = null;
     let statusElement = null;
 
     function isIndexedDbSupported() {
@@ -719,7 +723,7 @@
             force: options.force === true
         });
 
-        if (result.syncedCount > 0) {
+        if (result.syncedCount > 0 && options.silent !== true) {
             localStorage.setItem("recordOfflineLastSync", new Date().toISOString());
             showSyncMessage(
                 `${result.syncedCount} offline record${result.syncedCount === 1 ? "" : "s"} synced successfully.`,
@@ -727,7 +731,7 @@
             );
         }
 
-        if (result.failedCount > 0) {
+        if (result.failedCount > 0 && options.silent !== true) {
             showSyncMessage(
                 `${result.failedCount} offline record${result.failedCount === 1 ? "" : "s"} still need syncing.`,
                 "warning"
@@ -739,17 +743,103 @@
         return result;
     }
 
+    function wait(milliseconds) {
+        return new Promise(resolve => window.setTimeout(resolve, milliseconds));
+    }
+
+    async function checkBackendAvailability() {
+        const token = localStorage.getItem("token");
+
+        if (!token || (typeof navigator !== "undefined" && navigator.onLine === false)) {
+            return { reachable: false, authenticated: false };
+        }
+
+        const controller = typeof AbortController === "function"
+            ? new AbortController()
+            : null;
+        const timeout = window.setTimeout(() => controller?.abort(), 5000);
+
+        try {
+            const response = await fetch("/api/auth/me", {
+                method: "GET",
+                cache: "no-store",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                },
+                signal: controller?.signal
+            });
+
+            return {
+                reachable: response.ok,
+                authenticated: response.status !== 401 && response.status !== 403
+            };
+        } catch (error) {
+            return { reachable: false, authenticated: false };
+        } finally {
+            window.clearTimeout(timeout);
+        }
+    }
+
+    function scheduleAutomaticSync(delay = AUTO_SYNC_DELAY_MS) {
+        if (automaticSyncTimer || automaticSyncPromise) {
+            return;
+        }
+
+        automaticSyncTimer = window.setTimeout(() => {
+            automaticSyncTimer = null;
+            automaticSyncPromise = runAutomaticSync().finally(() => {
+                automaticSyncPromise = null;
+            });
+        }, delay);
+    }
+
+    async function runAutomaticSync() {
+        await wait(AUTO_SYNC_DELAY_MS);
+
+        for (let attempt = 0; attempt <= AUTO_SYNC_RETRY_DELAYS_MS.length; attempt++) {
+            if (typeof navigator !== "undefined" && navigator.onLine === false) {
+                return;
+            }
+
+            const stats = await getQueueStats();
+            if (!stats.waiting && !stats.failed && !stats.syncing) {
+                await refreshStatusIndicator();
+                return;
+            }
+
+            const backend = await checkBackendAvailability();
+            if (backend.reachable && backend.authenticated) {
+                const result = await syncForCurrentUser({ silent: true });
+
+                if (!result.networkError && !result.authError && !result.failedCount) {
+                    const remaining = await getQueueStats();
+
+                    if (!remaining.waiting && !remaining.failed && !remaining.syncing) {
+                        localStorage.setItem("recordOfflineLastSync", new Date().toISOString());
+                        await refreshStatusIndicator();
+                        return;
+                    }
+                }
+            }
+
+            if (attempt < AUTO_SYNC_RETRY_DELAYS_MS.length) {
+                await wait(AUTO_SYNC_RETRY_DELAYS_MS[attempt]);
+            }
+        }
+
+        // Leave failed records in IndexedDB and continue retrying quietly.
+        window.setTimeout(() => {
+            if (!automaticSyncPromise) {
+                scheduleAutomaticSync(0);
+            }
+        }, AUTO_SYNC_RETRY_DELAYS_MS[AUTO_SYNC_RETRY_DELAYS_MS.length - 1]);
+    }
+
     window.addEventListener("online", () => {
         updateOfflineNavigation("online", 0);
-        updateOfflineBanners("Online - syncing pending records...");
-        showSyncMessage(
-            "You are back online. Syncing pending records...",
-            "success"
-        );
-
-        syncForCurrentUser().catch(error => {
-            console.error("OFFLINE SYNC ERROR:", error);
-        });
+        updateOfflineBanners("Online - checking the server...");
+        scheduleAutomaticSync();
     });
 
     window.addEventListener("offline", () => {
@@ -762,19 +852,17 @@
     });
 
     if (typeof navigator === "undefined" || navigator.onLine !== false) {
-        syncForCurrentUser().catch(error => {
-            console.error("INITIAL OFFLINE SYNC ERROR:", error);
-        });
+        scheduleAutomaticSync();
     }
 
     window.setInterval(() => {
         if (typeof document !== "undefined" && document.visibilityState === "visible") {
-            syncForCurrentUser().catch(() => {});
+            scheduleAutomaticSync(0);
         }
     }, 30000);
 
     window.addEventListener("focus", () => {
-        syncForCurrentUser().catch(() => {});
+        scheduleAutomaticSync(0);
     });
 
     window.setTimeout(() => {

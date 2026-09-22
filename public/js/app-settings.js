@@ -69,7 +69,7 @@
         }
 
         if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/service-worker.js?v=27", {
+        navigator.serviceWorker.register("/service-worker.js?v=29", {
                 updateViaCache: "none"
             }).then(registration => {
                 // Do not make offline startup wait on a service-worker update check.
@@ -886,7 +886,16 @@
     }
 
     function applyProfile(profile) {
-        const currentProfile = profile || readProfile();
+        const storedProfile = readProfile();
+        const currentProfile = profile
+            ? {
+                ...storedProfile,
+                ...profile,
+                // Avatar is persisted in account settings, not in the small
+                // user identity cache used by the shell.
+                avatar: profile.avatar || storedProfile.avatar || ""
+            }
+            : storedProfile;
         const displayName = currentProfile.name || DEFAULT_PROFILE.name;
         const displayRole = currentProfile.role || DEFAULT_PROFILE.role;
         const storedUser = readStoredUser();

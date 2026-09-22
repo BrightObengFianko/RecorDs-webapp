@@ -515,7 +515,12 @@ function persistUserCache() {
     localStorage.setItem("user", JSON.stringify(user));
 
     if (window.RecordProfile && typeof window.RecordProfile.applyProfile === "function") {
-        window.RecordProfile.applyProfile(user);
+        // The avatar is stored in per-user settings, but the shared shell
+        // still needs the current image when it reapplies the profile.
+        window.RecordProfile.applyProfile({
+            ...user,
+            avatar: state.profile.avatar || ""
+        });
     }
 
     return user;
