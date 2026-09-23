@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v35";
+const CACHE_NAME = "records-shell-v36";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -99,7 +99,7 @@ self.addEventListener("fetch", event => {
     // Shell CSS/JS/images should be available immediately offline. Refresh the
     // cache in the background when a network is available.
     event.respondWith(
-        caches.match(request, { ignoreSearch: true }).then(cached => {
+        caches.match(request).then(cached => {
             const refresh = fetch(request)
                 .then(response => {
                     if (response.ok) {

@@ -149,6 +149,12 @@ app.use(
                         "no-cache, must-revalidate"
                     );
                 }
+                if (path.basename(filePath).toLowerCase() === "service-worker.js") {
+                    res.setHeader(
+                        "Cache-Control",
+                        "no-cache, no-store, must-revalidate"
+                    );
+                }
             }
         }
     )
