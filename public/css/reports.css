@@ -177,6 +177,8 @@ body.reports-page {
     color: #a33b3b;
     background: #fff5f5;
     border-color: #e3a0a0;
+    font-size: 17px;
+    line-height: 1;
 }
 
 .recycle-bin-button:hover,
