@@ -156,10 +156,15 @@ function mergeSettings(base, stored) {
     }
 
     if (stored.profile && typeof stored.profile === "object") {
+        const cachedAvatar = base.profile.avatar;
         base.profile = {
             ...base.profile,
             ...stored.profile
         };
+
+        if (!base.profile.avatar && cachedAvatar) {
+            base.profile.avatar = cachedAvatar;
+        }
     }
 
     if (stored.appearance && typeof stored.appearance === "object") {
@@ -211,7 +216,7 @@ function mergeServerSettings(serverSettings) {
         return;
     }
 
-    state = mergeSettings(cloneDefaults(), serverSettings);
+    state = mergeSettings(state || cloneDefaults(), serverSettings);
     saveSettings();
 }
 
