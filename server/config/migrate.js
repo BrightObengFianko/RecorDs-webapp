@@ -442,6 +442,79 @@ async function ensureDatabaseSchema() {
 
     await pool.query(
         `
+            CREATE TABLE IF NOT EXISTS notifications (
+                id BIGSERIAL PRIMARY KEY,
+                type VARCHAR(60) NOT NULL,
+                title VARCHAR(200) NOT NULL,
+                message TEXT NOT NULL,
+                priority VARCHAR(20) NOT NULL DEFAULT 'INFO',
+                user_id INTEGER NOT NULL,
+                record_id INTEGER,
+                branch_id INTEGER,
+                is_read BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                read_at TIMESTAMP,
+                metadata JSONB DEFAULT '{}'::jsonb,
+                CONSTRAINT notifications_priority_check
+                    CHECK (priority IN ('CRITICAL', 'IMPORTANT', 'INFO')),
+                CONSTRAINT notifications_user_id_fkey
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                    ON UPDATE CASCADE ON DELETE CASCADE,
+                CONSTRAINT notifications_record_id_fkey
+                    FOREIGN KEY (record_id) REFERENCES records(id)
+                    ON UPDATE CASCADE ON DELETE SET NULL,
+                CONSTRAINT notifications_branch_id_fkey
+                    FOREIGN KEY (branch_id) REFERENCES branches(id)
+                    ON UPDATE CASCADE ON DELETE SET NULL
+            )
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_notifications_user_id
+            ON notifications(user_id)
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_notifications_created_at
+            ON notifications(created_at DESC)
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_notifications_priority
+            ON notifications(priority)
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_notifications_type
+            ON notifications(type)
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_notifications_unread_user
+            ON notifications(user_id, is_read, created_at DESC)
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_event_unique
+            ON notifications(user_id, type, (metadata->>'event_id'))
+            WHERE metadata ? 'event_id'
+        `
+    );
+
+    await pool.query(
+        `
             CREATE INDEX IF NOT EXISTS idx_security_audit_logs_occurred_at
             ON security_audit_logs(occurred_at DESC)
         `

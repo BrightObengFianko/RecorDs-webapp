@@ -16,6 +16,7 @@ const authRoutes = require("./server/routes/authRoutes");
 const recordRoutes = require("./server/routes/recordRoutes");
 const adminRoutes = require("./server/routes/adminRoutes");
 const smsRoutes = require("./server/routes/smsRoutes");
+const notificationRoutes = require("./server/routes/notificationRoutes");
 
 const app = express();
 
@@ -72,6 +73,11 @@ app.use(
 app.use(
     "/api/sms",
     smsRoutes
+);
+
+app.use(
+    "/api/notifications",
+    notificationRoutes
 );
 
 app.get("/health", async (req, res) => {

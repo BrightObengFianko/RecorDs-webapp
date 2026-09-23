@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="css/confirm-dialog.css">
     <link rel="stylesheet" href="css/reports.css">
     <link rel="stylesheet" href="css/mobile-form-controls.css">
+    <link rel="stylesheet" href="css/admin-notifications.css">
 </head>
 <body class="reports-page">
     <svg aria-hidden="true" focusable="false" class="reports-icon-sprite">
@@ -87,6 +88,23 @@
                         <button id="nextActivityPage" type="button" disabled>Next</button>
                     </div>
                 </section>
+
+                <section class="reports-card notifications-report-card" id="notifications" hidden>
+                    <div class="activity-heading">
+                        <div><h2>Notifications</h2><p>Admin notifications requiring your attention.</p></div>
+                    </div>
+                    <div class="notifications-report-toolbar" role="tablist" aria-label="Notification filters">
+                        <button type="button" data-notification-filter="" class="is-active">All</button>
+                        <button type="button" data-notification-filter="unread">Unread</button>
+                        <button type="button" data-notification-filter="important">Important</button>
+                    </div>
+                    <div class="notifications-report-list" id="notificationReportList" aria-live="polite"></div>
+                    <div class="notifications-report-pagination">
+                        <button type="button" id="notificationReportPrevious" disabled>Previous</button>
+                        <span id="notificationReportPage">Page 1 of 1</span>
+                        <button type="button" id="notificationReportNext" disabled>Next</button>
+                    </div>
+                </section>
             </section>
         </main>
     </div>
@@ -109,6 +127,7 @@
     <script src="js/confirm-dialog.js"></script>
     <script src="js/app-settings.js"></script>
     <script src="js/offline-records.js"></script>
+    <script src="js/admin-notifications.js"></script>
     <script src="js/reports.js"></script>
 </body>
 </html>

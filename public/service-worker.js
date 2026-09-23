@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v34";
+const CACHE_NAME = "records-shell-v35";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -26,6 +26,7 @@ const APP_SHELL = [
     "/css/settings.css",
     "/css/users.css",
     "/css/pending-sync.css",
+    "/css/admin-notifications.css",
     "/js/app-settings.js",
     "/js/offline-records.js",
     "/js/notification.js",
@@ -39,6 +40,7 @@ const APP_SHELL = [
     "/js/settings.js",
     "/js/users.js",
     "/js/pending-sync.js",
+    "/js/admin-notifications.js",
     "/assets/navigation-icons.svg",
     "/assets/records-logo.jpeg",
     "/assets/records-icon-192.png",

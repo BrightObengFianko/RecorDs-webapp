@@ -1,0 +1,41 @@
+.admin-notification-button {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    margin-left: 8px;
+    border: 1px solid var(--app-border, #e5e7eb);
+    border-radius: 50%;
+    background: var(--app-surface, #fff);
+    color: var(--app-text, #172033);
+    font-size: 19px;
+    cursor: pointer;
+}
+.admin-notification-button:hover { background: var(--app-surface-2, #f3f4f8); }
+.admin-notification-badge { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: #d44747; color: #fff; font-size: 10px; font-weight: 800; line-height: 18px; }
+.admin-notification-panel { position: fixed; z-index: 10000; width: 340px; overflow: hidden; border: 1px solid var(--app-border, #e5e7eb); border-radius: 14px; background: var(--app-surface, #fff); box-shadow: 0 18px 50px rgba(17, 24, 39, .18); }
+.admin-notification-panel header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--app-border, #e5e7eb); }
+.admin-notification-mark-all { border: 0; background: transparent; color: var(--accent-ink, #5735e8); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.admin-notification-list { max-height: 390px; overflow-y: auto; }
+.admin-notification-item { display: flex; width: 100%; gap: 10px; padding: 13px 16px; border: 0; border-bottom: 1px solid var(--app-border, #e5e7eb); background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.admin-notification-item:hover, .admin-notification-item.is-unread { background: var(--accent-soft, #f1efff); }
+.admin-notification-item-icon { flex: 0 0 25px; font-size: 17px; }
+.admin-notification-item-copy { display: grid; gap: 3px; min-width: 0; }
+.admin-notification-item-copy strong { font-size: 12px; }
+.admin-notification-item-copy span { color: var(--app-muted, #667085); font-size: 11px; overflow-wrap: anywhere; }
+.admin-notification-item-copy small { color: var(--app-muted, #667085); font-size: 10px; }
+.admin-notification-item-icon.priority-critical { filter: saturate(1.35); }
+.admin-notification-view-all { display: block; padding: 13px 16px; color: var(--accent-ink, #5735e8); font-size: 12px; font-weight: 700; text-align: center; text-decoration: none; }
+.admin-notification-state { padding: 28px 18px; margin: 0; color: var(--app-muted, #667085); font-size: 12px; line-height: 1.7; text-align: center; }
+.admin-notification-state strong { color: var(--app-text, #172033); }
+.admin-notification-retry { margin-top: 8px; padding: 7px 11px; border: 1px solid var(--app-border, #e5e7eb); border-radius: 7px; background: var(--app-surface, #fff); cursor: pointer; }
+.notifications-report-card { margin-top: 18px; }
+.notifications-report-toolbar { display: flex; gap: 8px; padding: 16px 20px; border-bottom: 1px solid var(--app-border, #e5e7eb); }
+.notifications-report-toolbar button { padding: 7px 12px; border: 1px solid var(--app-border, #e5e7eb); border-radius: 7px; background: transparent; color: var(--app-text, #172033); font: inherit; font-size: 12px; cursor: pointer; }
+.notifications-report-toolbar button.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); font-weight: 700; }
+.notifications-report-list .admin-notification-item { border-bottom: 1px solid var(--app-border, #e5e7eb); }
+.notifications-report-pagination { display: flex; justify-content: flex-end; gap: 10px; align-items: center; padding: 12px 20px; border-top: 1px solid var(--app-border, #e5e7eb); font-size: 12px; }
+.notifications-report-pagination button { padding: 7px 10px; border: 1px solid var(--app-border, #e5e7eb); border-radius: 7px; background: var(--app-surface, #fff); cursor: pointer; }
+.notifications-report-pagination button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 600px) { .admin-notification-panel.is-mobile { inset: 12px; top: 70px !important; left: 12px !important; width: auto; max-height: calc(100vh - 82px); } .admin-notification-panel.is-mobile .admin-notification-list { max-height: calc(100vh - 170px); } .admin-notification-button { width: 46px; height: 46px; } .notifications-report-toolbar { padding: 12px; } }
