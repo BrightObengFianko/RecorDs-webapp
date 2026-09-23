@@ -22,6 +22,15 @@ function validateFilter(value, allowed, message) {
     return normalized;
 }
 
+function parseDateFilter(value, field) {
+    if (!value) return null;
+    const normalized = String(value).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+        throw new Error(`Invalid notification ${field}.`);
+    }
+    return normalized;
+}
+
 function isClientValidationError(error) {
     return String(error?.message || "").startsWith("Invalid notification");
 }
@@ -32,7 +41,21 @@ async function listNotifications(req, res) {
         const limit = parseLimit(req.query.limit);
         const values = [req.user.id];
         const conditions = ["n.user_id = $1"];
-        const type = validateFilter(req.query.type, notificationTypeSet, "Invalid notification type filter.");
+        const typeValues = String(req.query.type || "")
+            .split(",")
+            .map(value => value.trim().toUpperCase())
+            .filter(Boolean);
+        typeValues.forEach(value => {
+            if (!notificationTypeSet.has(value)) throw new Error("Invalid notification type filter.");
+        });
+        const readStatus = String(req.query.readStatus || "").trim().toLowerCase();
+        if (readStatus && !["read", "unread"].includes(readStatus)) throw new Error("Invalid notification read status filter.");
+        const dateFrom = parseDateFilter(req.query.dateFrom, "start date");
+        const dateTo = parseDateFilter(req.query.dateTo, "end date");
+        if (dateFrom && dateTo && dateFrom > dateTo) throw new Error("Invalid notification date range.");
+        const search = String(req.query.search || "").trim().slice(0, 120);
+        const sort = String(req.query.sort || "newest").trim().toLowerCase();
+        if (!["newest", "oldest"].includes(sort)) throw new Error("Invalid notification sort order.");
         const priorityValues = String(req.query.priority || "")
             .split(",")
             .map(value => value.trim().toUpperCase())
@@ -41,21 +64,36 @@ async function listNotifications(req, res) {
             if (!notificationPrioritySet.has(value)) throw new Error("Invalid notification priority filter.");
         });
 
-        if (String(req.query.unread || "").toLowerCase() === "true") {
+        if (String(req.query.unread || "").toLowerCase() === "true" || readStatus === "unread") {
             conditions.push("n.is_read = FALSE");
         }
-        if (type) {
-            values.push(type);
-            conditions.push(`n.type = $${values.length}`);
+        if (readStatus === "read") {
+            conditions.push("n.is_read = TRUE");
+        }
+        if (typeValues.length) {
+            values.push(typeValues);
+            conditions.push(`n.type = ANY($${values.length}::text[])`);
         }
         if (priorityValues.length) {
             values.push(priorityValues);
             conditions.push(`n.priority = ANY($${values.length}::text[])`);
         }
+        if (search) {
+            values.push(`%${search.replace(/[%_]/g, "\\$&")}%`);
+            conditions.push(`(n.title ILIKE $${values.length} ESCAPE '\\' OR n.message ILIKE $${values.length} ESCAPE '\\' OR n.type ILIKE $${values.length} ESCAPE '\\' OR COALESCE(r.name, '') ILIKE $${values.length} ESCAPE '\\' OR n.metadata::text ILIKE $${values.length} ESCAPE '\\')`);
+        }
+        if (dateFrom) {
+            values.push(dateFrom);
+            conditions.push(`n.created_at >= $${values.length}::date`);
+        }
+        if (dateTo) {
+            values.push(dateTo);
+            conditions.push(`n.created_at < ($${values.length}::date + INTERVAL '1 day')`);
+        }
 
         const whereClause = conditions.join(" AND ");
         const countResult = await pool.query(
-            `SELECT COUNT(*)::int AS total FROM notifications n WHERE ${whereClause}`,
+            `SELECT COUNT(*)::int AS total FROM notifications n LEFT JOIN records r ON r.id = n.record_id WHERE ${whereClause}`,
             values
         );
         const offset = (page - 1) * limit;
@@ -64,8 +102,9 @@ async function listNotifications(req, res) {
             `
                 SELECT n.*
                 FROM notifications n
+                LEFT JOIN records r ON r.id = n.record_id
                 WHERE ${whereClause}
-                ORDER BY n.created_at DESC, n.id DESC
+                ORDER BY n.created_at ${sort === "oldest" ? "ASC" : "DESC"}, n.id ${sort === "oldest" ? "ASC" : "DESC"}
                 LIMIT $${queryValues.length - 1}
                 OFFSET $${queryValues.length}
             `,
@@ -79,7 +118,7 @@ async function listNotifications(req, res) {
             pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) }
         });
     } catch (error) {
-        if (isClientValidationError(error)) {
+        if (isClientValidationError(error) || String(error?.message || "").startsWith("Invalid notification")) {
             return res.status(400).json({ success: false, message: error.message });
         }
         console.error("LIST NOTIFICATIONS ERROR:", error);
@@ -150,10 +189,32 @@ async function deleteNotification(req, res) {
     }
 }
 
+async function clearAllNotifications(req, res) {
+    try {
+        const result = await pool.query(
+            "DELETE FROM notifications WHERE user_id = $1",
+            [req.user.id]
+        );
+
+        return res.json({
+            success: true,
+            deleted: result.rowCount,
+            message: "All notifications cleared."
+        });
+    } catch (error) {
+        console.error("CLEAR ALL NOTIFICATIONS ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to clear notifications."
+        });
+    }
+}
+
 module.exports = {
     listNotifications,
     getUnreadCount,
     markNotificationRead,
     markAllNotificationsRead,
-    deleteNotification
+    deleteNotification,
+    clearAllNotifications
 };

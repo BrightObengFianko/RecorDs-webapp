@@ -59,6 +59,25 @@ const DEFAULT_ACCOUNT_SETTINGS = {
         showAvatars: true,
         showStatusColors: true,
         enableAnimations: true
+    },
+    notificationPreferences: {
+        RECORD_CREATED: true,
+        RECORD_UPDATED: true,
+        RECORD_APPROVED: true,
+        RECORD_DELETED: true,
+        RECORD_RESTORED: true,
+        DUPLICATE_DETECTED: true,
+        PENDING_APPROVAL: true,
+        SMS_ACTIVITY: true,
+        SMS_FAILED: true,
+        SYNC_SUCCEEDED: true,
+        SYNC_FAILED: true,
+        OFFLINE_RECORDS_PENDING: true,
+        USER_CREATED: true,
+        USER_ENABLED: true,
+        USER_DISABLED: true,
+        BRANCH_ASSIGNMENT_CHANGED: true,
+        SETTINGS_CHANGED: true
     }
 };
 
@@ -71,6 +90,9 @@ function normalizeAccountSettings(rawSettings, user) {
         : {};
     const rawAppearance = raw.appearance && typeof raw.appearance === "object"
         ? raw.appearance
+        : {};
+    const rawNotificationPreferences = raw.notificationPreferences && typeof raw.notificationPreferences === "object"
+        ? raw.notificationPreferences
         : {};
     const cleanText = (value, fallback, maxLength) => {
         const text = String(value ?? fallback ?? "").trim();
@@ -102,7 +124,13 @@ function normalizeAccountSettings(rawSettings, user) {
             showAvatars: rawAppearance.showAvatars !== false,
             showStatusColors: rawAppearance.showStatusColors !== false,
             enableAnimations: rawAppearance.enableAnimations !== false
-        }
+        },
+        notificationPreferences: Object.fromEntries(
+            Object.keys(DEFAULT_ACCOUNT_SETTINGS.notificationPreferences).map(type => [
+                type,
+                rawNotificationPreferences[type] !== false
+            ])
+        )
     };
 }
 

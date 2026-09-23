@@ -6,9 +6,11 @@ const NOTIFICATION_TYPES = Object.freeze({
     RECORD_DELETED: "RECORD_DELETED",
     RECORD_RESTORED: "RECORD_RESTORED",
     PENDING_APPROVAL: "PENDING_APPROVAL",
+    SMS_ACTIVITY: "SMS_ACTIVITY",
     SMS_FAILED: "SMS_FAILED",
     SMS_SERVICE_UNAVAILABLE: "SMS_SERVICE_UNAVAILABLE",
     SYNC_FAILED: "SYNC_FAILED",
+    SYNC_SUCCEEDED: "SYNC_SUCCEEDED",
     OFFLINE_RECORDS_PENDING: "OFFLINE_RECORDS_PENDING",
     DUPLICATE_DETECTED: "DUPLICATE_DETECTED",
     USER_CREATED: "USER_CREATED",
@@ -28,6 +30,17 @@ const NOTIFICATION_PRIORITIES = Object.freeze({
 
 const notificationTypeSet = new Set(Object.values(NOTIFICATION_TYPES));
 const notificationPrioritySet = new Set(Object.values(NOTIFICATION_PRIORITIES));
+const REQUIRED_NOTIFICATION_TYPES = new Set([
+    NOTIFICATION_TYPES.FAILED_LOGIN_ALERT,
+    NOTIFICATION_TYPES.SYSTEM_ALERT
+]);
+
+function isNotificationEnabled(user, type) {
+    const normalizedType = String(type || "").trim().toUpperCase();
+    if (REQUIRED_NOTIFICATION_TYPES.has(normalizedType)) return true;
+    const preferences = user?.account_settings;
+    return !preferences || preferences.notificationPreferences?.[normalizedType] !== false;
+}
 
 function validateNotificationText(value, field, maxLength, required = true) {
     const text = String(value ?? "").trim();
@@ -169,7 +182,7 @@ async function notifyAdmins({
 }) {
     const adminResult = await pool.query(
         `
-            SELECT id
+            SELECT id, account_settings
             FROM users
             WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) = 'admin'
               AND COALESCE(is_active, TRUE) = TRUE
@@ -179,6 +192,7 @@ async function notifyAdmins({
 
     const notifications = [];
     for (const admin of adminResult.rows) {
+        if (!isNotificationEnabled(admin, type)) continue;
         try {
             notifications.push(await createNotification({
                 type,
@@ -238,7 +252,8 @@ async function notifyAdminsGrouped({
     recordId = null,
     branchId = null,
     metadata = {},
-    render
+    render,
+    groupingWindowMinutes = 15
 }) {
     if (!groupingKey || typeof render !== "function") {
         throw new Error("Grouped notification requires a grouping key and renderer.");
@@ -246,7 +261,7 @@ async function notifyAdminsGrouped({
 
     const adminResult = await pool.query(
         `
-            SELECT id
+            SELECT id, account_settings
             FROM users
             WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) = 'admin'
               AND COALESCE(is_active, TRUE) = TRUE
@@ -256,7 +271,18 @@ async function notifyAdminsGrouped({
     const results = [];
 
     for (const admin of adminResult.rows) {
-        const currentResult = await pool.query(
+        if (!isNotificationEnabled(admin, type)) continue;
+        const client = await pool.connect();
+        const lockKey = `${admin.id}:${type}:${priority}:${groupingKey}`;
+
+        try {
+            await client.query("BEGIN");
+            await client.query(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                [lockKey]
+            );
+
+            const currentResult = await client.query(
             `
                 SELECT *
                 FROM notifications
@@ -267,28 +293,29 @@ async function notifyAdminsGrouped({
                 LIMIT 1
             `,
             [admin.id, type, priority, groupingKey]
-        );
-        const current = currentResult.rows[0];
-        const currentMetadata = current?.metadata || {};
-        const existingEventIds = Array.isArray(currentMetadata.event_ids)
-            ? currentMetadata.event_ids.map(String)
-            : [];
+            );
+            const current = currentResult.rows[0];
+            const currentMetadata = current?.metadata || {};
+            const existingEventIds = Array.isArray(currentMetadata.event_ids)
+                ? currentMetadata.event_ids.map(String)
+                : [];
 
-        if (current && eventId && existingEventIds.includes(String(eventId))) {
-            results.push(current);
-            continue;
-        }
+            if (current && eventId && existingEventIds.includes(String(eventId))) {
+                await client.query("COMMIT");
+                results.push(current);
+                continue;
+            }
 
-        const nextMetadata = mergeGroupedMetadata(currentMetadata, metadata, eventId);
-        const nextCount = Number(current?.group_count || 0) + 1;
-        const content = render({
-            count: nextCount,
-            metadata: nextMetadata,
-            current
-        });
+            const nextMetadata = mergeGroupedMetadata(currentMetadata, metadata, eventId);
+            const nextCount = Number(current?.group_count || 0) + 1;
+            const content = render({
+                count: nextCount,
+                metadata: nextMetadata,
+                current
+            });
 
-        if (current) {
-            const updated = await pool.query(
+            if (current) {
+                const updated = await client.query(
                 `
                     UPDATE notifications
                     SET title = $1,
@@ -299,6 +326,9 @@ async function notifyAdminsGrouped({
                         read_at = NULL,
                         group_count = $5,
                         last_event_at = CURRENT_TIMESTAMP,
+                        is_active = TRUE,
+                        resolved_at = NULL,
+                        group_window_minutes = $8,
                         metadata = $6::jsonb
                     WHERE id = $7
                     RETURNING *
@@ -310,20 +340,23 @@ async function notifyAdminsGrouped({
                     branchId,
                     nextCount,
                     JSON.stringify(nextMetadata),
-                    current.id
+                    current.id,
+                    Number(groupingWindowMinutes) || 15
                 ]
-            );
-            results.push(updated.rows[0]);
-            continue;
-        }
+                );
+                await client.query("COMMIT");
+                results.push(updated.rows[0]);
+                continue;
+            }
 
-        const inserted = await pool.query(
+            const inserted = await client.query(
             `
                 INSERT INTO notifications (
                     type, title, message, priority, user_id, record_id,
-                    branch_id, grouping_key, group_count, last_event_at, metadata
+                    branch_id, grouping_key, group_count, last_event_at,
+                    is_active, group_window_minutes, metadata
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, $10::jsonb)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, TRUE, $11, $10::jsonb)
                 ON CONFLICT (user_id, type, priority, grouping_key)
                 WHERE grouping_key IS NOT NULL
                 DO NOTHING
@@ -339,10 +372,18 @@ async function notifyAdminsGrouped({
                 branchId,
                 groupingKey,
                 nextCount,
-                JSON.stringify(nextMetadata)
+                JSON.stringify(nextMetadata),
+                Number(groupingWindowMinutes) || 15
             ]
-        );
-        if (inserted.rows[0]) results.push(inserted.rows[0]);
+            );
+            await client.query("COMMIT");
+            if (inserted.rows[0]) results.push(inserted.rows[0]);
+        } catch (error) {
+            await client.query("ROLLBACK");
+            console.error("GROUPED NOTIFICATION ERROR:", error.message);
+        } finally {
+            client.release();
+        }
     }
 
     return results;
@@ -361,7 +402,7 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
     const recordIds = (countResult.rows[0]?.record_ids || []).slice(0, 50);
     const adminResult = await pool.query(
         `
-            SELECT id
+            SELECT id, account_settings
             FROM users
             WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) = 'admin'
               AND COALESCE(is_active, TRUE) = TRUE
@@ -370,6 +411,7 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
     );
 
     for (const admin of adminResult.rows) {
+        if (!isNotificationEnabled(admin, NOTIFICATION_TYPES.PENDING_APPROVAL)) continue;
         const currentResult = await pool.query(
             `
                 SELECT * FROM notifications
@@ -395,9 +437,9 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
                 `
                     INSERT INTO notifications (
                         type, title, message, priority, user_id, grouping_key,
-                        group_count, last_event_at, metadata
+                        group_count, last_event_at, is_active, group_window_minutes, metadata
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, $8::jsonb)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, TRUE, 15, $8::jsonb)
                     ON CONFLICT (user_id, type, priority, grouping_key) DO NOTHING
                 `,
                 [
@@ -423,8 +465,11 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
                     group_count = $3,
                     metadata = $4::jsonb,
                     last_event_at = CURRENT_TIMESTAMP,
+                    is_active = $8,
+                    resolved_at = CASE WHEN $8 THEN NULL ELSE CURRENT_TIMESTAMP END,
+                    group_window_minutes = 15,
                     is_read = CASE WHEN $5 THEN TRUE WHEN $6 THEN FALSE ELSE is_read END,
-                    read_at = CASE WHEN $5 OR $6 THEN CURRENT_TIMESTAMP ELSE read_at END
+                    read_at = CASE WHEN $5 THEN CURRENT_TIMESTAMP WHEN $6 THEN NULL ELSE read_at END
                 WHERE id = $7
             `,
             [
@@ -434,7 +479,8 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
                 JSON.stringify(metadata),
                 count === 0,
                 becameUnread,
-                current.id
+                current.id,
+                count > 0
             ]
         );
     }

@@ -589,6 +589,38 @@
                     </button>
                 </div>
             </section>
+
+            <section class="panel notification-preferences-panel" id="notificationPreferencesSection">
+                <div class="panel-head">
+                    <div class="section-icon"><svg class="icon" aria-hidden="true"><use href="#icon-bell"></use></svg></div>
+                    <div><h2>Notification Preferences</h2><p>Choose which in-app notification groups you want to see.</p></div>
+                </div>
+                <div class="notification-preference-groups">
+                    <div class="notification-preference-group"><h3>Record Activity</h3><div class="notification-preference-list">
+                        <label class="toggle-row"><span class="toggle-copy"><strong>Record created</strong><span>New records added to RecorDS</span></span><span class="switch"><input type="checkbox" data-notification-preference="RECORD_CREATED"><span></span></span></label>
+                        <label class="toggle-row"><span class="toggle-copy"><strong>Record edited</strong><span>Changes made to existing records</span></span><span class="switch"><input type="checkbox" data-notification-preference="RECORD_UPDATED"><span></span></span></label>
+                        <label class="toggle-row"><span class="toggle-copy"><strong>Record approved</strong><span>Records approved for processing</span></span><span class="switch"><input type="checkbox" data-notification-preference="RECORD_APPROVED"><span></span></span></label>
+                        <label class="toggle-row"><span class="toggle-copy"><strong>Record deleted</strong><span>Records moved to the recycle bin</span></span><span class="switch"><input type="checkbox" data-notification-preference="RECORD_DELETED"><span></span></span></label>
+                        <label class="toggle-row"><span class="toggle-copy"><strong>Record restored</strong><span>Records restored from the recycle bin</span></span><span class="switch"><input type="checkbox" data-notification-preference="RECORD_RESTORED"><span></span></span></label>
+                        <label class="toggle-row"><span class="toggle-copy"><strong>Duplicate detected</strong><span>Possible duplicate cases</span></span><span class="switch"><input type="checkbox" data-notification-preference="DUPLICATE_DETECTED"><span></span></span></label>
+                    </div></div>
+                    <div class="notification-preference-group"><h3>Approval, SMS &amp; Synchronization</h3><div class="notification-preference-list">
+                        <label class="toggle-row"><span class="toggle-copy"><strong>Pending approval</strong><span>Records waiting for review</span></span><span class="switch"><input type="checkbox" data-notification-preference="PENDING_APPROVAL"><span></span></span></label>
+                        <label class="toggle-row"><span class="toggle-copy"><strong>SMS activity</strong><span>SMS sent or queued activity</span></span><span class="switch"><input type="checkbox" data-notification-preference="SMS_ACTIVITY"><span></span></span></label>
+                        <label class="toggle-row"><span class="toggle-copy"><strong>SMS failures</strong><span>SMS delivery or service failures</span></span><span class="switch"><input type="checkbox" data-notification-preference="SMS_FAILED"><span></span></span></label>
+                        <label class="toggle-row"><span class="toggle-copy"><strong>Synchronization completed</strong><span>Offline records synchronized successfully</span></span><span class="switch"><input type="checkbox" data-notification-preference="SYNC_SUCCEEDED"><span></span></span></label>
+                        <label class="toggle-row"><span class="toggle-copy"><strong>Synchronization failed</strong><span>Offline records that need attention</span></span><span class="switch"><input type="checkbox" data-notification-preference="SYNC_FAILED"><span></span></span></label>
+                        <label class="toggle-row"><span class="toggle-copy"><strong>Offline records pending</strong><span>Records waiting to synchronize</span></span><span class="switch"><input type="checkbox" data-notification-preference="OFFLINE_RECORDS_PENDING"><span></span></span></label>
+                    </div></div>
+                    <div class="notification-preference-group notification-admin-preferences"><h3>Admin Activity</h3><div class="notification-preference-list">
+                        <label class="toggle-row"><span class="toggle-copy"><strong>User created</strong><span>New user accounts</span></span><span class="switch"><input type="checkbox" data-notification-preference="USER_CREATED"><span></span></span></label>
+                        <label class="toggle-row"><span class="toggle-copy"><strong>User enabled or disabled</strong><span>User access changes</span></span><span class="switch"><input type="checkbox" data-notification-preference="USER_ENABLED"><span></span></span></label>
+                        <label class="toggle-row"><span class="toggle-copy"><strong>Branch assignment changed</strong><span>Changes to user branch access</span></span><span class="switch"><input type="checkbox" data-notification-preference="BRANCH_ASSIGNMENT_CHANGED"><span></span></span></label>
+                        <label class="toggle-row"><span class="toggle-copy"><strong>Settings changed</strong><span>Important system setting changes</span></span><span class="switch"><input type="checkbox" data-notification-preference="SETTINGS_CHANGED"><span></span></span></label>
+                    </div></div>
+                </div>
+                <div class="panel-actions panel-actions-end notification-preference-actions"><button class="outline-button" type="button" id="resetNotificationPreferences">Reset to defaults</button><button class="primary-button" type="button" id="saveNotificationPreferences">Save Notification Preferences</button></div>
+            </section>
         </main>
     </div>
 

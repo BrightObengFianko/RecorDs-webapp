@@ -192,6 +192,45 @@ async function notifyRecordAdmins(request, {
     }
 }
 
+async function notifySmsAdmins(request, record, {
+    success,
+    errorMessage = null,
+    smsStatus = null,
+    eventId
+}) {
+    try {
+        const stableEventId = String(eventId || `sms:${record.id}:${record.updated_at || "unknown"}`);
+        await notifyAdminsGrouped({
+            type: success ? NOTIFICATION_TYPES.SMS_ACTIVITY : NOTIFICATION_TYPES.SMS_FAILED,
+            title: success ? "SMS Activity" : "SMS Activity Failed",
+            message: success
+                ? `SMS activity for case #${record.id}.`
+                : `SMS activity failed for case #${record.id}.`,
+            priority: success
+                ? NOTIFICATION_PRIORITIES.INFO
+                : NOTIFICATION_PRIORITIES.IMPORTANT,
+            groupingKey: `SMS:${notificationWindowKey(10)}`,
+            groupingWindowMinutes: 10,
+            eventId: stableEventId,
+            recordId: record.id,
+            branchId: record.branch_id,
+            metadata: {
+                event_ids: [stableEventId],
+                record_ids: [record.id],
+                sms_status: smsStatus || (success ? "Sent" : "Error"),
+                error: errorMessage || null
+            },
+            render: ({ count, metadata }) => ({
+                title: success ? `${count} SMS Activities` : `${count} SMS Activities Failed`,
+                message: `${count} SMS ${success ? "activities" : "failures"} recorded in the last 10 minutes.`,
+                metadata
+            })
+        });
+    } catch (error) {
+        console.error("SMS ADMIN NOTIFICATION ERROR:", error.message);
+    }
+}
+
 function recordActorName(request) {
     return String(request.user?.name || "A staff member").trim();
 }
@@ -748,6 +787,32 @@ const createRecord = async (req, res) => {
                 };
             }
         });
+
+        // A valid client UUID means this record arrived through the offline
+        // queue. The server only emits this event after the insert succeeds.
+        if (clientUuid) {
+            await notifyAdminsGrouped({
+                type: NOTIFICATION_TYPES.SYNC_SUCCEEDED,
+                title: "Record Synchronized",
+                message: `Case #${createdRecord.id} synchronized successfully.`,
+                priority: NOTIFICATION_PRIORITIES.INFO,
+                groupingKey: `SYNC_SUCCEEDED:${notificationWindowKey(10)}`,
+                groupingWindowMinutes: 10,
+                eventId: `sync:create:${clientUuid}`,
+                recordId: createdRecord.id,
+                branchId: createdRecord.branch_id,
+                metadata: {
+                    record_ids: [createdRecord.id],
+                    sync_event_ids: [`sync:create:${clientUuid}`]
+                },
+                render: ({ count }) => ({
+                    title: count === 1 ? "Record Synchronized" : `${count} Records Synchronized`,
+                    message: count === 1
+                        ? `Case #${createdRecord.id} synchronized successfully.`
+                        : `${count} records synchronized in the last 10 minutes.`
+                })
+            });
+        }
 
         if (normalizeStatusValue(createdRecord.status) === "Processing") {
             await refreshPendingApprovalNotifications({ markNewAsUnread: true });
@@ -1936,7 +2001,8 @@ const updateRecord = async (req, res) => {
             status,
             registrar,
             notes,
-            expected_updated_at
+            expected_updated_at,
+            client_uuid
         } = req.body;
 
         if (
@@ -2151,6 +2217,29 @@ const updateRecord = async (req, res) => {
             normalizeStatusValue(existingRecord.status) !== "Processing"
         ) {
             await refreshPendingApprovalNotifications({ markNewAsUnread: true });
+        }
+
+        if (normalizeClientUuid(client_uuid)) {
+            const syncEventId = `sync:update:${normalizeClientUuid(client_uuid)}`;
+            await notifyAdminsGrouped({
+                type: NOTIFICATION_TYPES.SYNC_SUCCEEDED,
+                title: "Record Synchronized",
+                message: `Case #${updatedRecord.id} synchronized successfully.`,
+                priority: NOTIFICATION_PRIORITIES.INFO,
+                groupingKey: `SYNC_SUCCEEDED:${notificationWindowKey(10)}`,
+                groupingWindowMinutes: 10,
+                eventId: syncEventId,
+                recordId: updatedRecord.id,
+                branchId: updatedRecord.branch_id,
+                metadata: {
+                    record_ids: [updatedRecord.id],
+                    sync_event_ids: [syncEventId]
+                },
+                render: ({ count }) => ({
+                    title: count === 1 ? "Record Synchronized" : `${count} Records Synchronized`,
+                    message: `${count} record${count === 1 ? "" : "s"} synchronized in the last 10 minutes.`
+                })
+            });
         }
 
         // =========================================
@@ -2821,7 +2910,7 @@ const sendSms = async (req, res) => {
                       COALESCE(sms_status, '') <> 'Sending'
                       OR updated_at < CURRENT_TIMESTAMP - INTERVAL '10 minutes'
                   )
-                RETURNING id
+                RETURNING id, updated_at
             `,
             [id]
         );
@@ -2864,6 +2953,12 @@ const sendSms = async (req, res) => {
                 details: smsSent ? "SMS sent successfully." : "SMS queued for processing."
             });
 
+            await notifySmsAdmins(req, record, {
+                success: true,
+                smsStatus: smsSent ? "Sent" : "Queued",
+                eventId: `sms:${record.id}:${claimResult.rows[0]?.updated_at || "unknown"}`
+            });
+
             const updatedResult = await pool.query(
                 `
                     SELECT id, phone_number, sms_sent, sms_status, sms_error, sms_date
@@ -2888,6 +2983,7 @@ const sendSms = async (req, res) => {
                 }
             });
         } catch (workflowError) {
+            const smsError = String(workflowError.message || "SMS workflow failed.").slice(0, 1000);
             await pool.query(
                 `
                     UPDATE records
@@ -2897,8 +2993,29 @@ const sendSms = async (req, res) => {
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = $2
                 `,
-                [String(workflowError.message || "SMS workflow failed.").slice(0, 1000), id]
+                [smsError, id]
             );
+
+            await recordActivity({
+                request: req,
+                userId: req.user?.id,
+                name: req.user?.name,
+                email: req.user?.email,
+                role: req.user?.role,
+                activityType: ACTIVITY_TYPES.SMS_ACTIVITY,
+                recordId: record.id,
+                branchId: record.branch_id,
+                branchName: req.user?.branch,
+                success: false,
+                details: smsError
+            });
+
+            await notifySmsAdmins(req, record, {
+                success: false,
+                errorMessage: smsError,
+                smsStatus: "Error",
+                eventId: `sms:${record.id}:${claimResult.rows[0]?.updated_at || "unknown"}`
+            });
 
             return res.status(502).json({
                 success: false,

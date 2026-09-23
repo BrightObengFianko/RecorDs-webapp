@@ -26,6 +26,25 @@ const DEFAULT_SETTINGS = {
         showAvatars: true,
         showStatusColors: true,
         enableAnimations: true
+    },
+    notificationPreferences: {
+        RECORD_CREATED: true,
+        RECORD_UPDATED: true,
+        RECORD_APPROVED: true,
+        RECORD_DELETED: true,
+        RECORD_RESTORED: true,
+        DUPLICATE_DETECTED: true,
+        PENDING_APPROVAL: true,
+        SMS_ACTIVITY: true,
+        SMS_FAILED: true,
+        SYNC_SUCCEEDED: true,
+        SYNC_FAILED: true,
+        OFFLINE_RECORDS_PENDING: true,
+        USER_CREATED: true,
+        USER_ENABLED: true,
+        USER_DISABLED: true,
+        BRANCH_ASSIGNMENT_CHANGED: true,
+        SETTINGS_CHANGED: true
     }
 };
 
@@ -53,6 +72,9 @@ const compactModeInput = document.getElementById("compactMode");
 const showAvatarsInput = document.getElementById("showAvatars");
 const showStatusColorsInput = document.getElementById("showStatusColors");
 const enableAnimationsInput = document.getElementById("enableAnimations");
+const notificationPreferenceInputs = [...document.querySelectorAll("[data-notification-preference]")];
+const saveNotificationPreferencesButton = document.getElementById("saveNotificationPreferences");
+const resetNotificationPreferencesButton = document.getElementById("resetNotificationPreferences");
 
 const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
 let toastTimer = null;
@@ -139,6 +161,15 @@ function parseSettings(raw, includeProfile) {
     settings.appearance.showAvatars = settings.appearance.showAvatars !== false;
     settings.appearance.showStatusColors = settings.appearance.showStatusColors !== false;
     settings.appearance.enableAnimations = settings.appearance.enableAnimations !== false;
+    settings.notificationPreferences = {
+        ...DEFAULT_SETTINGS.notificationPreferences,
+        ...(parsed.notificationPreferences && typeof parsed.notificationPreferences === "object"
+            ? parsed.notificationPreferences
+            : {})
+    };
+    Object.keys(settings.notificationPreferences).forEach(type => {
+        settings.notificationPreferences[type] = settings.notificationPreferences[type] !== false;
+    });
 
     return settings;
 }
@@ -146,7 +177,8 @@ function parseSettings(raw, includeProfile) {
 function cloneDefaults() {
     return {
         profile: { ...DEFAULT_SETTINGS.profile },
-        appearance: { ...DEFAULT_SETTINGS.appearance }
+        appearance: { ...DEFAULT_SETTINGS.appearance },
+        notificationPreferences: { ...DEFAULT_SETTINGS.notificationPreferences }
     };
 }
 
@@ -171,6 +203,13 @@ function mergeSettings(base, stored) {
         base.appearance = {
             ...base.appearance,
             ...stored.appearance
+        };
+    }
+
+    if (stored.notificationPreferences && typeof stored.notificationPreferences === "object") {
+        base.notificationPreferences = {
+            ...base.notificationPreferences,
+            ...stored.notificationPreferences
         };
     }
 
@@ -489,6 +528,13 @@ function updateFormFields() {
     showAvatarsInput.checked = Boolean(state.appearance.showAvatars);
     showStatusColorsInput.checked = Boolean(state.appearance.showStatusColors);
     enableAnimationsInput.checked = Boolean(state.appearance.enableAnimations);
+    notificationPreferenceInputs.forEach(input => {
+        input.checked = state.notificationPreferences[input.dataset.notificationPreference] !== false;
+    });
+    const adminPreferences = document.querySelector(".notification-admin-preferences");
+    if (adminPreferences) {
+        adminPreferences.hidden = String(currentUserRole || "").trim().toLowerCase().replace(/[\s-]+/g, "_") !== "admin";
+    }
 
     syncThemeCards();
     syncAccentSwatches();
@@ -642,6 +688,42 @@ async function saveAppearanceFromForm() {
     }
 }
 
+async function saveNotificationPreferences() {
+    const previousState = JSON.parse(JSON.stringify(state));
+    notificationPreferenceInputs.forEach(input => {
+        state.notificationPreferences[input.dataset.notificationPreference] = input.checked;
+    });
+    saveSettings();
+    try {
+        await persistSettingsToServer();
+        showToast("Notification preferences updated.");
+    } catch (error) {
+        state = previousState;
+        renderSettings();
+        persistUserCache();
+        showToast(error.message || "Unable to update notification preferences.");
+    }
+}
+
+async function resetNotificationPreferences() {
+    const confirmed = await window.ConfirmDialog?.show(
+        "Restore your role-appropriate notification defaults? Existing notifications and audit logs will not be deleted.",
+        "Reset Notification Preferences",
+        "Reset Defaults",
+        "Cancel"
+    );
+    if (!confirmed) return;
+    state.notificationPreferences = { ...DEFAULT_SETTINGS.notificationPreferences };
+    renderSettings();
+    saveSettings();
+    try {
+        await persistSettingsToServer();
+        showToast("Notification preferences reset.");
+    } catch (error) {
+        showToast(error.message || "Unable to reset notification preferences.");
+    }
+}
+
 function optimizeProfilePhoto(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -755,6 +837,16 @@ function bindEvents() {
             }
         });
     }
+
+    saveNotificationPreferencesButton?.addEventListener("click", async () => {
+        saveNotificationPreferencesButton.disabled = true;
+        try {
+            await saveNotificationPreferences();
+        } finally {
+            saveNotificationPreferencesButton.disabled = false;
+        }
+    });
+    resetNotificationPreferencesButton?.addEventListener("click", resetNotificationPreferences);
 
     if (logoutButton) {
         logoutButton.addEventListener("click", () => {

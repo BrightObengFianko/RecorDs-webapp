@@ -458,6 +458,9 @@ async function ensureDatabaseSchema() {
                 grouping_key VARCHAR(200),
                 group_count INTEGER NOT NULL DEFAULT 1,
                 last_event_at TIMESTAMP,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                resolved_at TIMESTAMP,
+                group_window_minutes INTEGER,
                 CONSTRAINT notifications_priority_check
                     CHECK (priority IN ('CRITICAL', 'IMPORTANT', 'INFO')),
                 CONSTRAINT notifications_user_id_fkey
@@ -478,7 +481,10 @@ async function ensureDatabaseSchema() {
             ALTER TABLE notifications
                 ADD COLUMN IF NOT EXISTS grouping_key VARCHAR(200),
                 ADD COLUMN IF NOT EXISTS group_count INTEGER NOT NULL DEFAULT 1,
-                ADD COLUMN IF NOT EXISTS last_event_at TIMESTAMP
+                ADD COLUMN IF NOT EXISTS last_event_at TIMESTAMP,
+                ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP,
+                ADD COLUMN IF NOT EXISTS group_window_minutes INTEGER
         `
     );
 

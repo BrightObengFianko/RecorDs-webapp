@@ -91,12 +91,19 @@
 
                 <section class="reports-card notifications-report-card" id="notifications" hidden>
                     <div class="activity-heading">
-                        <div><h2>Notifications</h2><p>Admin notifications requiring your attention.</p></div>
+                        <div><h2>Notifications</h2><p>Admin notifications requiring your attention.</p></div><button type="button" class="reports-danger notification-report-clear-all" id="notificationReportClearAll">Clear All Messages</button>
                     </div>
                     <div class="notifications-report-toolbar" role="tablist" aria-label="Notification filters">
                         <button type="button" data-notification-filter="" class="is-active">All</button>
                         <button type="button" data-notification-filter="unread">Unread</button>
-                        <button type="button" data-notification-filter="important">Important</button>
+                        <button type="button" data-notification-filter="read">Read</button>
+                        <label class="notification-history-search"><span class="sr-only">Search notifications</span><input id="notificationSearchInput" type="search" placeholder="Search notifications..." autocomplete="off"></label>
+                        <select id="notificationTypeFilter" aria-label="Notification type"><option value="">All types</option><option value="RECORD_CREATED,RECORD_UPDATED,RECORD_APPROVED,RECORD_DELETED,RECORD_RESTORED,DUPLICATE_DETECTED">Record activity</option><option value="PENDING_APPROVAL">Approval</option><option value="SMS_ACTIVITY,SMS_FAILED">SMS</option><option value="SYNC_SUCCEEDED,SYNC_FAILED,OFFLINE_RECORDS_PENDING">Synchronization</option><option value="USER_CREATED,USER_ENABLED,USER_DISABLED,BRANCH_ASSIGNMENT_CHANGED,SETTINGS_CHANGED">Admin activity</option></select>
+                        <select id="notificationDateFilter" aria-label="Notification date"><option value="">Any date</option><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="custom">Custom range</option></select>
+                        <input id="notificationDateFrom" type="date" aria-label="Notification start date" hidden>
+                        <input id="notificationDateTo" type="date" aria-label="Notification end date" hidden>
+                        <select id="notificationSort" aria-label="Notification sort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select>
+                        <button type="button" id="notificationClearFilters">Clear Filters</button>
                     </div>
                     <div class="notifications-report-list" id="notificationReportList" aria-live="polite"></div>
                     <div class="notifications-report-pagination">
