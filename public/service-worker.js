@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v36";
+const CACHE_NAME = "records-shell-v37";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -96,8 +96,25 @@ self.addEventListener("fetch", event => {
         return;
     }
 
-    // Shell CSS/JS/images should be available immediately offline. Refresh the
-    // cache in the background when a network is available.
+    // Fetch CSS and JavaScript from the network first so normal navigation
+    // receives deployed UI fixes, while retaining the cached shell offline.
+    if (request.destination === "style" || request.destination === "script") {
+        event.respondWith(
+            fetch(request)
+                .then(response => {
+                    if (response.ok) {
+                        const copy = response.clone();
+                        caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+                    }
+                    return response;
+                })
+                .catch(() => caches.match(request).then(cached => cached || Response.error()))
+        );
+        return;
+    }
+
+    // Images and other shell assets remain cache-first and refresh in the
+    // background when a network is available.
     event.respondWith(
         caches.match(request).then(cached => {
             const refresh = fetch(request)
