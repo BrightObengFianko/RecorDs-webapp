@@ -118,7 +118,15 @@
         button.type = "button";
         button.setAttribute("aria-label", "Notifications");
         button.innerHTML = "🔔<span class=\"admin-notification-badge\" hidden></span>";
-        target.appendChild(button);
+        const smsBalance = target.querySelector(".dashboard-sms-balance, .search-sms-balance");
+        const logout = target.querySelector("#logoutButton");
+        if (smsBalance) {
+            target.insertBefore(button, smsBalance);
+        } else if (logout) {
+            target.insertBefore(button, logout);
+        } else {
+            target.appendChild(button);
+        }
         panel = document.createElement("section");
         panel.className = "admin-notification-panel";
         panel.hidden = true;
