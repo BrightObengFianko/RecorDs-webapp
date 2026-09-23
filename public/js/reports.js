@@ -198,7 +198,7 @@ async function loadActivity({ resetPage = false } = {}) {
     params.set("page", String(activityPage));
     params.set("limit", String(ACTIVITY_PAGE_SIZE));
 
-    activityBody.innerHTML = '<tr><td colspan="8" class="reports-empty">Loading activity...</td></tr>';
+    activityBody.innerHTML = '<tr><td colspan="9" class="reports-empty">Loading activity...</td></tr>';
 
     try {
         const response = await fetch(`/api/admin/auth-activity?${params.toString()}`, {
@@ -221,7 +221,7 @@ async function loadActivity({ resetPage = false } = {}) {
         updateActivityPagination(total);
 
         if (!activities.length) {
-            activityBody.innerHTML = '<tr><td colspan="8" class="reports-empty">No activity logs found.</td></tr>';
+            activityBody.innerHTML = '<tr><td colspan="9" class="reports-empty">No activity logs found.</td></tr>';
             return;
         }
 
@@ -235,6 +235,7 @@ async function loadActivity({ resetPage = false } = {}) {
                 <td data-label="Details">${escapeReportHtml(activity.details || activity.new_value || "-")}</td>
                 <td data-label="Date">${escapeReportHtml(formatActivityDate(activity.occurred_at))}</td>
                 <td data-label="Time">${escapeReportHtml(formatActivityTime(activity.occurred_at))}</td>
+                <td data-label="Actions" class="activity-actions">${activity.activity_type === "RECORD_DELETED" ? `<button type="button" class="activity-restore-button" data-restore-activity-id="${escapeReportHtml(activity.id)}">Restore</button>` : "-"}</td>
             </tr>
         `).join("");
         activityBody.querySelectorAll(".activity-row").forEach(row => {
@@ -247,9 +248,46 @@ async function loadActivity({ resetPage = false } = {}) {
                 }
             });
         });
+        activityBody.querySelectorAll("[data-restore-activity-id]").forEach(button => {
+            button.addEventListener("click", event => {
+                event.stopPropagation();
+                restoreDeletedCase(button.dataset.restoreActivityId, button);
+            });
+        });
     } catch (error) {
-        activityBody.innerHTML = `<tr><td colspan="8" class="reports-empty">${escapeReportHtml(error.message)}</td></tr>`;
+        activityBody.innerHTML = `<tr><td colspan="9" class="reports-empty">${escapeReportHtml(error.message)}</td></tr>`;
         if (window.Notification) Notification.error(error.message);
+    }
+}
+
+async function restoreDeletedCase(activityId, button) {
+    const confirmed = await ConfirmDialog.show(
+        "Restore this deleted case to the active records?",
+        "Restore Case",
+        "Restore",
+        "Cancel"
+    );
+
+    if (!confirmed) return;
+
+    button.disabled = true;
+
+    try {
+        const response = await fetch(`/api/admin/auth-activity/${encodeURIComponent(activityId)}/restore`, {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${reportsToken}` }
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error(data.message || "Unable to restore deleted case.");
+        }
+
+        Notification.success(data.message || "Case restored successfully.");
+        await loadActivity();
+    } catch (error) {
+        button.disabled = false;
+        Notification.error(error.message);
     }
 }
 

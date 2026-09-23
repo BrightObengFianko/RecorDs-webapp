@@ -14,6 +14,7 @@ const {
     listBranches,
     listAuthActivity,
     getAuthActivityDetails,
+    restoreDeletedCase,
     clearAuthActivity,
     createBranch,
     updateBranch,
@@ -40,6 +41,7 @@ router.post("/branches", createBranch);
 router.patch("/branches/:id", updateBranch);
 router.delete("/branches/:id", deleteBranch);
 router.get("/auth-activity", listAuthActivity);
+router.patch("/auth-activity/:id/restore", restoreDeletedCase);
 router.get("/auth-activity/:id", getAuthActivityDetails);
 router.delete("/auth-activity", clearAuthActivity);
 

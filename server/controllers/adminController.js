@@ -5,7 +5,7 @@ const {
     validatePassword
 } = require("../utils/authSecurity");
 const { boundedText, isIsoDate } = require("../utils/inputValidation");
-const { ACTIVITY_TYPES, recordActivity } = require("../utils/authActivity");
+const { ACTIVITY_TYPES, recordActivity, makeRecordSnapshot } = require("../utils/authActivity");
 
 function logAdminActivity(req, activityType, data = {}) {
     return recordActivity({
@@ -459,6 +459,116 @@ async function getAuthActivityDetails(req, res) {
             success: false,
             message: "Unable to load activity details."
         });
+    }
+}
+
+async function restoreDeletedCase(req, res) {
+    const client = await pool.connect();
+
+    try {
+        const deletedLog = await client.query(
+            `
+                SELECT id, record_id, branch_id, branch_name, record_snapshot
+                FROM auth_activity_logs
+                WHERE id = $1
+                  AND activity_type = $2
+                LIMIT 1
+            `,
+            [req.params.id, ACTIVITY_TYPES.RECORD_DELETED]
+        );
+
+        const log = deletedLog.rows[0];
+        const snapshot = log?.record_snapshot;
+
+        if (!log || !snapshot || !snapshot.id || !snapshot.name) {
+            return res.status(404).json({
+                success: false,
+                message: "Deleted case snapshot not found."
+            });
+        }
+
+        await client.query("BEGIN");
+
+        const existing = await client.query(
+            "SELECT id FROM records WHERE id = $1 LIMIT 1",
+            [snapshot.id]
+        );
+
+        if (existing.rows.length) {
+            await client.query("ROLLBACK");
+            return res.status(409).json({
+                success: false,
+                message: "This case has already been restored."
+            });
+        }
+
+        const restored = await client.query(
+            `
+                INSERT INTO records (
+                    id, name, phone_number, category, date_of_birth, date_of_death,
+                    registration_date, registrar, branch_id, status, sms_sent,
+                    sms_status, sms_date, sms_error, notes, created_by
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                RETURNING *
+            `,
+            [
+                snapshot.id,
+                snapshot.name,
+                snapshot.phone_number || null,
+                snapshot.category || null,
+                snapshot.date_of_birth || null,
+                snapshot.date_of_death || null,
+                snapshot.registration_date || null,
+                snapshot.registrar || null,
+                snapshot.branch_id ?? log.branch_id ?? null,
+                snapshot.status || "Pending",
+                snapshot.sms_sent || null,
+                snapshot.sms_status || null,
+                snapshot.sms_date || null,
+                snapshot.sms_error || null,
+                snapshot.notes || null,
+                snapshot.created_by || null
+            ]
+        );
+
+        await client.query(
+            `
+                SELECT setval(
+                    pg_get_serial_sequence('records', 'id'),
+                    GREATEST(COALESCE((SELECT MAX(id) FROM records), 1), 1),
+                    true
+                )
+            `
+        );
+        await client.query("COMMIT");
+
+        await logAdminActivity(req, ACTIVITY_TYPES.RECORD_RESTORED, {
+            recordId: restored.rows[0].id,
+            branchId: restored.rows[0].branch_id,
+            branchName: log.branch_name,
+            details: "Deleted case restored.",
+            recordSnapshot: makeRecordSnapshot(restored.rows[0])
+        });
+
+        return res.json({
+            success: true,
+            message: "Case restored successfully."
+        });
+    } catch (error) {
+        try {
+            await client.query("ROLLBACK");
+        } catch (rollbackError) {
+            console.error("RESTORE CASE ROLLBACK ERROR:", rollbackError);
+        }
+
+        console.error("RESTORE DELETED CASE ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to restore deleted case."
+        });
+    } finally {
+        client.release();
     }
 }
 
@@ -1166,6 +1276,7 @@ async function deleteBranch(req, res) {
 module.exports = {
     listAuthActivity,
     getAuthActivityDetails,
+    restoreDeletedCase,
     clearAuthActivity,
     listUsers,
     listPendingUsers,

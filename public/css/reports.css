@@ -173,6 +173,43 @@ body.reports-page {
     cursor: pointer;
 }
 
+.recycle-bin-button {
+    color: #a33b3b;
+    background: #fff5f5;
+    border-color: #e3a0a0;
+}
+
+.recycle-bin-button:hover,
+.recycle-bin-button:focus-visible {
+    color: #ffffff;
+    background: #b94a4a;
+    border-color: #b94a4a;
+}
+
+.activity-restore-button {
+    min-height: 32px;
+    padding: 0 10px;
+    border: 1px solid #9ac9aa;
+    border-radius: 7px;
+    color: #137a4b;
+    background: #effaf3;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.activity-restore-button:hover,
+.activity-restore-button:focus-visible {
+    color: #ffffff;
+    background: #137a4b;
+}
+
+.activity-restore-button:disabled {
+    cursor: wait;
+    opacity: .55;
+}
+
 .activity-heading h2 {
     font-size: 17px;
 }
