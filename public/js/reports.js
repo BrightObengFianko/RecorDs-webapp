@@ -267,6 +267,10 @@ if (!reportsToken) {
         document.getElementById("branchFilter").innerHTML = '<option value="">All branches</option>' + (data.branches || []).map(branch => `<option value="${escapeReportHtml(branch.id)}">${escapeReportHtml(branch.name)}</option>`).join("");
     }
     document.getElementById("filterButton").addEventListener("click", () => loadActivity({ resetPage: true }));
+    document.getElementById("deletedCasesButton").addEventListener("click", () => {
+        document.getElementById("activityFilter").value = "RECORD_DELETED";
+        loadActivity({ resetPage: true });
+    });
     document.getElementById("refreshButton").addEventListener("click", () => loadActivity());
     document.getElementById("resetButton").addEventListener("click", () => {
         document.getElementById("fromDateFilter").value = "";

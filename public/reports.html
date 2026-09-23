@@ -31,6 +31,7 @@
         <symbol id="icon-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></symbol>
         <symbol id="icon-filter" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"></path></symbol>
         <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.5-4L4 9M4 4v5h5M4 13a8 8 0 0 0 14.5 4L20 15M20 20v-5h-5"></path></symbol>
+        <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path></symbol>
     </svg>
 
     <div class="app">
@@ -74,7 +75,7 @@
                 </div>
 
                 <section class="reports-card activity-card">
-                    <div class="activity-heading"><div><h2>Activity Logs</h2><p id="activitySummary">Loading activity...</p></div><div class="activity-heading-actions"><button class="reports-refresh reports-icon-button" id="refreshButton" type="button" aria-label="Refresh activity logs" title="Refresh activity logs"><svg class="ui-icon" aria-hidden="true"><use href="#icon-refresh"></use></svg></button><button class="reports-danger" id="clearLogsButton" type="button">Clear Logs</button></div></div>
+                    <div class="activity-heading"><div><h2>Activity Logs</h2><p id="activitySummary">Loading activity...</p></div><div class="activity-heading-actions"><button class="reports-icon-button" id="deletedCasesButton" type="button" aria-label="Open recycle bin" title="Recycle bin"><svg class="ui-icon" aria-hidden="true"><use href="#icon-trash"></use></svg></button><button class="reports-refresh reports-icon-button" id="refreshButton" type="button" aria-label="Refresh activity logs" title="Refresh activity logs"><svg class="ui-icon" aria-hidden="true"><use href="#icon-refresh"></use></svg></button><button class="reports-danger" id="clearLogsButton" type="button">Clear Logs</button></div></div>
                     <div class="activity-table-wrap">
                         <table>
                             <thead><tr><th>User</th><th>Role</th><th>Activity</th><th>Branch</th><th>Case</th><th>Details</th><th>Date</th><th>Time</th></tr></thead>
