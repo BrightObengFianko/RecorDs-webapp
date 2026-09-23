@@ -6,7 +6,7 @@
     const isAdmin = String(user.role || "").trim().toLowerCase().replace(/[\s-]+/g, "_") === "admin";
     const API = "/api/notifications";
     const TYPE_ICONS = {
-        RECORD_CREATED: "🔵", RECORD_UPDATED: "🔵", RECORD_DELETED: "🗑️", RECORD_RESTORED: "🟢",
+        RECORD_CREATED: "🔵", RECORD_UPDATED: "🔵", RECORD_APPROVED: "🟢", RECORD_DELETED: "🗑️", RECORD_RESTORED: "🟢",
         PENDING_APPROVAL: "🟠", SMS_FAILED: "🔴", SMS_SERVICE_UNAVAILABLE: "🔴", SYNC_FAILED: "🔴",
         OFFLINE_RECORDS_PENDING: "🟠", DUPLICATE_DETECTED: "⚠️", USER_CREATED: "🔵", USER_DISABLED: "🔴",
         USER_ENABLED: "🟢", BRANCH_ASSIGNMENT_CHANGED: "🔵", FAILED_LOGIN_ALERT: "🔴",
@@ -64,6 +64,23 @@
         </button>`;
     }
 
+    function notificationDestination(item) {
+        const recordId = item.record_id || item.metadata?.record_id;
+        switch (String(item.type || "").toUpperCase()) {
+            case "RECORD_DELETED":
+                return `reports.html?activity=RECORD_DELETED${recordId ? `&case_id=${encodeURIComponent(recordId)}` : ""}`;
+            case "PENDING_APPROVAL":
+                return "account.html";
+            case "RECORD_CREATED":
+            case "RECORD_UPDATED":
+            case "RECORD_APPROVED":
+            case "RECORD_RESTORED":
+                return recordId ? `case-details.html?id=${encodeURIComponent(recordId)}` : "";
+            default:
+                return "";
+        }
+    }
+
     async function loadDropdown() {
         if (!panel) return;
         panel.querySelector(".admin-notification-list").innerHTML = '<p class="admin-notification-state">Loading notifications...</p>';
@@ -73,7 +90,10 @@
             panel.querySelector(".admin-notification-list").innerHTML = items.length
                 ? items.map(notificationMarkup).join("")
                 : '<p class="admin-notification-state">🔔<br><strong>You\'re all caught up.</strong><br>No notifications yet.</p>';
-            panel.querySelectorAll("[data-notification-id]").forEach(item => item.addEventListener("click", () => markRead(item.dataset.notificationId, item)));
+            panel.querySelectorAll("[data-notification-id]").forEach(item => {
+                item.notificationData = items.find(entry => String(entry.id) === String(item.dataset.notificationId));
+                item.addEventListener("click", () => handleNotificationClick(item));
+            });
         } catch (error) {
             panel.querySelector(".admin-notification-list").innerHTML = `<p class="admin-notification-state">Unable to load notifications.<br><button type="button" class="admin-notification-retry">Try Again</button></p>`;
             panel.querySelector(".admin-notification-retry")?.addEventListener("click", loadDropdown);
@@ -92,6 +112,12 @@
 
     async function markAllRead() {
         try { await request("/read-all", { method: "POST" }); updateBadge(0); await loadDropdown(); } catch { /* Keep the current list on a transient failure. */ }
+    }
+
+    async function handleNotificationClick(item) {
+        await markRead(item.dataset.notificationId, item);
+        const destination = notificationDestination(item.notificationData || {});
+        if (destination) window.location.assign(destination);
     }
 
     function positionPanel() {
@@ -154,7 +180,10 @@
             document.getElementById("notificationReportPage").textContent = `Page ${data.pagination?.page || 1} of ${data.pagination?.totalPages || 1}`;
             document.getElementById("notificationReportPrevious").disabled = reportPage <= 1;
             document.getElementById("notificationReportNext").disabled = reportPage >= (data.pagination?.totalPages || 1);
-            list.querySelectorAll("[data-notification-id]").forEach(item => item.addEventListener("click", async () => { await markRead(item.dataset.notificationId, item); await loadReportNotifications(); }));
+            list.querySelectorAll("[data-notification-id]").forEach(item => {
+                item.notificationData = items.find(entry => String(entry.id) === String(item.dataset.notificationId));
+                item.addEventListener("click", () => handleNotificationClick(item));
+            });
         } catch (error) { list.innerHTML = `<p class="admin-notification-state">Unable to load notifications.<br><button type="button" class="admin-notification-retry">Try Again</button></p>`; list.querySelector("button")?.addEventListener("click", loadReportNotifications); }
     }
 

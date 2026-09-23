@@ -21,6 +21,11 @@ const {
     normalizedRegistrarSql,
     normalizeRecordRows
 } = require("../utils/registrarUtils");
+const {
+    NOTIFICATION_TYPES,
+    NOTIFICATION_PRIORITIES,
+    notifyAdmins
+} = require("../utils/notifications");
 
 function normalizeRole(role) {
     return String(role || "")
@@ -148,6 +153,45 @@ function normalizeClientUuid(value) {
     return uuidPattern.test(clientUuid)
         ? clientUuid
         : null;
+}
+
+function recordNotificationBranch(record, request) {
+    return String(request.user?.branch || "").trim() ||
+        (record?.branch_id ? `Branch #${record.branch_id}` : "the assigned branch");
+}
+
+async function notifyRecordAdmins(request, {
+    type,
+    title,
+    message,
+    priority = NOTIFICATION_PRIORITIES.INFO,
+    recordId = null,
+    branchId = null,
+    eventId,
+    metadata = {}
+}) {
+    try {
+        await notifyAdmins({
+            type,
+            title,
+            message,
+            priority,
+            recordId,
+            branchId,
+            metadata: {
+                ...metadata,
+                event_id: eventId,
+                actor_user_id: request.user?.id || null
+            }
+        });
+    } catch (error) {
+        // Notification delivery must not turn a successful record operation into a failure.
+        console.error("RECORD ADMIN NOTIFICATION ERROR:", error.message);
+    }
+}
+
+function recordActorName(request) {
+    return String(request.user?.name || "A staff member").trim();
 }
 
 /**
@@ -670,6 +714,40 @@ const createRecord = async (req, res) => {
             details: "Record created.",
             recordSnapshot: makeRecordSnapshot(result.rows[0])
         });
+
+        const createdRecord = result.rows[0];
+        const createdBranch = recordNotificationBranch(createdRecord, req);
+        await notifyRecordAdmins(req, {
+            type: NOTIFICATION_TYPES.RECORD_CREATED,
+            title: "New Record Created",
+            message: `Case #${createdRecord.id} was created by ${recordActorName(req)} at ${createdBranch}.`,
+            recordId: createdRecord.id,
+            branchId: createdRecord.branch_id,
+            eventId: `record-created:${createdRecord.id}`,
+            metadata: {
+                record_id: createdRecord.id,
+                branch_id: createdRecord.branch_id,
+                branch_name: createdBranch
+            }
+        });
+
+        if (normalizeStatusValue(createdRecord.status) === "Processing") {
+            await notifyRecordAdmins(req, {
+                type: NOTIFICATION_TYPES.PENDING_APPROVAL,
+                title: "Approval Required",
+                message: `Case #${createdRecord.id} is waiting for approval at ${createdBranch}.`,
+                priority: NOTIFICATION_PRIORITIES.IMPORTANT,
+                recordId: createdRecord.id,
+                branchId: createdRecord.branch_id,
+                eventId: `pending-approval:${createdRecord.id}`,
+                metadata: {
+                    record_id: createdRecord.id,
+                    branch_id: createdRecord.branch_id,
+                    previous_status: null,
+                    new_status: createdRecord.status
+                }
+            });
+        }
 
         return res.status(201).json({
             success: true,
@@ -2034,6 +2112,21 @@ const updateRecord = async (req, res) => {
             changeSet: changeSet.length ? changeSet : null
         });
 
+        const updatedRecord = result.rows[0];
+        await notifyRecordAdmins(req, {
+            type: NOTIFICATION_TYPES.RECORD_UPDATED,
+            title: "Record Updated",
+            message: `Case #${updatedRecord.id} was edited by ${recordActorName(req)}.`,
+            recordId: updatedRecord.id,
+            branchId: updatedRecord.branch_id,
+            eventId: `record-updated:${updatedRecord.id}:${String(updatedRecord.updated_at || Date.now())}`,
+            metadata: {
+                record_id: updatedRecord.id,
+                branch_id: updatedRecord.branch_id,
+                changed_fields: changeSet.map(change => change.field)
+            }
+        });
+
         // =========================================
         // TRIGGER n8n WHEN STATUS CHANGES TO READY
         // =========================================
@@ -2193,6 +2286,24 @@ const updateSmsDetails = async (req, res) => {
             details: "Record SMS details or note edited."
         });
 
+        const editedRecord = result.rows[0];
+        await notifyRecordAdmins(req, {
+            type: NOTIFICATION_TYPES.RECORD_UPDATED,
+            title: "Record Updated",
+            message: `Case #${editedRecord.id} was edited by ${recordActorName(req)}.`,
+            recordId: editedRecord.id,
+            branchId: editedRecord.branch_id,
+            eventId: `record-updated:${editedRecord.id}:${String(editedRecord.updated_at || Date.now())}`,
+            metadata: {
+                record_id: editedRecord.id,
+                branch_id: editedRecord.branch_id,
+                changed_fields: [
+                    ...(clearSms ? ["sms_sent", "sms_status", "sms_date", "sms_error"] : []),
+                    ...(clearNote ? ["notes"] : [])
+                ]
+            }
+        });
+
         return res.json({
             success: true,
             message: clearSms && clearNote
@@ -2303,6 +2414,22 @@ const approveRecord = async (req, res) => {
             previousValue: existingResult.rows[0].status,
             newValue: result.rows[0].status,
             details: "Processing record approved."
+        });
+
+        const approvedRecord = result.rows[0];
+        await notifyRecordAdmins(req, {
+            type: NOTIFICATION_TYPES.RECORD_APPROVED,
+            title: "Record Approved",
+            message: `Case #${approvedRecord.id} was approved by ${recordActorName(req)}.`,
+            recordId: approvedRecord.id,
+            branchId: approvedRecord.branch_id,
+            eventId: `record-approved:${approvedRecord.id}:${String(approvedRecord.updated_at || Date.now())}`,
+            metadata: {
+                record_id: approvedRecord.id,
+                branch_id: approvedRecord.branch_id,
+                previous_status: existingResult.rows[0].status,
+                new_status: approvedRecord.status
+            }
         });
 
         // =========================================
@@ -2506,6 +2633,23 @@ const deleteRecord = async (req, res) => {
             branchName: req.user?.branch,
             details: "Record deleted. The deleted-case snapshot is preserved in this audit entry.",
             recordSnapshot: makeRecordSnapshot(result.rows[0])
+        });
+
+        const deletedRecord = result.rows[0];
+        const deletedBranch = recordNotificationBranch(deletedRecord, req);
+        await notifyRecordAdmins(req, {
+            type: NOTIFICATION_TYPES.RECORD_DELETED,
+            title: "Record Deleted",
+            message: `Case #${deletedRecord.id} was deleted by ${recordActorName(req)}.`,
+            priority: NOTIFICATION_PRIORITIES.IMPORTANT,
+            branchId: deletedRecord.branch_id,
+            eventId: `record-deleted:${deletedRecord.id}:${Date.now()}`,
+            metadata: {
+                record_id: deletedRecord.id,
+                branch_id: deletedRecord.branch_id,
+                branch_name: deletedBranch,
+                recycle_bin: true
+            }
         });
 
         return res.json({

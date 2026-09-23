@@ -158,10 +158,51 @@ async function createNotification({
     throw new Error("Unable to create notification.");
 }
 
+async function notifyAdmins({
+    type,
+    title,
+    message,
+    priority = NOTIFICATION_PRIORITIES.INFO,
+    recordId = null,
+    branchId = null,
+    metadata = {}
+}) {
+    const adminResult = await pool.query(
+        `
+            SELECT id
+            FROM users
+            WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) = 'admin'
+              AND COALESCE(is_active, TRUE) = TRUE
+              AND UPPER(COALESCE(account_status, 'APPROVED')) = 'APPROVED'
+        `
+    );
+
+    const notifications = [];
+    for (const admin of adminResult.rows) {
+        try {
+            notifications.push(await createNotification({
+                type,
+                title,
+                message,
+                priority,
+                userId: admin.id,
+                recordId,
+                branchId,
+                metadata
+            }));
+        } catch (error) {
+            console.error("CREATE ADMIN NOTIFICATION ERROR:", error.message);
+        }
+    }
+
+    return notifications;
+}
+
 module.exports = {
     NOTIFICATION_TYPES,
     NOTIFICATION_PRIORITIES,
     createNotification,
+    notifyAdmins,
     notificationTypeSet,
     notificationPrioritySet
 };

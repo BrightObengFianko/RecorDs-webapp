@@ -6,6 +6,7 @@ const {
 } = require("../utils/authSecurity");
 const { boundedText, isIsoDate } = require("../utils/inputValidation");
 const { ACTIVITY_TYPES, recordActivity, makeRecordSnapshot } = require("../utils/authActivity");
+const { NOTIFICATION_TYPES, notifyAdmins } = require("../utils/notifications");
 
 function logAdminActivity(req, activityType, data = {}) {
     return recordActivity({
@@ -550,6 +551,25 @@ async function restoreDeletedCase(req, res) {
             details: "Deleted case restored.",
             recordSnapshot: makeRecordSnapshot(restored.rows[0])
         });
+
+        try {
+            const restoredBranch = String(log.branch_name || req.user?.branch || "the assigned branch").trim();
+            await notifyAdmins({
+                type: NOTIFICATION_TYPES.RECORD_RESTORED,
+                title: "Record Restored",
+                message: `Case #${restored.rows[0].id} was restored by ${req.user?.name || "Admin"}.`,
+                recordId: restored.rows[0].id,
+                branchId: restored.rows[0].branch_id,
+                eventId: `record-restored:${restored.rows[0].id}:${Date.now()}`,
+                metadata: {
+                    record_id: restored.rows[0].id,
+                    branch_id: restored.rows[0].branch_id,
+                    branch_name: restoredBranch
+                }
+            });
+        } catch (notificationError) {
+            console.error("RESTORE ADMIN NOTIFICATION ERROR:", notificationError.message);
+        }
 
         return res.json({
             success: true,

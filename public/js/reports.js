@@ -294,6 +294,15 @@ async function restoreDeletedCase(activityId, button) {
 if (!reportsToken) {
     window.location.replace("index.html");
 } else {
+    const reportQuery = new URLSearchParams(window.location.search);
+    const queryActivity = reportQuery.get("activity");
+    const queryCaseId = reportQuery.get("case_id");
+    if (queryActivity && [...document.getElementById("activityFilter").options].some(option => option.value === queryActivity)) {
+        document.getElementById("activityFilter").value = queryActivity;
+    }
+    if (queryCaseId && /^[1-9]\d*$/.test(queryCaseId)) {
+        document.getElementById("searchFilter").value = queryCaseId;
+    }
     document.querySelectorAll("[data-activity-modal-close]").forEach(element => element.addEventListener("click", closeActivityDetails));
     document.addEventListener("keydown", event => {
         if (event.key === "Escape") closeActivityDetails();
