@@ -58,14 +58,16 @@
 
     function notificationMarkup(item) {
         const priority = String(item.priority || "INFO").toLowerCase();
+        const grouped = Array.isArray(item.metadata?.record_ids) && item.metadata.record_ids.length > 1;
         return `<button type="button" class="admin-notification-item ${item.is_read ? "" : "is-unread"}" data-notification-id="${escapeHtml(item.id)}">
             <span class="admin-notification-item-icon priority-${priority}">${TYPE_ICONS[item.type] || "🔔"}</span>
-            <span class="admin-notification-item-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.message)}</span><small>${escapeHtml(timeAgo(item.created_at))}</small></span>
+            <span class="admin-notification-item-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.message)}</span>${grouped ? "<small>View affected records</small>" : ""}<small>${escapeHtml(timeAgo(item.created_at))}</small></span>
         </button>`;
     }
 
     function notificationDestination(item) {
-        const recordId = item.record_id || item.metadata?.record_id;
+        const recordIds = Array.isArray(item.metadata?.record_ids) ? item.metadata.record_ids : [];
+        const recordId = item.record_id || item.metadata?.record_id || recordIds[0];
         switch (String(item.type || "").toUpperCase()) {
             case "RECORD_DELETED":
                 return `reports.html?activity=RECORD_DELETED${recordId ? `&case_id=${encodeURIComponent(recordId)}` : ""}`;
@@ -75,6 +77,7 @@
             case "RECORD_UPDATED":
             case "RECORD_APPROVED":
             case "RECORD_RESTORED":
+                if (recordIds.length > 1) return "search-cases.html";
                 return recordId ? `case-details.html?id=${encodeURIComponent(recordId)}` : "";
             default:
                 return "";

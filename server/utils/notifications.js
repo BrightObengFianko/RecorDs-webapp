@@ -198,11 +198,255 @@ async function notifyAdmins({
     return notifications;
 }
 
+function mergeGroupedMetadata(existingMetadata, incomingMetadata, eventId) {
+    const existing = existingMetadata && typeof existingMetadata === "object"
+        ? existingMetadata
+        : {};
+    const incoming = incomingMetadata && typeof incomingMetadata === "object"
+        ? incomingMetadata
+        : {};
+    const merged = { ...existing, ...incoming };
+
+    const eventIds = Array.from(new Set([
+        ...(Array.isArray(existing.event_ids) ? existing.event_ids : []),
+        ...(Array.isArray(incoming.event_ids) ? incoming.event_ids : []),
+        ...(eventId ? [String(eventId)] : [])
+    ])).slice(-50);
+
+    if (eventIds.length) {
+        merged.event_ids = eventIds;
+    }
+
+    for (const field of ["record_ids", "branch_ids", "branch_names"]) {
+        const values = Array.from(new Set([
+            ...(Array.isArray(existing[field]) ? existing[field] : []),
+            ...(Array.isArray(incoming[field]) ? incoming[field] : [])
+        ])).slice(-50);
+        if (values.length) merged[field] = values;
+    }
+
+    return merged;
+}
+
+async function notifyAdminsGrouped({
+    type,
+    title,
+    message,
+    priority = NOTIFICATION_PRIORITIES.INFO,
+    groupingKey,
+    eventId,
+    recordId = null,
+    branchId = null,
+    metadata = {},
+    render
+}) {
+    if (!groupingKey || typeof render !== "function") {
+        throw new Error("Grouped notification requires a grouping key and renderer.");
+    }
+
+    const adminResult = await pool.query(
+        `
+            SELECT id
+            FROM users
+            WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) = 'admin'
+              AND COALESCE(is_active, TRUE) = TRUE
+              AND UPPER(COALESCE(account_status, 'APPROVED')) = 'APPROVED'
+        `
+    );
+    const results = [];
+
+    for (const admin of adminResult.rows) {
+        const currentResult = await pool.query(
+            `
+                SELECT *
+                FROM notifications
+                WHERE user_id = $1
+                  AND type = $2
+                  AND priority = $3
+                  AND grouping_key = $4
+                LIMIT 1
+            `,
+            [admin.id, type, priority, groupingKey]
+        );
+        const current = currentResult.rows[0];
+        const currentMetadata = current?.metadata || {};
+        const existingEventIds = Array.isArray(currentMetadata.event_ids)
+            ? currentMetadata.event_ids.map(String)
+            : [];
+
+        if (current && eventId && existingEventIds.includes(String(eventId))) {
+            results.push(current);
+            continue;
+        }
+
+        const nextMetadata = mergeGroupedMetadata(currentMetadata, metadata, eventId);
+        const nextCount = Number(current?.group_count || 0) + 1;
+        const content = render({
+            count: nextCount,
+            metadata: nextMetadata,
+            current
+        });
+
+        if (current) {
+            const updated = await pool.query(
+                `
+                    UPDATE notifications
+                    SET title = $1,
+                        message = $2,
+                        record_id = $3,
+                        branch_id = $4,
+                        is_read = FALSE,
+                        read_at = NULL,
+                        group_count = $5,
+                        last_event_at = CURRENT_TIMESTAMP,
+                        metadata = $6::jsonb
+                    WHERE id = $7
+                    RETURNING *
+                `,
+                [
+                    content.title,
+                    content.message,
+                    recordId,
+                    branchId,
+                    nextCount,
+                    JSON.stringify(nextMetadata),
+                    current.id
+                ]
+            );
+            results.push(updated.rows[0]);
+            continue;
+        }
+
+        const inserted = await pool.query(
+            `
+                INSERT INTO notifications (
+                    type, title, message, priority, user_id, record_id,
+                    branch_id, grouping_key, group_count, last_event_at, metadata
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, $10::jsonb)
+                ON CONFLICT (user_id, type, priority, grouping_key)
+                WHERE grouping_key IS NOT NULL
+                DO NOTHING
+                RETURNING *
+            `,
+            [
+                type,
+                content.title,
+                content.message,
+                priority,
+                admin.id,
+                recordId,
+                branchId,
+                groupingKey,
+                nextCount,
+                JSON.stringify(nextMetadata)
+            ]
+        );
+        if (inserted.rows[0]) results.push(inserted.rows[0]);
+    }
+
+    return results;
+}
+
+async function refreshPendingApprovalNotifications({ markNewAsUnread = false } = {}) {
+    const countResult = await pool.query(
+        `
+            SELECT COUNT(*)::int AS count,
+                   ARRAY_AGG(id ORDER BY registration_date DESC, id DESC) FILTER (WHERE id IS NOT NULL) AS record_ids
+            FROM records
+            WHERE LOWER(REPLACE(REPLACE(COALESCE(status, ''), '_', ' '), '-', ' ')) = 'processing'
+        `
+    );
+    const count = Number(countResult.rows[0]?.count || 0);
+    const recordIds = (countResult.rows[0]?.record_ids || []).slice(0, 50);
+    const adminResult = await pool.query(
+        `
+            SELECT id
+            FROM users
+            WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) = 'admin'
+              AND COALESCE(is_active, TRUE) = TRUE
+              AND UPPER(COALESCE(account_status, 'APPROVED')) = 'APPROVED'
+        `
+    );
+
+    for (const admin of adminResult.rows) {
+        const currentResult = await pool.query(
+            `
+                SELECT * FROM notifications
+                WHERE user_id = $1
+                  AND type = $2
+                  AND priority = $3
+                  AND grouping_key = $4
+                LIMIT 1
+            `,
+            [admin.id, NOTIFICATION_TYPES.PENDING_APPROVAL, NOTIFICATION_PRIORITIES.IMPORTANT, "ALL_BRANCHES"]
+        );
+        const current = currentResult.rows[0];
+        if (!current && count === 0) continue;
+
+        const metadata = {
+            ...(current?.metadata || {}),
+            record_ids: recordIds,
+            current_state: true
+        };
+
+        if (!current) {
+            await pool.query(
+                `
+                    INSERT INTO notifications (
+                        type, title, message, priority, user_id, grouping_key,
+                        group_count, last_event_at, metadata
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, $8::jsonb)
+                    ON CONFLICT (user_id, type, priority, grouping_key) DO NOTHING
+                `,
+                [
+                    NOTIFICATION_TYPES.PENDING_APPROVAL,
+                    `${count} Records Awaiting Approval`,
+                    `${count} records are waiting for approval.`,
+                    NOTIFICATION_PRIORITIES.IMPORTANT,
+                    admin.id,
+                    "ALL_BRANCHES",
+                    count,
+                    JSON.stringify(metadata)
+                ]
+            );
+            continue;
+        }
+
+        const becameUnread = markNewAsUnread && count > Number(current.group_count || 0);
+        await pool.query(
+            `
+                UPDATE notifications
+                SET title = $1,
+                    message = $2,
+                    group_count = $3,
+                    metadata = $4::jsonb,
+                    last_event_at = CURRENT_TIMESTAMP,
+                    is_read = CASE WHEN $5 THEN TRUE WHEN $6 THEN FALSE ELSE is_read END,
+                    read_at = CASE WHEN $5 OR $6 THEN CURRENT_TIMESTAMP ELSE read_at END
+                WHERE id = $7
+            `,
+            [
+                count ? `${count} Records Awaiting Approval` : "Approval Queue Clear",
+                count ? `${count} records are waiting for approval.` : "No records are currently waiting for approval.",
+                count,
+                JSON.stringify(metadata),
+                count === 0,
+                becameUnread,
+                current.id
+            ]
+        );
+    }
+}
+
 module.exports = {
     NOTIFICATION_TYPES,
     NOTIFICATION_PRIORITIES,
     createNotification,
     notifyAdmins,
+    notifyAdminsGrouped,
+    refreshPendingApprovalNotifications,
     notificationTypeSet,
     notificationPrioritySet
 };

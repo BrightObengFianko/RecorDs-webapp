@@ -24,7 +24,9 @@ const {
 const {
     NOTIFICATION_TYPES,
     NOTIFICATION_PRIORITIES,
-    notifyAdmins
+    notifyAdmins,
+    notifyAdminsGrouped,
+    refreshPendingApprovalNotifications
 } = require("../utils/notifications");
 
 function normalizeRole(role) {
@@ -192,6 +194,10 @@ async function notifyRecordAdmins(request, {
 
 function recordActorName(request) {
     return String(request.user?.name || "A staff member").trim();
+}
+
+function notificationWindowKey(minutes) {
+    return Math.floor(Date.now() / (minutes * 60 * 1000));
 }
 
 /**
@@ -717,36 +723,34 @@ const createRecord = async (req, res) => {
 
         const createdRecord = result.rows[0];
         const createdBranch = recordNotificationBranch(createdRecord, req);
-        await notifyRecordAdmins(req, {
+        await notifyAdminsGrouped({
             type: NOTIFICATION_TYPES.RECORD_CREATED,
-            title: "New Record Created",
-            message: `Case #${createdRecord.id} was created by ${recordActorName(req)} at ${createdBranch}.`,
+            priority: NOTIFICATION_PRIORITIES.INFO,
+            groupingKey: `ALL_BRANCHES:${notificationWindowKey(15)}`,
+            eventId: `record-created:${createdRecord.id}`,
             recordId: createdRecord.id,
             branchId: createdRecord.branch_id,
-            eventId: `record-created:${createdRecord.id}`,
             metadata: {
-                record_id: createdRecord.id,
-                branch_id: createdRecord.branch_id,
-                branch_name: createdBranch
+                record_ids: [createdRecord.id],
+                branch_ids: [createdRecord.branch_id],
+                branch_names: [createdBranch]
+            },
+            render: ({ count, metadata }) => {
+                const branches = metadata.branch_names || [];
+                const branchText = branches.length <= 1
+                    ? ` at ${branches[0] || createdBranch}`
+                    : ` across ${branches.length} branches`;
+                return {
+                    title: count === 1 ? "New Record Created" : `${count} New Records`,
+                    message: count === 1
+                        ? `Case #${createdRecord.id} was created by ${recordActorName(req)}${branchText}.`
+                        : `${count} records were created${branchText}.`
+                };
             }
         });
 
         if (normalizeStatusValue(createdRecord.status) === "Processing") {
-            await notifyRecordAdmins(req, {
-                type: NOTIFICATION_TYPES.PENDING_APPROVAL,
-                title: "Approval Required",
-                message: `Case #${createdRecord.id} is waiting for approval at ${createdBranch}.`,
-                priority: NOTIFICATION_PRIORITIES.IMPORTANT,
-                recordId: createdRecord.id,
-                branchId: createdRecord.branch_id,
-                eventId: `pending-approval:${createdRecord.id}`,
-                metadata: {
-                    record_id: createdRecord.id,
-                    branch_id: createdRecord.branch_id,
-                    previous_status: null,
-                    new_status: createdRecord.status
-                }
-            });
+            await refreshPendingApprovalNotifications({ markNewAsUnread: true });
         }
 
         return res.status(201).json({
@@ -2113,19 +2117,41 @@ const updateRecord = async (req, res) => {
         });
 
         const updatedRecord = result.rows[0];
-        await notifyRecordAdmins(req, {
+        await notifyAdminsGrouped({
             type: NOTIFICATION_TYPES.RECORD_UPDATED,
-            title: "Record Updated",
-            message: `Case #${updatedRecord.id} was edited by ${recordActorName(req)}.`,
+            priority: NOTIFICATION_PRIORITIES.INFO,
+            groupingKey: `ALL_BRANCHES:${notificationWindowKey(15)}`,
+            eventId: `record-updated:${updatedRecord.id}:${String(updatedRecord.updated_at || Date.now())}`,
             recordId: updatedRecord.id,
             branchId: updatedRecord.branch_id,
-            eventId: `record-updated:${updatedRecord.id}:${String(updatedRecord.updated_at || Date.now())}`,
             metadata: {
-                record_id: updatedRecord.id,
-                branch_id: updatedRecord.branch_id,
+                record_ids: [updatedRecord.id],
+                branch_ids: [updatedRecord.branch_id],
                 changed_fields: changeSet.map(change => change.field)
+            },
+            render: ({ count, metadata }) => {
+                const recordIds = metadata.record_ids || [];
+                if (recordIds.length === 1 && count > 1) {
+                    return {
+                        title: `Case #${recordIds[0]} Updated`,
+                        message: `Case #${recordIds[0]} was updated multiple times.`
+                    };
+                }
+                return {
+                    title: count === 1 ? "Record Updated" : `${count} Records Updated`,
+                    message: count === 1
+                        ? `Case #${updatedRecord.id} was edited by ${recordActorName(req)}.`
+                        : `${count} records were edited in the last 15 minutes.`
+                };
             }
         });
+
+        if (
+            nextStatus === "Processing" &&
+            normalizeStatusValue(existingRecord.status) !== "Processing"
+        ) {
+            await refreshPendingApprovalNotifications({ markNewAsUnread: true });
+        }
 
         // =========================================
         // TRIGGER n8n WHEN STATUS CHANGES TO READY
@@ -2287,20 +2313,34 @@ const updateSmsDetails = async (req, res) => {
         });
 
         const editedRecord = result.rows[0];
-        await notifyRecordAdmins(req, {
+        await notifyAdminsGrouped({
             type: NOTIFICATION_TYPES.RECORD_UPDATED,
-            title: "Record Updated",
-            message: `Case #${editedRecord.id} was edited by ${recordActorName(req)}.`,
+            priority: NOTIFICATION_PRIORITIES.INFO,
+            groupingKey: `ALL_BRANCHES:${notificationWindowKey(15)}`,
+            eventId: `record-updated:${editedRecord.id}:${String(editedRecord.updated_at || Date.now())}`,
             recordId: editedRecord.id,
             branchId: editedRecord.branch_id,
-            eventId: `record-updated:${editedRecord.id}:${String(editedRecord.updated_at || Date.now())}`,
             metadata: {
-                record_id: editedRecord.id,
-                branch_id: editedRecord.branch_id,
+                record_ids: [editedRecord.id],
+                branch_ids: [editedRecord.branch_id],
                 changed_fields: [
                     ...(clearSms ? ["sms_sent", "sms_status", "sms_date", "sms_error"] : []),
                     ...(clearNote ? ["notes"] : [])
                 ]
+            },
+            render: ({ count, metadata }) => {
+                const recordIds = metadata.record_ids || [];
+                return recordIds.length === 1 && count > 1
+                    ? {
+                        title: `Case #${recordIds[0]} Updated`,
+                        message: `Case #${recordIds[0]} was updated multiple times.`
+                    }
+                    : {
+                        title: count === 1 ? "Record Updated" : `${count} Records Updated`,
+                        message: count === 1
+                            ? `Case #${editedRecord.id} was edited by ${recordActorName(req)}.`
+                            : `${count} records were edited in the last 15 minutes.`
+                    };
             }
         });
 
@@ -2571,6 +2611,8 @@ const approveProcessingRecord = async (req, res) => {
             newValue: result.rows[0].status,
             details: "Processing record approved."
         });
+
+        await refreshPendingApprovalNotifications();
 
         return res.json({
             success: true,

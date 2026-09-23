@@ -455,6 +455,9 @@ async function ensureDatabaseSchema() {
                 created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 read_at TIMESTAMP,
                 metadata JSONB DEFAULT '{}'::jsonb,
+                grouping_key VARCHAR(200),
+                group_count INTEGER NOT NULL DEFAULT 1,
+                last_event_at TIMESTAMP,
                 CONSTRAINT notifications_priority_check
                     CHECK (priority IN ('CRITICAL', 'IMPORTANT', 'INFO')),
                 CONSTRAINT notifications_user_id_fkey
@@ -467,6 +470,15 @@ async function ensureDatabaseSchema() {
                     FOREIGN KEY (branch_id) REFERENCES branches(id)
                     ON UPDATE CASCADE ON DELETE SET NULL
             )
+        `
+    );
+
+    await pool.query(
+        `
+            ALTER TABLE notifications
+                ADD COLUMN IF NOT EXISTS grouping_key VARCHAR(200),
+                ADD COLUMN IF NOT EXISTS group_count INTEGER NOT NULL DEFAULT 1,
+                ADD COLUMN IF NOT EXISTS last_event_at TIMESTAMP
         `
     );
 
@@ -510,6 +522,14 @@ async function ensureDatabaseSchema() {
             CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_event_unique
             ON notifications(user_id, type, (metadata->>'event_id'))
             WHERE metadata ? 'event_id'
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_group_unique
+            ON notifications(user_id, type, priority, grouping_key)
+            WHERE grouping_key IS NOT NULL
         `
     );
 
