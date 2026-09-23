@@ -240,6 +240,7 @@ function dashboardBranchClause(user) {
     return {
         clause: `
             WHERE r.branch_id = $1
+              AND r.created_by = $2
               AND COALESCE(r.registration_date, r.created_at) >= date_trunc(
                   'year',
                   (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date
@@ -251,7 +252,7 @@ function dashboardBranchClause(user) {
                   ) + INTERVAL '1 year'
               )::date
         `,
-        values: [user.branch_id]
+        values: [user.branch_id, user.id]
     };
 }
 
@@ -405,7 +406,8 @@ function assertBranchAccess(user, record) {
         return true;
     }
 
-    return String(record.branch_id) === String(user.branch_id);
+    return String(record.branch_id) === String(user.branch_id) &&
+        String(record.created_by) === String(user.id);
 }
 
 // =========================================
@@ -597,7 +599,8 @@ const createRecord = async (req, res) => {
         const statusParameter = branchStaffRecord ? "$7" : "$8";
         const notesParameter = branchStaffRecord ? "$8" : "$9";
         const branchParameter = branchStaffRecord ? "$9" : "$10";
-        const clientUuidParameter = branchStaffRecord ? "$10" : "$11";
+        const createdByParameter = branchStaffRecord ? "$10" : "$11";
+        const clientUuidParameter = branchStaffRecord ? "$11" : "$12";
 
         const result = await transactionClient.query(
             `
@@ -613,10 +616,11 @@ const createRecord = async (req, res) => {
                     status,
                     notes,
                     branch_id,
+                    created_by,
                     client_uuid
                 )
                 VALUES
-                ($1,$2,$3,$4,$5,$6,${registrationDateSql},${statusParameter},${notesParameter},${branchParameter},${clientUuidParameter})
+                ($1,$2,$3,$4,$5,$6,${registrationDateSql},${statusParameter},${notesParameter},${branchParameter},${createdByParameter},${clientUuidParameter})
                 RETURNING *
             `,
             branchStaffRecord
@@ -630,6 +634,7 @@ const createRecord = async (req, res) => {
                 initialStatus,
                 notes || null,
                 branchId,
+                req.user.id,
                 clientUuid
             ]
                 : [
@@ -643,6 +648,7 @@ const createRecord = async (req, res) => {
                 initialStatus,
                 notes || null,
                 branchId,
+                req.user.id,
                 clientUuid
             ]
         );

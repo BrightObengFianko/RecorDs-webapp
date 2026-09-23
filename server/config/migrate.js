@@ -148,6 +148,13 @@ async function ensureDatabaseSchema() {
     await pool.query(
         `
             ALTER TABLE records
+            ADD COLUMN IF NOT EXISTS created_by INTEGER
+        `
+    );
+
+    await pool.query(
+        `
+            ALTER TABLE records
             ADD COLUMN IF NOT EXISTS sms_sent VARCHAR(20)
         `
     );
@@ -404,6 +411,27 @@ async function ensureDatabaseSchema() {
         `
     );
 
+    // Preserve creator ownership for existing records when the audit trail
+    // identifies who originally created them. Never overwrite a known value.
+    await pool.query(
+        `
+            UPDATE records r
+            SET created_by = activity.user_id
+            FROM (
+                SELECT DISTINCT ON (record_id)
+                    record_id,
+                    user_id
+                FROM auth_activity_logs
+                WHERE activity_type = 'RECORD_CREATED'
+                  AND record_id IS NOT NULL
+                  AND user_id IS NOT NULL
+                ORDER BY record_id, occurred_at ASC, id ASC
+            ) AS activity
+            WHERE r.id = activity.record_id
+              AND r.created_by IS NULL
+        `
+    );
+
     await pool.query(
         `
             ALTER TABLE security_audit_logs
@@ -496,6 +524,13 @@ async function ensureDatabaseSchema() {
         `
             CREATE INDEX IF NOT EXISTS idx_records_branch_id
             ON records(branch_id)
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_records_created_by
+            ON records(created_by)
         `
     );
 
