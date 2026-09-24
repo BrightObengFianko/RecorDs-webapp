@@ -35,9 +35,13 @@ const REQUIRED_NOTIFICATION_TYPES = new Set([
     NOTIFICATION_TYPES.SYSTEM_ALERT
 ]);
 
-function isNotificationEnabled(user, type) {
+function isNotificationEnabled(user, type, priority) {
     const normalizedType = String(type || "").trim().toUpperCase();
-    if (REQUIRED_NOTIFICATION_TYPES.has(normalizedType)) return true;
+    const normalizedPriority = String(priority || "").trim().toUpperCase();
+    if (
+        REQUIRED_NOTIFICATION_TYPES.has(normalizedType) ||
+        [NOTIFICATION_PRIORITIES.CRITICAL, NOTIFICATION_PRIORITIES.IMPORTANT].includes(normalizedPriority)
+    ) return true;
     const preferences = user?.account_settings;
     return !preferences || preferences.notificationPreferences?.[normalizedType] !== false;
 }
@@ -192,7 +196,7 @@ async function notifyAdmins({
 
     const notifications = [];
     for (const admin of adminResult.rows) {
-        if (!isNotificationEnabled(admin, type)) continue;
+        if (!isNotificationEnabled(admin, type, priority)) continue;
         try {
             notifications.push(await createNotification({
                 type,
@@ -271,7 +275,7 @@ async function notifyAdminsGrouped({
     const results = [];
 
     for (const admin of adminResult.rows) {
-        if (!isNotificationEnabled(admin, type)) continue;
+        if (!isNotificationEnabled(admin, type, priority)) continue;
         const client = await pool.connect();
         const lockKey = `${admin.id}:${type}:${priority}:${groupingKey}`;
 
@@ -411,7 +415,7 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
     );
 
     for (const admin of adminResult.rows) {
-        if (!isNotificationEnabled(admin, NOTIFICATION_TYPES.PENDING_APPROVAL)) continue;
+        if (!isNotificationEnabled(admin, NOTIFICATION_TYPES.PENDING_APPROVAL, NOTIFICATION_PRIORITIES.IMPORTANT)) continue;
         const currentResult = await pool.query(
             `
                 SELECT * FROM notifications

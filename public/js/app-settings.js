@@ -1245,15 +1245,21 @@
             }
 
             document.body.classList.add("page-transition-enter");
+            let transitionTimer = null;
 
             const clearEnterTransition = event => {
-                if (event.animationName === "record-page-enter") {
+                if (!event || event.animationName === "record-page-enter") {
                     document.body.classList.remove("page-transition-enter");
                     transitionTarget.removeEventListener("animationend", clearEnterTransition);
+                    if (transitionTimer) window.clearTimeout(transitionTimer);
                 }
             };
 
             transitionTarget.addEventListener("animationend", clearEnterTransition);
+            // Animation events can be skipped when reduced motion is enabled,
+            // a page is restored from the back-forward cache, or a browser
+            // throttles the tab. Never leave the transition class stuck.
+            transitionTimer = window.setTimeout(() => clearEnterTransition(), 500);
         };
 
         playEnterTransition();
@@ -1300,18 +1306,10 @@
             isLeaving = true;
             document.body.classList.remove("page-transition-enter");
 
-            // Show the branded shell immediately, but do not wait for it before
-            // loading the destination page.
-            showAuthLoadingState();
-
-            // Navigate in the same frame. The destination page owns its short
-            // enter animation; never hold navigation for an exit animation.
-            const continueNavigation = () => window.location.assign(destination.href);
-            if (typeof window.requestAnimationFrame === "function") {
-                window.requestAnimationFrame(continueNavigation);
-            } else {
-                continueNavigation();
-            }
+            // Do not put the current page behind a loader or wait for an
+            // animation frame. The destination owns its short enter animation;
+            // navigation must remain immediate even when a frame is delayed.
+            window.location.assign(destination.href);
         });
     }
 

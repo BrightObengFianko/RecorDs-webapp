@@ -21,6 +21,8 @@
     let refreshTimer = null;
     let pollingStarted = false;
     let panelUnreadIndicator = null;
+    const urgentNotificationIds = new Set();
+    let urgentNotificationsInitialized = false;
 
     if (!token || !isAdmin) return;
 
@@ -180,6 +182,28 @@
                 await loadDropdown();
             }
         } catch { /* Header remains usable if notifications are unavailable. */ }
+
+        try {
+            const data = await request("/?unread=true&limit=5&priority=CRITICAL,IMPORTANT");
+            const urgentItems = data.notifications || [];
+            if (!urgentNotificationsInitialized) {
+                urgentItems.forEach(item => urgentNotificationIds.add(String(item.id)));
+                urgentNotificationsInitialized = true;
+                return;
+            }
+
+            urgentItems.forEach(item => {
+                const id = String(item.id);
+                if (urgentNotificationIds.has(id)) return;
+                urgentNotificationIds.add(id);
+                const notify = String(item.priority || "").toUpperCase() === "CRITICAL"
+                    ? window.Notification?.error
+                    : window.Notification?.warning;
+                notify?.call(window.Notification, `${item.title}: ${item.message}`, 0);
+            });
+        } catch {
+            // The badge and notification panel remain usable during a transient failure.
+        }
     }
 
     function startNotificationPolling() {
