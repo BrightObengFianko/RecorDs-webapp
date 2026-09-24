@@ -264,8 +264,8 @@ function duplicateLockKey(category, name, dateOfBirth, dateOfDeath) {
 
 /**
  * Checks if a record is a duplicate
- * - Normal cases: same normalized Name + Date of Birth
- * - Death cases: same normalized Name + Date of Death
+ * - Normal cases: same Category + normalized Name + Date of Birth
+ * - Death cases: same Category + normalized Name + Date of Death
  */
 async function checkDuplicateRecord(pool, category, name, dateOfBirth, dateOfDeath) {
     const isDeathCategory =
@@ -274,7 +274,9 @@ async function checkDuplicateRecord(pool, category, name, dateOfBirth, dateOfDea
 
     const normalizedName = normalizeName(name);
 
-    if (!normalizedName || (!dateOfBirth && !dateOfDeath)) {
+    const normalizedCategory = String(category || "").trim().toLowerCase();
+
+    if (!normalizedCategory || !normalizedName) {
         return null;
     }
 
@@ -282,25 +284,31 @@ async function checkDuplicateRecord(pool, category, name, dateOfBirth, dateOfDea
     let params;
 
     if (isDeathCategory) {
-        // Death cases: check name + date_of_death
+        if (!dateOfDeath) return null;
+
+        // Death cases use the date of death and the selected category.
         query = `
             SELECT id, name, category, date_of_death
             FROM records
-            WHERE LOWER(TRIM(name)) = LOWER(TRIM($1))
-              AND date_of_death = $2
+            WHERE LOWER(TRIM(category)) = LOWER(TRIM($1))
+              AND LOWER(TRIM(name)) = LOWER(TRIM($2))
+              AND date_of_death = $3
             LIMIT 1
         `;
-        params = [name, dateOfDeath];
+        params = [category, name, dateOfDeath];
     } else {
-        // Normal cases: check name + date_of_birth
+        if (!dateOfBirth) return null;
+
+        // Other categories use the date of birth and the selected category.
         query = `
             SELECT id, name, category, date_of_birth
             FROM records
-            WHERE LOWER(TRIM(name)) = LOWER(TRIM($1))
-              AND date_of_birth = $2
+            WHERE LOWER(TRIM(category)) = LOWER(TRIM($1))
+              AND LOWER(TRIM(name)) = LOWER(TRIM($2))
+              AND date_of_birth = $3
             LIMIT 1
         `;
-        params = [name, dateOfBirth];
+        params = [category, name, dateOfBirth];
     }
 
     const result = await pool.query(query, params);

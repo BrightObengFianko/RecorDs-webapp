@@ -3,7 +3,7 @@
 }
 
 body.account-page {
-    font-family: Arial, sans-serif;
+    font-family: inherit;
     background: var(--app-bg);
     color: var(--app-text);
 }
@@ -518,13 +518,13 @@ body.account-page {
     font-size: 12px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
     .account-main {
-        padding: 20px;
+        padding: 22px;
     }
 
     .account-filters {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .account-filters .account-primary-button,
@@ -533,11 +533,107 @@ body.account-page {
     }
 }
 
+@media (max-width: 900px) and (min-width: 701px) {
+    .account-main {
+        padding: 20px;
+    }
+
+    .account-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    .account-main {
+        padding: 18px 14px 30px;
+        gap: 16px;
+    }
+
+    .account-heading {
+        align-items: flex-start;
+        padding: 0 0 16px;
+    }
+
+    .account-heading-left {
+        gap: 9px;
+    }
+
+    .account-heading h1 {
+        font-size: 25px;
+    }
+
+    .account-heading p {
+        max-width: 290px;
+        font-size: 12px;
+        line-height: 1.45;
+    }
+
+    .account-filters {
+        grid-template-columns: 1fr;
+        gap: 11px;
+    }
+
+    .account-filters label {
+        font-size: 12px;
+    }
+
+    .account-filters input,
+    .account-filters select,
+    .account-filters button {
+        min-height: 46px;
+        height: 46px;
+        font-size: 16px;
+    }
+
+    .account-heading,
+    .account-card-heading,
+    .account-bulk-row,
+    .account-footer {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .account-card-heading,
+    .account-bulk-row,
+    .account-footer {
+        padding: 14px;
+    }
+
+    .account-card-heading > div,
+    .account-card-total,
+    .account-bulk-row p {
+        width: 100%;
+    }
+
+    .account-card-total {
+        justify-content: space-between;
+    }
+
+    .account-bulk-row p {
+        margin: 0;
+    }
+
+    .account-table-wrap th,
+    .account-table-wrap td {
+        padding: 12px 11px;
+    }
+
+    .account-footer {
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .table-copyright-footer {
+        padding: 12px 14px 14px;
+        text-align: center;
+    }
+}
+
 @media (max-width: 560px) {
     .account-heading,
     .account-summary,
     .account-bulk-row {
-        align-items: flex-start;
         flex-direction: column;
     }
 
@@ -546,24 +642,11 @@ body.account-page {
     }
 
     .account-card-total {
-        align-self: flex-end;
-    }
-
-    .account-heading h1 {
-        font-size: 25px;
-    }
-
-    .account-filters {
-        grid-template-columns: 1fr;
-    }
-
-    .account-bulk-row p {
-        margin: 0;
+        align-self: stretch;
     }
 }
 
 @media (max-width: 480px) {
-
     .account-main {
         padding: 12px;
     }
@@ -592,17 +675,6 @@ body.account-page {
     .account-filters {
         gap: 10px;
         padding: 0;
-    }
-
-    .account-filters input,
-    .account-filters select,
-    .account-filters button {
-        min-height: 42px;
-        font-size: 13px;
-    }
-
-    .account-summary {
-        padding: 12px 13px;
     }
 
     .account-table-wrap {

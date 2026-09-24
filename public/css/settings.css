@@ -1128,12 +1128,122 @@ html[data-theme="dark"] .toast {
 ========================================= */
 
 .notification-preferences-panel { margin-top: 18px; }
-.notification-preference-groups { display: grid; gap: 24px; }
-.notification-preference-group { padding: 18px; border: 1px solid var(--app-border, #e5e7eb); border-radius: 12px; background: var(--app-surface-2, #f8f9fc); }
-.notification-preference-group h3 { margin: 0 0 12px; color: var(--app-text, #172033); font-size: 14px; }
-.notification-preference-list { display: grid; gap: 4px; }
-.notification-preference-list .toggle-row { min-height: 48px; padding: 8px 0; }
-.notification-preference-actions { gap: 10px; flex-wrap: wrap; }
+.notification-preference-groups {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+    align-items: start;
+}
+
+.notification-preference-group {
+    min-width: 0;
+    padding: 18px;
+    border: 1px solid var(--app-border, #e5e7eb);
+    border-radius: 14px;
+    background: var(--app-surface-2, #f8f9fc);
+}
+
+.notification-preference-group.notification-admin-preferences {
+    grid-column: 1 / -1;
+}
+
+.notification-preference-group h3 {
+    margin: 0 0 12px;
+    color: var(--app-text, #172033);
+    font-size: 14px;
+    line-height: 1.35;
+}
+
+.notification-preference-list {
+    display: grid;
+    gap: 2px;
+}
+
+.notification-preference-list .toggle-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 52px;
+    gap: 14px;
+    padding: 9px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--app-border, #e5e7eb) 72%, transparent);
+}
+
+.notification-preference-list .toggle-row:last-child {
+    border-bottom: 0;
+}
+
+.notification-preference-list .toggle-row:hover {
+    background: color-mix(in srgb, var(--accent-soft, #f1efff) 55%, transparent);
+}
+
+.notification-preference-list .toggle-copy {
+    min-width: 0;
+    padding: 2px 6px;
+}
+
+.notification-preference-list .toggle-copy strong,
+.notification-preference-list .toggle-copy span {
+    overflow-wrap: anywhere;
+}
+
+.notification-preference-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.notification-preference-actions .outline-button,
+.notification-preference-actions .primary-button {
+    width: auto;
+    min-width: 190px;
+}
+
+@media (max-width: 820px) {
+    .notification-preference-groups {
+        grid-template-columns: 1fr;
+    }
+
+    .notification-preference-group.notification-admin-preferences {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 600px) {
+    .notification-preference-group {
+        padding: 14px;
+        border-radius: 12px;
+    }
+
+    .notification-preference-list .toggle-row {
+        min-height: 58px;
+        gap: 10px;
+        padding: 10px 0;
+    }
+
+    .notification-preference-list .toggle-copy {
+        padding: 2px 4px 2px 0;
+    }
+
+    .notification-preference-list .toggle-copy strong {
+        font-size: 13px;
+    }
+
+    .notification-preference-list .toggle-copy span {
+        font-size: 11px;
+        line-height: 1.4;
+    }
+
+    .notification-preference-actions {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .notification-preference-actions .outline-button,
+    .notification-preference-actions .primary-button {
+        width: 100%;
+        min-width: 0;
+    }
+}
 
 @media (max-width: 1100px) {
 

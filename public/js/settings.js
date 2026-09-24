@@ -533,7 +533,9 @@ function updateFormFields() {
     });
     const adminPreferences = document.querySelector(".notification-admin-preferences");
     if (adminPreferences) {
-        adminPreferences.hidden = String(currentUserRole || "").trim().toLowerCase().replace(/[\s-]+/g, "_") !== "admin";
+        const isAdmin = String(currentUserRole || "").trim().toLowerCase().replace(/[\s-]+/g, "_") === "admin";
+        adminPreferences.hidden = !isAdmin;
+        adminPreferences.setAttribute("aria-hidden", String(!isAdmin));
     }
 
     syncThemeCards();
