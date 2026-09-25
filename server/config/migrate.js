@@ -411,6 +411,49 @@ async function ensureDatabaseSchema() {
         `
     );
 
+    await pool.query(
+        `
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id BIGSERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                code_hash VARCHAR(64) NOT NULL,
+                reset_token_hash VARCHAR(64),
+                expires_at TIMESTAMP NOT NULL,
+                verified_at TIMESTAMP,
+                used_at TIMESTAMP,
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                request_ip VARCHAR(64),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT password_reset_tokens_user_id_fkey
+                    FOREIGN KEY (user_id)
+                    REFERENCES users(id)
+                    ON UPDATE CASCADE
+                    ON DELETE CASCADE
+            )
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id
+            ON password_reset_tokens(user_id)
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_code_hash
+            ON password_reset_tokens(code_hash)
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires_at
+            ON password_reset_tokens(expires_at)
+        `
+    );
+
     // Preserve creator ownership for existing records when the audit trail
     // identifies who originally created them. Never overwrite a known value.
     await pool.query(

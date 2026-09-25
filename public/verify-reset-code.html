@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Reset Code | RecorDs</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/assets/records-icon-192.png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/mobile-form-controls.css">
+    <link rel="stylesheet" href="css/notification.css">
+</head>
+<body class="login-page password-reset-page">
+    <main class="auth-container password-reset-container">
+        <section class="auth-info" aria-hidden="true"><div class="info-content"><p class="eyebrow">SMART RECORDS. BETTER SERVICE.</p><h1>Manage Records<br><span>with Confidence</span></h1></div></section>
+        <section class="auth-form"><div class="login-card password-reset-card">
+            <div class="login-brand"><img src="assets/records-logo-transparent.png" alt="RecorDs logo"></div>
+            <h2>Verify Reset Code</h2>
+            <p class="subtitle">Enter the 6-digit code sent to your registered email address.</p>
+            <form id="verifyResetForm">
+                <label for="resetCode">Reset Code</label>
+                <div class="input-wrap"><input id="resetCode" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></div>
+                <button type="submit" class="login-button" id="verifyResetButton"><span>Verify Code</span><span class="button-arrow" aria-hidden="true">&#8594;</span></button>
+            </form>
+            <div class="reset-actions"><button type="button" class="text-button" id="resendResetButton">Resend Code</button><a href="index.html">Back to Login</a></div>
+        </div></section>
+    </main>
+    <script src="js/notification.js"></script>
+    <script src="js/password-reset.js"></script>
+</body>
+</html>

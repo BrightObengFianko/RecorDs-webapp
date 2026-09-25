@@ -635,6 +635,99 @@ input {
     }
 }
 
+/* Password recovery */
+.password-reset-card h2 {
+    margin: 0;
+    color: var(--navy);
+    font-size: clamp(28px, 3vw, 38px);
+    line-height: 1.1;
+    letter-spacing: -.04em;
+    text-align: center;
+}
+
+.password-reset-page .subtitle {
+    margin-bottom: 26px;
+}
+
+.password-reset-page .login-card form > label {
+    display: block;
+    margin: 0 0 8px;
+    color: var(--navy);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.password-reset-page .input-wrap input {
+    padding: 0 16px;
+}
+
+.password-reset-page .input-wrap input:focus {
+    border-color: var(--blue);
+}
+
+.reset-link,
+.reset-actions {
+    margin: 20px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+}
+
+.reset-link a,
+.reset-actions a,
+.text-button {
+    color: var(--blue-dark);
+    font: inherit;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.reset-link a:hover,
+.reset-actions a:hover,
+.text-button:hover {
+    text-decoration: underline;
+}
+
+.reset-actions {
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+}
+
+.text-button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.password-requirements {
+    margin: -4px 0 20px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.password-reset-page .login-button:disabled {
+    cursor: wait;
+    opacity: .7;
+}
+
+@media (max-width: 600px) {
+    .password-reset-card h2 {
+        font-size: 28px;
+    }
+
+    .password-reset-page .input-wrap input {
+        font-size: 16px;
+    }
+
+    .reset-actions {
+        flex-direction: column;
+        gap: 12px;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -918,5 +1011,31 @@ body.signup-page .signup-text {
     body.login-page .login-brand img {
         width: 112px;
         height: 76px;
+    }
+}
+
+body.password-reset-page {
+    overflow-y: auto;
+}
+
+body.password-reset-page .auth-container {
+    height: auto;
+    min-height: 100vh;
+}
+
+body.password-reset-page .auth-form {
+    min-height: 100vh;
+}
+
+@media (max-width: 760px) {
+    body.password-reset-page .auth-form {
+        align-items: flex-start;
+        min-height: auto;
+        padding: 16px 12px 32px;
+    }
+
+    body.password-reset-page .login-card {
+        max-height: none;
+        margin: 0 auto;
     }
 }

@@ -129,6 +129,9 @@ serveFrontendPage("create-record.html");
 serveFrontendPage("users.html");
 serveFrontendPage("reports.html");
 serveFrontendPage("settings.html");
+serveFrontendPage("forgot-password.html");
+serveFrontendPage("verify-reset-code.html");
+serveFrontendPage("reset-password.html");
 
 
 // =========================================

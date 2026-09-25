@@ -21,11 +21,19 @@ const { requireRole } =
 const {
     loginRateLimiter
 } = require("../middleware/loginRateLimiter");
+const {
+    requestPasswordReset,
+    verifyResetCode,
+    resetPassword
+} = require("../controllers/passwordResetController");
 const auditMutatingRequest = require("../middleware/auditMiddleware");
 
 
 // Public endpoint
 router.post("/login", loginRateLimiter, login);
+router.post("/password-reset/request", requestPasswordReset);
+router.post("/password-reset/verify", verifyResetCode);
+router.post("/password-reset/complete", resetPassword);
 router.post("/logout", authenticateToken, auditMutatingRequest, logout);
 
 // Protected endpoints - auth required
