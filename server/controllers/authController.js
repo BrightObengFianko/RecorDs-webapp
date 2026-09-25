@@ -682,6 +682,13 @@ const updateAccountSettings = async (req, res) => {
                 emailAddress: email
             }
         };
+
+        // Notification preferences are an Admin-only settings area. Preserve
+        // the stored values for other roles even if they call this endpoint directly.
+        if (normalizeRole(req.user?.role) !== "admin") {
+            merged.notificationPreferences = existing.accountSettings.notificationPreferences;
+        }
+
         const settings = normalizeAccountSettings(merged, {
             ...existing,
             name: fullName,

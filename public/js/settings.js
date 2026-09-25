@@ -73,6 +73,7 @@ const showAvatarsInput = document.getElementById("showAvatars");
 const showStatusColorsInput = document.getElementById("showStatusColors");
 const enableAnimationsInput = document.getElementById("enableAnimations");
 const notificationPreferenceInputs = [...document.querySelectorAll("[data-notification-preference]")];
+const notificationPreferencesSection = document.getElementById("notificationPreferencesSection");
 const saveNotificationPreferencesButton = document.getElementById("saveNotificationPreferences");
 const resetNotificationPreferencesButton = document.getElementById("resetNotificationPreferences");
 
@@ -531,9 +532,14 @@ function updateFormFields() {
     notificationPreferenceInputs.forEach(input => {
         input.checked = state.notificationPreferences[input.dataset.notificationPreference] !== false;
     });
+    const isAdmin = String(currentUserRole || "").trim().toLowerCase().replace(/[\s-]+/g, "_") === "admin";
+    if (notificationPreferencesSection) {
+        notificationPreferencesSection.hidden = !isAdmin;
+        notificationPreferencesSection.setAttribute("aria-hidden", String(!isAdmin));
+    }
+
     const adminPreferences = document.querySelector(".notification-admin-preferences");
     if (adminPreferences) {
-        const isAdmin = String(currentUserRole || "").trim().toLowerCase().replace(/[\s-]+/g, "_") === "admin";
         adminPreferences.hidden = !isAdmin;
         adminPreferences.setAttribute("aria-hidden", String(!isAdmin));
     }
@@ -691,6 +697,11 @@ async function saveAppearanceFromForm() {
 }
 
 async function saveNotificationPreferences() {
+    if (String(currentUserRole || "").trim().toLowerCase().replace(/[\s-]+/g, "_") !== "admin") {
+        showToast("Notification Preferences are available to Admin users only.");
+        return;
+    }
+
     const previousState = JSON.parse(JSON.stringify(state));
     notificationPreferenceInputs.forEach(input => {
         state.notificationPreferences[input.dataset.notificationPreference] = input.checked;
@@ -708,6 +719,11 @@ async function saveNotificationPreferences() {
 }
 
 async function resetNotificationPreferences() {
+    if (String(currentUserRole || "").trim().toLowerCase().replace(/[\s-]+/g, "_") !== "admin") {
+        showToast("Notification Preferences are available to Admin users only.");
+        return;
+    }
+
     const confirmed = await window.ConfirmDialog?.show(
         "Restore your role-appropriate notification defaults? Existing notifications and audit logs will not be deleted.",
         "Reset Notification Preferences",
