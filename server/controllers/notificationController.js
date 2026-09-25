@@ -40,7 +40,10 @@ async function listNotifications(req, res) {
         const page = parsePage(req.query.page);
         const limit = parseLimit(req.query.limit);
         const values = [req.user.id];
-        const conditions = ["n.user_id = $1"];
+        const conditions = [
+            "n.user_id = $1",
+            "(u.account_settings->'notificationPreferences'->>n.type IS DISTINCT FROM 'false')"
+        ];
         const typeValues = String(req.query.type || "")
             .split(",")
             .map(value => value.trim().toUpperCase())
@@ -93,7 +96,7 @@ async function listNotifications(req, res) {
 
         const whereClause = conditions.join(" AND ");
         const countResult = await pool.query(
-            `SELECT COUNT(*)::int AS total FROM notifications n LEFT JOIN records r ON r.id = n.record_id WHERE ${whereClause}`,
+            `SELECT COUNT(*)::int AS total FROM notifications n JOIN users u ON u.id = n.user_id LEFT JOIN records r ON r.id = n.record_id WHERE ${whereClause}`,
             values
         );
         const offset = (page - 1) * limit;
@@ -102,6 +105,7 @@ async function listNotifications(req, res) {
             `
                 SELECT n.*
                 FROM notifications n
+                JOIN users u ON u.id = n.user_id
                 LEFT JOIN records r ON r.id = n.record_id
                 WHERE ${whereClause}
                 ORDER BY n.created_at ${sort === "oldest" ? "ASC" : "DESC"}, n.id ${sort === "oldest" ? "ASC" : "DESC"}
@@ -129,7 +133,14 @@ async function listNotifications(req, res) {
 async function getUnreadCount(req, res) {
     try {
         const result = await pool.query(
-            "SELECT COUNT(*)::int AS count FROM notifications WHERE user_id = $1 AND is_read = FALSE",
+            `
+                SELECT COUNT(*)::int AS count
+                FROM notifications n
+                JOIN users u ON u.id = n.user_id
+                WHERE n.user_id = $1
+                  AND n.is_read = FALSE
+                  AND (u.account_settings->'notificationPreferences'->>n.type IS DISTINCT FROM 'false')
+            `,
             [req.user.id]
         );
         return res.json({ success: true, unreadCount: Number(result.rows[0]?.count || 0) });

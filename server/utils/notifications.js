@@ -30,20 +30,13 @@ const NOTIFICATION_PRIORITIES = Object.freeze({
 
 const notificationTypeSet = new Set(Object.values(NOTIFICATION_TYPES));
 const notificationPrioritySet = new Set(Object.values(NOTIFICATION_PRIORITIES));
-const REQUIRED_NOTIFICATION_TYPES = new Set([
-    NOTIFICATION_TYPES.FAILED_LOGIN_ALERT,
-    NOTIFICATION_TYPES.SYSTEM_ALERT
-]);
-
-function isNotificationEnabled(user, type, priority) {
+function isNotificationEnabled(user, type) {
     const normalizedType = String(type || "").trim().toUpperCase();
-    const normalizedPriority = String(priority || "").trim().toUpperCase();
-    if (
-        REQUIRED_NOTIFICATION_TYPES.has(normalizedType) ||
-        [NOTIFICATION_PRIORITIES.CRITICAL, NOTIFICATION_PRIORITIES.IMPORTANT].includes(normalizedPriority)
-    ) return true;
+    const preferenceKey = normalizedType === NOTIFICATION_TYPES.SMS_SERVICE_UNAVAILABLE
+        ? NOTIFICATION_TYPES.SMS_FAILED
+        : normalizedType;
     const preferences = user?.account_settings;
-    return !preferences || preferences.notificationPreferences?.[normalizedType] !== false;
+    return !preferences || preferences.notificationPreferences?.[preferenceKey] !== false;
 }
 
 function validateNotificationText(value, field, maxLength, required = true) {
@@ -196,7 +189,7 @@ async function notifyAdmins({
 
     const notifications = [];
     for (const admin of adminResult.rows) {
-        if (!isNotificationEnabled(admin, type, priority)) continue;
+        if (!isNotificationEnabled(admin, type)) continue;
         try {
             notifications.push(await createNotification({
                 type,
@@ -275,7 +268,7 @@ async function notifyAdminsGrouped({
     const results = [];
 
     for (const admin of adminResult.rows) {
-        if (!isNotificationEnabled(admin, type, priority)) continue;
+        if (!isNotificationEnabled(admin, type)) continue;
         const client = await pool.connect();
         const lockKey = `${admin.id}:${type}:${priority}:${groupingKey}`;
 
@@ -415,7 +408,7 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
     );
 
     for (const admin of adminResult.rows) {
-        if (!isNotificationEnabled(admin, NOTIFICATION_TYPES.PENDING_APPROVAL, NOTIFICATION_PRIORITIES.IMPORTANT)) continue;
+        if (!isNotificationEnabled(admin, NOTIFICATION_TYPES.PENDING_APPROVAL)) continue;
         const currentResult = await pool.query(
             `
                 SELECT * FROM notifications
