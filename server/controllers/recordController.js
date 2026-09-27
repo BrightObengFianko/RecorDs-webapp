@@ -2131,7 +2131,8 @@ const updateRecord = async (req, res) => {
                         date_of_birth = $3,
                         date_of_death = $4,
                         phone_number = $5,
-                registration_date = COALESCE($6::date, (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date),
+                        -- Keep the existing registration date when an edit does not change it.
+                        registration_date = COALESCE($6::date, registration_date),
                         status = $7,
                         registrar = $8,
                         notes = $9,
