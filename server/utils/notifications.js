@@ -387,17 +387,18 @@ async function notifyAdminsGrouped({
 }
 
 async function refreshPendingApprovalNotifications({ markNewAsUnread = false } = {}) {
-    const countResult = await pool.query(
+    try {
+        const countResult = await pool.query(
         `
             SELECT COUNT(*)::int AS count,
                    ARRAY_AGG(id ORDER BY registration_date DESC, id DESC) FILTER (WHERE id IS NOT NULL) AS record_ids
             FROM records
             WHERE LOWER(REPLACE(REPLACE(COALESCE(status, ''), '_', ' '), '-', ' ')) = 'processing'
         `
-    );
-    const count = Number(countResult.rows[0]?.count || 0);
-    const recordIds = (countResult.rows[0]?.record_ids || []).slice(0, 50);
-    const adminResult = await pool.query(
+        );
+        const count = Number(countResult.rows[0]?.count || 0);
+        const recordIds = (countResult.rows[0]?.record_ids || []).slice(0, 50);
+        const adminResult = await pool.query(
         `
             SELECT id, account_settings
             FROM users
@@ -405,9 +406,9 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
               AND COALESCE(is_active, TRUE) = TRUE
               AND UPPER(COALESCE(account_status, 'APPROVED')) = 'APPROVED'
         `
-    );
+        );
 
-    for (const admin of adminResult.rows) {
+        for (const admin of adminResult.rows) {
         if (!isNotificationEnabled(admin, NOTIFICATION_TYPES.PENDING_APPROVAL)) continue;
         const currentResult = await pool.query(
             `
@@ -437,7 +438,7 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
                         group_count, last_event_at, is_active, group_window_minutes, metadata
                     )
                     VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, TRUE, 15, $8::jsonb)
-                    ON CONFLICT (user_id, type, priority, grouping_key) DO NOTHING
+                    ON CONFLICT DO NOTHING
                 `,
                 [
                     NOTIFICATION_TYPES.PENDING_APPROVAL,
@@ -480,6 +481,10 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
                 count > 0
             ]
         );
+        }
+    } catch (error) {
+        // Notification refresh is a post-save side effect and must not fail record creation.
+        console.error("PENDING APPROVAL NOTIFICATION REFRESH ERROR:", error.message);
     }
 }
 
