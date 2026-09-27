@@ -754,76 +754,82 @@ const createRecord = async (req, res) => {
         transactionClient.release();
         transactionClient = null;
 
-        await recordActivity({
-            request: req,
-            userId: req.user?.id,
-            name: req.user?.name,
-            email: req.user?.email,
-            role: req.user?.role,
-            activityType: ACTIVITY_TYPES.RECORD_CREATED,
-            recordId: result.rows[0].id,
-            branchId,
-            branchName: req.user?.branch,
-            details: "Record created.",
-            recordSnapshot: makeRecordSnapshot(result.rows[0])
-        });
-
         const createdRecord = result.rows[0];
-        const createdBranch = recordNotificationBranch(createdRecord, req);
-        await notifyAdminsGrouped({
-            type: NOTIFICATION_TYPES.RECORD_CREATED,
-            priority: NOTIFICATION_PRIORITIES.INFO,
-            groupingKey: `ALL_BRANCHES:${notificationWindowKey(15)}`,
-            eventId: `record-created:${createdRecord.id}`,
-            recordId: createdRecord.id,
-            branchId: createdRecord.branch_id,
-            metadata: {
-                record_ids: [createdRecord.id],
-                branch_ids: [createdRecord.branch_id],
-                branch_names: [createdBranch]
-            },
-            render: ({ count, metadata }) => {
-                const branches = metadata.branch_names || [];
-                const branchText = branches.length <= 1
-                    ? ` at ${branches[0] || createdBranch}`
-                    : ` across ${branches.length} branches`;
-                return {
-                    title: count === 1 ? "New Record Created" : `${count} New Records`,
-                    message: count === 1
-                        ? `Case #${createdRecord.id} was created by ${recordActorName(req)}${branchText}.`
-                        : `${count} records were created${branchText}.`
-                };
-            }
-        });
+        // The database commit above is the source of truth. Audit and
+        // notification work must not turn a successful insert into a 500.
+        try {
+            await recordActivity({
+                request: req,
+                userId: req.user?.id,
+                name: req.user?.name,
+                email: req.user?.email,
+                role: req.user?.role,
+                activityType: ACTIVITY_TYPES.RECORD_CREATED,
+                recordId: createdRecord.id,
+                branchId,
+                branchName: req.user?.branch,
+                details: "Record created.",
+                recordSnapshot: makeRecordSnapshot(createdRecord)
+            });
 
-        // A valid client UUID means this record arrived through the offline
-        // queue. The server only emits this event after the insert succeeds.
-        if (clientUuid) {
+            const createdBranch = recordNotificationBranch(createdRecord, req);
             await notifyAdminsGrouped({
-                type: NOTIFICATION_TYPES.SYNC_SUCCEEDED,
-                title: "Record Synchronized",
-                message: `Case #${createdRecord.id} synchronized successfully.`,
+                type: NOTIFICATION_TYPES.RECORD_CREATED,
                 priority: NOTIFICATION_PRIORITIES.INFO,
-                groupingKey: `SYNC_SUCCEEDED:${notificationWindowKey(10)}`,
-                groupingWindowMinutes: 10,
-                eventId: `sync:create:${clientUuid}`,
+                groupingKey: `ALL_BRANCHES:${notificationWindowKey(15)}`,
+                eventId: `record-created:${createdRecord.id}`,
                 recordId: createdRecord.id,
                 branchId: createdRecord.branch_id,
                 metadata: {
                     record_ids: [createdRecord.id],
-                    sync_event_ids: [`sync:create:${clientUuid}`]
+                    branch_ids: [createdRecord.branch_id],
+                    branch_names: [createdBranch]
                 },
-                render: ({ count }) => ({
-                    title: count === 1 ? "Record Synchronized" : `${count} Records Synchronized`,
-                    message: count === 1
-                        ? `Case #${createdRecord.id} synchronized successfully.`
-                        : `${count} records synchronized in the last 10 minutes.`
-                })
+                render: ({ count, metadata }) => {
+                    const branches = metadata.branch_names || [];
+                    const branchText = branches.length <= 1
+                        ? ` at ${branches[0] || createdBranch}`
+                        : ` across ${branches.length} branches`;
+                    return {
+                        title: count === 1 ? "New Record Created" : `${count} New Records`,
+                        message: count === 1
+                            ? `Case #${createdRecord.id} was created by ${recordActorName(req)}${branchText}.`
+                            : `${count} records were created${branchText}.`
+                    };
+                }
             });
-        }
 
-        if (normalizeStatusValue(createdRecord.status) === "Processing") {
-            await refreshPendingApprovalNotifications({ markNewAsUnread: true });
+            // A valid client UUID means this record arrived through the offline
+            // queue. The server only emits this event after the insert succeeds.
+            if (clientUuid) {
+                await notifyAdminsGrouped({
+                    type: NOTIFICATION_TYPES.SYNC_SUCCEEDED,
+                    title: "Record Synchronized",
+                    message: `Case #${createdRecord.id} synchronized successfully.`,
+                    priority: NOTIFICATION_PRIORITIES.INFO,
+                    groupingKey: `SYNC_SUCCEEDED:${notificationWindowKey(10)}`,
+                    groupingWindowMinutes: 10,
+                    eventId: `sync:create:${clientUuid}`,
+                    recordId: createdRecord.id,
+                    branchId: createdRecord.branch_id,
+                    metadata: {
+                        record_ids: [createdRecord.id],
+                        sync_event_ids: [`sync:create:${clientUuid}`]
+                    },
+                    render: ({ count }) => ({
+                        title: count === 1 ? "Record Synchronized" : `${count} Records Synchronized`,
+                        message: count === 1
+                            ? `Case #${createdRecord.id} synchronized successfully.`
+                            : `${count} records synchronized in the last 10 minutes.`
+                    })
+                });
+            }
+
+            if (normalizeStatusValue(createdRecord.status) === "Processing") {
+                await refreshPendingApprovalNotifications({ markNewAsUnread: true });
+            }
+        } catch (sideEffectError) {
+            console.error("CREATE RECORD POST-SAVE SIDE EFFECT ERROR:", sideEffectError.message);
         }
 
         return res.status(201).json({

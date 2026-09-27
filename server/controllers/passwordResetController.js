@@ -90,6 +90,9 @@ function recordVerificationAttempt(req, now = Date.now()) {
 
 function getPublicResetUrl(req, token) {
     const configured = String(process.env.APP_BASE_URL || "").trim().replace(/\/$/, "");
+    if (String(process.env.NODE_ENV || "").toLowerCase() === "production" && !configured) {
+        throw new Error("APP_BASE_URL must be configured in production.");
+    }
     const base = configured || `${req.protocol}://${req.get("host")}`;
     return `${base}/reset-password.html?token=${encodeURIComponent(token)}`;
 }

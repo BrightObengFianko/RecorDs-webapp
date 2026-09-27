@@ -21,7 +21,12 @@ const notificationRoutes = require("./server/routes/notificationRoutes");
 const app = express();
 
 app.disable("x-powered-by");
-app.set("trust proxy", process.env.TRUST_PROXY === "true" ? 1 : false);
+app.set(
+    "trust proxy",
+    process.env.TRUST_PROXY === "true" || process.env.NODE_ENV === "production"
+        ? 1
+        : false
+);
 
 
 // =========================================
@@ -33,7 +38,22 @@ app.use((req, res, next) => {
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-    res.setHeader("Content-Security-Policy", "frame-ancestors 'none'");
+    res.setHeader("Content-Security-Policy", [
+        "default-src 'self'",
+        "base-uri 'self'",
+        "object-src 'none'",
+        "frame-ancestors 'none'",
+        "form-action 'self'",
+        "img-src 'self' data: blob:",
+        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self' 'unsafe-inline'",
+        "connect-src 'self'",
+        "font-src 'self' data:",
+        "worker-src 'self' blob:"
+    ].join("; "));
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+    res.setHeader("X-Permitted-Cross-Domain-Policies", "none");
 
     if (process.env.NODE_ENV === "production" && req.secure) {
         res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
