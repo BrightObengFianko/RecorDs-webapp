@@ -1313,27 +1313,27 @@
         });
     }
 
-    async function performLogout() {
+    function performLogout() {
         const token = localStorage.getItem("token");
 
-        try {
-            if (token) {
-                await fetch("/api/auth/logout", {
-                    method: "POST",
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        "Content-Type": "application/json"
-                    },
-                    keepalive: true
-                });
-            }
-        } catch (error) {
-            console.warn("Unable to record logout activity:", error);
-        } finally {
-            localStorage.removeItem("token");
-            localStorage.removeItem("user");
-            window.location.replace("index.html");
+        // Navigate immediately instead of keeping the current page visible
+        // while a slow network waits for the audit request.
+        if (token) {
+            fetch("/api/auth/logout", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                },
+                keepalive: true
+            }).catch(error => {
+                console.warn("Unable to record logout activity:", error);
+            });
         }
+
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.replace("index.html");
     }
 
     // Capture the shared sidebar logout before page-specific handlers redirect.
