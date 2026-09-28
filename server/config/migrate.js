@@ -183,6 +183,16 @@ async function ensureDatabaseSchema() {
     await pool.query(
         `
             ALTER TABLE records
+            ADD COLUMN IF NOT EXISTS sms_error_at TIMESTAMP,
+            ADD COLUMN IF NOT EXISTS sms_last_response JSONB,
+            ADD COLUMN IF NOT EXISTS sms_last_attempt_at TIMESTAMP,
+            ADD COLUMN IF NOT EXISTS sms_last_attempt_by INTEGER
+        `
+    );
+
+    await pool.query(
+        `
+            ALTER TABLE records
             ADD COLUMN IF NOT EXISTS client_uuid UUID
         `
     );
@@ -568,6 +578,13 @@ async function ensureDatabaseSchema() {
 
     await pool.query(
         `
+            CREATE INDEX IF NOT EXISTS idx_notifications_active_attention
+            ON notifications(user_id, is_active, type, created_at DESC)
+        `
+    );
+
+    await pool.query(
+        `
             CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_event_unique
             ON notifications(user_id, type, (metadata->>'event_id'))
             WHERE metadata ? 'event_id'
@@ -709,6 +726,13 @@ async function ensureDatabaseSchema() {
             CREATE INDEX IF NOT EXISTS idx_records_sms_pending
             ON records(status, sms_sent)
             WHERE sms_sent IS DISTINCT FROM 'true'
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_records_sms_last_attempt_by
+            ON records(sms_last_attempt_by)
         `
     );
 }

@@ -2,7 +2,8 @@ const pool = require("../config/database");
 const {
     NOTIFICATION_PRIORITIES,
     notificationPrioritySet,
-    notificationTypeSet
+    notificationTypeSet,
+    ATTENTION_NOTIFICATION_TYPES
 } = require("../utils/notifications");
 
 function parsePage(value) {
@@ -93,6 +94,11 @@ async function listNotifications(req, res) {
             values.push(dateTo);
             conditions.push(`n.created_at < ($${values.length}::date + INTERVAL '1 day')`);
         }
+        if (String(req.query.attention || "").toLowerCase() === "true") {
+            values.push(Array.from(ATTENTION_NOTIFICATION_TYPES));
+            conditions.push(`n.type = ANY($${values.length}::text[])`);
+            conditions.push("COALESCE(n.is_active, TRUE) = TRUE");
+        }
 
         const whereClause = conditions.join(" AND ");
         const countResult = await pool.query(
@@ -134,16 +140,24 @@ async function getUnreadCount(req, res) {
     try {
         const result = await pool.query(
             `
-                SELECT COUNT(*)::int AS count
+                SELECT
+                    COUNT(*) FILTER (WHERE n.is_read = FALSE)::int AS unread_count,
+                    COUNT(*) FILTER (
+                        WHERE COALESCE(n.is_active, TRUE) = TRUE
+                          AND n.type = ANY($2::text[])
+                    )::int AS attention_count
                 FROM notifications n
                 JOIN users u ON u.id = n.user_id
                 WHERE n.user_id = $1
-                  AND n.is_read = FALSE
                   AND (u.account_settings->'notificationPreferences'->>n.type IS DISTINCT FROM 'false')
             `,
-            [req.user.id]
+            [req.user.id, Array.from(ATTENTION_NOTIFICATION_TYPES)]
         );
-        return res.json({ success: true, unreadCount: Number(result.rows[0]?.count || 0) });
+        return res.json({
+            success: true,
+            unreadCount: Number(result.rows[0]?.unread_count || 0),
+            attentionCount: Number(result.rows[0]?.attention_count || 0)
+        });
     } catch (error) {
         console.error("GET NOTIFICATION COUNT ERROR:", error);
         return res.status(500).json({ success: false, message: "Unable to load notification count." });
@@ -186,6 +200,28 @@ async function markAllNotificationsRead(req, res) {
     }
 }
 
+async function resolveNotification(req, res) {
+    try {
+        const result = await pool.query(
+            `
+                UPDATE notifications
+                SET is_active = FALSE,
+                    is_read = TRUE,
+                    read_at = COALESCE(read_at, CURRENT_TIMESTAMP),
+                    resolved_at = COALESCE(resolved_at, CURRENT_TIMESTAMP)
+                WHERE id = $1 AND user_id = $2
+                RETURNING *
+            `,
+            [req.params.id, req.user.id]
+        );
+        if (!result.rowCount) return res.status(404).json({ success: false, message: "Notification not found." });
+        return res.json({ success: true, notification: result.rows[0] });
+    } catch (error) {
+        console.error("RESOLVE NOTIFICATION ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to resolve notification." });
+    }
+}
+
 async function deleteNotification(req, res) {
     try {
         const result = await pool.query(
@@ -225,6 +261,7 @@ module.exports = {
     listNotifications,
     getUnreadCount,
     markNotificationRead,
+    resolveNotification,
     markAllNotificationsRead,
     deleteNotification,
     clearAllNotifications

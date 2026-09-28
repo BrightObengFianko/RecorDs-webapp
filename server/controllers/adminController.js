@@ -391,6 +391,10 @@ async function getAuthActivityDetails(req, res) {
                     r.sms_status AS current_sms_status,
                     r.sms_date AS current_sms_date,
                     r.sms_error AS current_sms_error,
+                    r.sms_error_at AS current_sms_error_at,
+                    r.sms_last_response AS current_sms_last_response,
+                    r.sms_last_attempt_at AS current_sms_last_attempt_at,
+                    r.sms_last_attempt_by AS current_sms_last_attempt_by,
                     r.notes AS current_notes,
                     r.branch_id AS current_branch_id
                 FROM auth_activity_logs l
@@ -425,6 +429,10 @@ async function getAuthActivityDetails(req, res) {
                 sms_status: row.current_sms_status,
                 sms_date: row.current_sms_date,
                 sms_error: row.current_sms_error,
+                sms_error_at: row.current_sms_error_at,
+                sms_last_response: row.current_sms_last_response,
+                sms_last_attempt_at: row.current_sms_last_attempt_at,
+                sms_last_attempt_by: row.current_sms_last_attempt_by,
                 notes: row.current_notes,
                 branch_id: row.current_branch_id
             }

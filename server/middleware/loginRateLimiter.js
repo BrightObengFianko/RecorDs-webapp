@@ -1,4 +1,5 @@
 const WINDOW_MS = 15 * 60 * 1000;
+const ALERT_THRESHOLD = 3;
 const MAX_FAILURES = 8;
 const BASE_LOCK_MS = 30 * 1000;
 const MAX_LOCK_MS = 15 * 60 * 1000;
@@ -49,15 +50,18 @@ function loginRateLimiter(req, res, next) {
 
 function recordLoginFailure(req) {
     const now = Date.now();
+    let identityState = null;
     for (const key of getKeys(req)) {
         const current = attempts.get(key);
 
         if (!current || now - current.firstFailureAt > WINDOW_MS) {
-            attempts.set(key, {
+            const next = {
                 count: 1,
                 firstFailureAt: now,
                 lockedUntil: 0
-            });
+            };
+            attempts.set(key, next);
+            if (key.startsWith("identity:")) identityState = next;
             continue;
         }
 
@@ -70,7 +74,15 @@ function recordLoginFailure(req) {
                 MAX_LOCK_MS
             );
         }
+        if (key.startsWith("identity:")) identityState = current;
     }
+
+    return {
+        count: identityState?.count || 1,
+        firstFailureAt: identityState?.firstFailureAt || now,
+        thresholdReached: (identityState?.count || 1) >= ALERT_THRESHOLD,
+        locked: Boolean(identityState?.lockedUntil && identityState.lockedUntil > now)
+    };
 }
 
 function clearLoginFailures(req) {

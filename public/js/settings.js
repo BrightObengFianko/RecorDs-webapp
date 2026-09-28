@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS = {
         PENDING_APPROVAL: true,
         SMS_ACTIVITY: true,
         SMS_FAILED: true,
+        SMS_SERVICE_UNAVAILABLE: true,
         SYNC_SUCCEEDED: true,
         SYNC_FAILED: true,
         OFFLINE_RECORDS_PENDING: true,
@@ -44,7 +45,9 @@ const DEFAULT_SETTINGS = {
         USER_ENABLED: true,
         USER_DISABLED: true,
         BRANCH_ASSIGNMENT_CHANGED: true,
-        SETTINGS_CHANGED: true
+        SETTINGS_CHANGED: true,
+        FAILED_LOGIN_ALERT: true,
+        SYSTEM_ALERT: true
     }
 };
 

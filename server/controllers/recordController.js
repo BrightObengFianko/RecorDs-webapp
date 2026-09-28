@@ -26,6 +26,7 @@ const {
     NOTIFICATION_PRIORITIES,
     notifyAdmins,
     notifyAdminsGrouped,
+    resolveRecordNotifications,
     refreshPendingApprovalNotifications
 } = require("../utils/notifications");
 
@@ -51,48 +52,69 @@ function canCreateRecords(user) {
     );
 }
 
-function getSmsWorkflowError(workflowResult) {
-    if (!workflowResult || workflowResult.success === false) {
-        return String(
-            workflowResult?.error ||
-            workflowResult?.message ||
-            "SMS workflow failed."
-        );
-    }
-
-    const status = String(workflowResult.status || "")
-        .trim()
-        .toLowerCase();
-
-    return ["error", "failed", "failure"].includes(status)
-        ? String(workflowResult.error || workflowResult.message || "SMS workflow failed.")
-        : null;
-}
-
-function isSmsSentConfirmation(workflowResult) {
-    if (!workflowResult || typeof workflowResult !== "object") {
-        return false;
-    }
-
-    const explicitConfirmation = [
-        workflowResult.sms_sent,
-        workflowResult.sent,
-        workflowResult.delivered,
-        workflowResult.sms_sent_candidate
-    ];
-
-    if (explicitConfirmation.some(value => value === true || String(value).toLowerCase() === "true")) {
-        return true;
-    }
-
-    return ["sent", "delivered"].includes(
-        String(workflowResult.status || "").trim().toLowerCase()
+function normalizeSmsWorkflowResult(workflowResult) {
+    const rawResponse = workflowResult && typeof workflowResult === "object"
+        ? workflowResult
+        : { message: String(workflowResult || "") };
+    const nestedResponse = rawResponse.data && typeof rawResponse.data === "object"
+        ? rawResponse.data
+        : {};
+    const sources = [rawResponse, nestedResponse];
+    const status = String(
+        sources.map(source => source.status).find(value => value !== undefined) || ""
+    ).trim().toLowerCase();
+    const error = String(
+        sources.map(source => source.error || source.error_message || source.reason).find(Boolean) ||
+        (status === "error" || status === "failed" || status === "failure" ? rawResponse.message : "") ||
+        ""
+    ).trim();
+    const explicitFailure = sources.some(source =>
+        source.success === false ||
+        source.sms_sent === false ||
+        source.sent === false ||
+        source.delivered === false
     );
+    const explicitSuccess = sources.some(source =>
+        source.success === true ||
+        source.sms_sent === true ||
+        source.sent === true ||
+        source.delivered === true ||
+        source.sms_sent_candidate === true ||
+        Boolean(source.messageId) ||
+        Boolean(source.message_id)
+    ) || ["sent", "delivered", "success"].includes(status);
+
+    if (explicitFailure || ["error", "failed", "failure"].includes(status) || error) {
+        return {
+            success: false,
+            status: "ERROR",
+            message: null,
+            error: error || "SMS workflow failed.",
+            rawResponse
+        };
+    }
+
+    if (explicitSuccess) {
+        return {
+            success: true,
+            status: "SENT",
+            message: String(rawResponse.message || "SMS sent successfully.").trim(),
+            error: null,
+            rawResponse
+        };
+    }
+
+    return {
+        success: false,
+        status: "ERROR",
+        message: null,
+        error: "SMS service did not confirm delivery.",
+        rawResponse
+    };
 }
 
-async function saveSmsWorkflowState(recordId, workflowResult) {
-    const smsError = getSmsWorkflowError(workflowResult);
-    const smsSent = !smsError && isSmsSentConfirmation(workflowResult);
+async function saveSmsWorkflowState(recordId, workflowResult, attemptBy) {
+    const smsResult = normalizeSmsWorkflowResult(workflowResult);
 
     await pool.query(
         `
@@ -101,24 +123,27 @@ async function saveSmsWorkflowState(recordId, workflowResult) {
                 sms_sent = $1,
                 sms_status = $2,
                 sms_error = $3,
-                sms_date = CASE WHEN $4 THEN CURRENT_TIMESTAMP ELSE sms_date END,
+                sms_error_at = CASE WHEN $4 THEN CURRENT_TIMESTAMP ELSE NULL END,
+                sms_last_response = $5::jsonb,
+                sms_last_attempt_at = CURRENT_TIMESTAMP,
+                sms_last_attempt_by = $6,
+                sms_date = CASE WHEN $7 THEN CURRENT_TIMESTAMP ELSE sms_date END,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = $5
+            WHERE id = $8
         `,
         [
-            smsSent ? "true" : "false",
-            smsError ? "Error" : smsSent ? "Sent" : "Queued",
-            smsError,
-            smsSent,
+            smsResult.success ? "true" : "false",
+            smsResult.status,
+            smsResult.error,
+            !smsResult.success,
+            JSON.stringify(smsResult.rawResponse || {}),
+            attemptBy || null,
+            smsResult.success,
             recordId
         ]
     );
 
-    if (smsError) {
-        throw new Error(smsError);
-    }
-
-    return smsSent;
+    return smsResult;
 }
 
 function normalizeStatusValue(value) {
@@ -199,17 +224,29 @@ async function notifySmsAdmins(request, record, {
     eventId
 }) {
     try {
+        if (success) {
+            await resolveRecordNotifications({
+                type: NOTIFICATION_TYPES.SMS_FAILED,
+                recordId: record.id
+            });
+        }
+
         const stableEventId = String(eventId || `sms:${record.id}:${record.updated_at || "unknown"}`);
+        const actor = recordActorName(request);
+        const phone = String(record.phone_number || "").trim() || "-";
+        const status = smsStatus || (success ? "SENT" : "ERROR");
         await notifyAdminsGrouped({
             type: success ? NOTIFICATION_TYPES.SMS_ACTIVITY : NOTIFICATION_TYPES.SMS_FAILED,
-            title: success ? "SMS Activity" : "SMS Activity Failed",
+            title: success
+                ? `SMS Sent - ${record.name || `Case #${record.id}`}`
+                : `SMS Error - ${record.name || `Case #${record.id}`}`,
             message: success
-                ? `SMS activity for case #${record.id}.`
-                : `SMS activity failed for case #${record.id}.`,
+                ? `SMS sent successfully. Record ID: #${record.id}. Phone: ${phone}. Staff: ${actor}.`
+                : `Record ID: #${record.id}. Phone: ${phone}. Error: ${errorMessage || "SMS workflow failed."}. Staff: ${actor}.`,
             priority: success
                 ? NOTIFICATION_PRIORITIES.INFO
                 : NOTIFICATION_PRIORITIES.IMPORTANT,
-            groupingKey: `SMS:${notificationWindowKey(10)}`,
+            groupingKey: `SMS:${success ? "SENT" : "ERROR"}:${record.id}`,
             groupingWindowMinutes: 10,
             eventId: stableEventId,
             recordId: record.id,
@@ -217,12 +254,20 @@ async function notifySmsAdmins(request, record, {
             metadata: {
                 event_ids: [stableEventId],
                 record_ids: [record.id],
-                sms_status: smsStatus || (success ? "Sent" : "Error"),
-                error: errorMessage || null
+                sms_status: status,
+                error: errorMessage || null,
+                record_name: record.name || null,
+                phone_number: phone,
+                staff_name: actor,
+                attempted_at: new Date().toISOString()
             },
             render: ({ count, metadata }) => ({
-                title: success ? `${count} SMS Activities` : `${count} SMS Activities Failed`,
-                message: `${count} SMS ${success ? "activities" : "failures"} recorded in the last 10 minutes.`,
+                title: success
+                    ? `SMS Sent - ${metadata.record_name || `Case #${record.id}`}`
+                    : `SMS Error - ${metadata.record_name || `Case #${record.id}`}`,
+                message: success
+                    ? `SMS sent successfully. Record ID: #${record.id}. Phone: ${metadata.phone_number || phone}. Staff: ${metadata.staff_name || actor}.`
+                    : `Record ID: #${record.id}. Phone: ${metadata.phone_number || phone}. Error: ${metadata.error || errorMessage || "SMS workflow failed."}. Staff: ${metadata.staff_name || actor}.`,
                 metadata
             })
         });
@@ -1586,7 +1631,8 @@ const getSmsStatus = async (req, res) => {
 
         const result = await pool.query(
             `
-                SELECT id, sms_status, sms_error, sms_sent, sms_date
+                SELECT id, sms_status, sms_error, sms_error_at, sms_last_response,
+                       sms_last_attempt_at, sms_last_attempt_by, sms_sent, sms_date
                 FROM records
                 WHERE NULLIF(BTRIM(COALESCE(sms_error, '')), '') IS NOT NULL
                 ORDER BY updated_at DESC NULLS LAST, id DESC
@@ -2378,12 +2424,20 @@ const updateSmsDetails = async (req, res) => {
                         ELSE sms_date
                     END,
                     sms_status = CASE
-                        WHEN $1 THEN 'Not Sent'
+                        WHEN $1 THEN 'NOT_SENT'
                         ELSE sms_status
                     END,
                     sms_error = CASE
                         WHEN $1 THEN NULL
                         ELSE sms_error
+                    END,
+                    sms_error_at = CASE
+                        WHEN $1 THEN NULL
+                        ELSE sms_error_at
+                    END,
+                    sms_last_response = CASE
+                        WHEN $1 THEN NULL
+                        ELSE sms_last_response
                     END,
                     notes = CASE
                         WHEN $2 THEN NULL
@@ -2400,6 +2454,13 @@ const updateSmsDetails = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: "Record not found."
+            });
+        }
+
+        if (clearSms) {
+            await resolveRecordNotifications({
+                type: NOTIFICATION_TYPES.SMS_FAILED,
+                recordId: result.rows[0].id
             });
         }
 
@@ -2865,7 +2926,13 @@ const sendSms = async (req, res) => {
                     notes,
                     branch_id,
                     sms_sent,
-                    sms_status
+                    sms_status,
+                    sms_error,
+                    sms_error_at,
+                    sms_last_response,
+                    sms_last_attempt_at,
+                    sms_last_attempt_by,
+                    sms_date
                 FROM records
                 WHERE id = $1
                 LIMIT 1
@@ -2915,8 +2982,13 @@ const sendSms = async (req, res) => {
         const claimResult = await pool.query(
             `
                 UPDATE records
-                SET sms_status = 'Sending',
+                SET sms_sent = 'false',
+                    sms_status = 'SENDING',
                     sms_error = NULL,
+                    sms_error_at = NULL,
+                    sms_last_response = NULL,
+                    sms_last_attempt_at = CURRENT_TIMESTAMP,
+                    sms_last_attempt_by = $2,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $1
                   AND status = 'Ready'
@@ -2927,7 +2999,7 @@ const sendSms = async (req, res) => {
                   )
                 RETURNING id, updated_at
             `,
-            [id]
+            [id, req.user?.id || null]
         );
 
         if (!claimResult.rowCount) {
@@ -2956,7 +3028,55 @@ const sendSms = async (req, res) => {
                 message
             });
 
-            const smsSent = await saveSmsWorkflowState(record.id, workflowResult);
+            const smsResult = await saveSmsWorkflowState(
+                record.id,
+                workflowResult,
+                req.user?.id
+            );
+
+            if (!smsResult.success) {
+                const smsError = smsResult.error;
+                await recordActivity({
+                    request: req,
+                    userId: req.user?.id,
+                    name: req.user?.name,
+                    email: req.user?.email,
+                    role: req.user?.role,
+                    activityType: ACTIVITY_TYPES.SMS_ACTIVITY,
+                    recordId: record.id,
+                    branchId: record.branch_id,
+                    branchName: req.user?.branch,
+                    success: false,
+                    details: `SMS status: ERROR. Name: ${record.name || "-"}. Phone: ${record.phone_number || phoneNumber}. ${smsError}`,
+                    newValue: smsError,
+                    recordSnapshot: makeRecordSnapshot({
+                        ...record,
+                        sms_status: "ERROR",
+                        sms_error: smsError,
+                        sms_last_response: smsResult.rawResponse
+                    })
+                });
+                await notifySmsAdmins(req, record, {
+                    success: false,
+                    errorMessage: smsError,
+                    smsStatus: "ERROR",
+                    eventId: `sms:${record.id}:${claimResult.rows[0]?.updated_at || "unknown"}`
+                });
+
+                return res.status(502).json({
+                    success: false,
+                    status: "ERROR",
+                    error: smsError,
+                    message: smsError,
+                    record: {
+                        id: record.id,
+                        sms_status: "ERROR",
+                        sms_error: smsError
+                    }
+                });
+            }
+
+            const smsSent = smsResult.success;
 
             await recordActivity({
                 request: req,
@@ -2969,7 +3089,7 @@ const sendSms = async (req, res) => {
                 branchId: record.branch_id,
                 branchName: req.user?.branch,
                 success: smsSent,
-                details: smsSent ? "SMS sent successfully." : "SMS queued for processing."
+                details: `SMS status: SENT. Name: ${record.name || "-"}. Phone: ${record.phone_number || phoneNumber}. SMS sent successfully.`
             });
 
             await notifySmsAdmins(req, record, {
@@ -2980,7 +3100,9 @@ const sendSms = async (req, res) => {
 
             const updatedResult = await pool.query(
                 `
-                    SELECT id, phone_number, sms_sent, sms_status, sms_error, sms_date
+                    SELECT id, phone_number, sms_sent, sms_status, sms_error,
+                           sms_error_at, sms_last_response, sms_last_attempt_at,
+                           sms_last_attempt_by, sms_date
                     FROM records
                     WHERE id = $1
                 `,
@@ -2991,9 +3113,11 @@ const sendSms = async (req, res) => {
 
             return res.json({
                 success: true,
+                status: "SENT",
                 message: smsSent
                     ? "SMS sent successfully!"
                     : "SMS request queued for processing.",
+                record: updatedRecord,
                 details: {
                     phone_number: updatedRecord.phone_number || phoneNumber,
                     message,
@@ -3002,17 +3126,22 @@ const sendSms = async (req, res) => {
                 }
             });
         } catch (workflowError) {
-            const smsError = String(workflowError.message || "SMS workflow failed.").slice(0, 1000);
+            const smsError = String(workflowError.message || "SMS service unavailable.").slice(0, 1000);
+            const workflowResponse = workflowError.smsResult?.rawResponse || workflowError.response || null;
             await pool.query(
                 `
                     UPDATE records
                     SET sms_sent = 'false',
-                        sms_status = 'Error',
+                        sms_status = 'ERROR',
                         sms_error = $1,
+                        sms_error_at = CURRENT_TIMESTAMP,
+                        sms_last_response = $2::jsonb,
+                        sms_last_attempt_at = CURRENT_TIMESTAMP,
+                        sms_last_attempt_by = $3,
                         updated_at = CURRENT_TIMESTAMP
-                    WHERE id = $2
+                    WHERE id = $4
                 `,
-                [smsError, id]
+                [smsError, JSON.stringify(workflowResponse || {}), req.user?.id || null, id]
             );
 
             await recordActivity({
@@ -3026,7 +3155,14 @@ const sendSms = async (req, res) => {
                 branchId: record.branch_id,
                 branchName: req.user?.branch,
                 success: false,
-                details: smsError
+                details: `SMS status: ERROR. Name: ${record.name || "-"}. Phone: ${record.phone_number || phoneNumber}. ${smsError}`,
+                newValue: smsError,
+                recordSnapshot: makeRecordSnapshot({
+                    ...record,
+                    sms_status: "ERROR",
+                    sms_error: smsError,
+                    sms_last_response: workflowResponse
+                })
             });
 
             await notifySmsAdmins(req, record, {
@@ -3038,7 +3174,14 @@ const sendSms = async (req, res) => {
 
             return res.status(502).json({
                 success: false,
-                message: "Unable to send SMS. Please try again."
+                status: "ERROR",
+                error: smsError,
+                message: smsError,
+                record: {
+                    id: record.id,
+                    sms_status: "ERROR",
+                    sms_error: smsError
+                }
             });
         }
     } catch (error) {

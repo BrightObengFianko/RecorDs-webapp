@@ -30,6 +30,18 @@ const NOTIFICATION_PRIORITIES = Object.freeze({
 
 const notificationTypeSet = new Set(Object.values(NOTIFICATION_TYPES));
 const notificationPrioritySet = new Set(Object.values(NOTIFICATION_PRIORITIES));
+const ATTENTION_NOTIFICATION_TYPES = new Set([
+    NOTIFICATION_TYPES.SMS_FAILED,
+    NOTIFICATION_TYPES.SMS_SERVICE_UNAVAILABLE,
+    NOTIFICATION_TYPES.SYNC_FAILED,
+    NOTIFICATION_TYPES.PENDING_APPROVAL,
+    NOTIFICATION_TYPES.FAILED_LOGIN_ALERT,
+    NOTIFICATION_TYPES.SYSTEM_ALERT
+]);
+
+function isAttentionNotificationType(type) {
+    return ATTENTION_NOTIFICATION_TYPES.has(String(type || "").trim().toUpperCase());
+}
 function isNotificationEnabled(user, type) {
     const normalizedType = String(type || "").trim().toUpperCase();
     const preferenceKey = normalizedType === NOTIFICATION_TYPES.SMS_SERVICE_UNAVAILABLE
@@ -354,9 +366,7 @@ async function notifyAdminsGrouped({
                     is_active, group_window_minutes, metadata
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, TRUE, $11, $10::jsonb)
-                ON CONFLICT (user_id, type, priority, grouping_key)
-                WHERE grouping_key IS NOT NULL
-                DO NOTHING
+                ON CONFLICT DO NOTHING
                 RETURNING *
             `,
             [
@@ -384,6 +394,27 @@ async function notifyAdminsGrouped({
     }
 
     return results;
+}
+
+async function resolveRecordNotifications({ type, recordId }) {
+    const normalizedRecordId = normalizeId(recordId, "Record ID", false);
+
+    await pool.query(
+        `
+            UPDATE notifications
+            SET is_active = FALSE,
+                is_read = TRUE,
+                read_at = COALESCE(read_at, CURRENT_TIMESTAMP),
+                resolved_at = COALESCE(resolved_at, CURRENT_TIMESTAMP)
+            WHERE type = $1
+              AND (
+                  record_id = $2
+                  OR metadata->'record_ids' @> $3::jsonb
+              )
+              AND COALESCE(is_active, TRUE) = TRUE
+        `,
+        [type, normalizedRecordId, JSON.stringify([normalizedRecordId])]
+    );
 }
 
 async function refreshPendingApprovalNotifications({ markNewAsUnread = false } = {}) {
@@ -494,7 +525,10 @@ module.exports = {
     createNotification,
     notifyAdmins,
     notifyAdminsGrouped,
+    resolveRecordNotifications,
     refreshPendingApprovalNotifications,
     notificationTypeSet,
-    notificationPrioritySet
+    notificationPrioritySet,
+    ATTENTION_NOTIFICATION_TYPES,
+    isAttentionNotificationType
 };

@@ -106,7 +106,8 @@ function makeRecordSnapshot(record) {
     const fields = [
         "id", "name", "phone_number", "category", "date_of_birth",
         "date_of_death", "registration_date", "registrar", "branch_id",
-        "status", "sms_sent", "sms_status", "sms_date", "sms_error", "notes",
+        "status", "sms_sent", "sms_status", "sms_date", "sms_error", "sms_error_at",
+        "sms_last_response", "sms_last_attempt_at", "sms_last_attempt_by", "notes",
         "created_by", "client_uuid"
     ];
 

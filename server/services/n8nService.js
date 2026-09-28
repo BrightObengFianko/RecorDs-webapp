@@ -77,10 +77,24 @@ const sendToN8N = async (data) => {
     }
 
     if (!response.ok) {
-        await response.text().catch(() => "");
-        const error = new Error("The SMS service rejected the request. Please try again.");
+        const responseText = await response.text().catch(() => "");
+        let responseBody = null;
+        try {
+            responseBody = responseText ? JSON.parse(responseText) : null;
+        } catch (error) {
+            responseBody = responseText || null;
+        }
+        const providerMessage = responseBody && typeof responseBody === "object"
+            ? responseBody.error || responseBody.message
+            : typeof responseBody === "string"
+                ? responseBody
+                : null;
+        const error = new Error(
+            providerMessage || "The SMS service rejected the request. Please try again."
+        );
         error.code = "N8N_HTTP_ERROR";
         error.status = response.status;
+        error.response = responseBody;
         throw error;
     }
 

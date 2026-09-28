@@ -3299,7 +3299,9 @@ function openSmsDetailsModal(record) {
 
     setSmsField(
         smsStatusValue,
-        smsError || smsStatus === "error"
+        smsStatus === "sending"
+            ? "Sending..."
+            : smsError || smsStatus === "error"
             ? "Error"
             : smsSent || smsStatus === "sent"
                 ? "Sent"

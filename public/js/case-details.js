@@ -79,7 +79,18 @@ function formatStatus(value) {
     return value ? String(value) : "-";
 }
 
-function formatSmsDetails(smsSent, smsDate) {
+function formatSmsDetails(smsSent, smsDate, smsStatus, smsError) {
+    const normalizedStatus = String(smsStatus || "").trim().toLowerCase();
+    const currentError = String(smsError || "").trim();
+
+    if (normalizedStatus === "error" || currentError) {
+        return `Error: ${currentError || "SMS attempt failed."}`;
+    }
+
+    if (normalizedStatus === "sending") {
+        return "Sending...";
+    }
+
     const sent =
         smsSent === true ||
         smsSent === "true" ||
@@ -236,7 +247,15 @@ async function loadRecord() {
             detailsRegistrar,
             window.RecordRegistrar?.normalize(record.registrar) || "-"
         );
-        setText(detailsSms, formatSmsDetails(record.sms_sent, record.sms_date));
+        setText(
+            detailsSms,
+            formatSmsDetails(
+                record.sms_sent,
+                record.sms_date,
+                record.sms_status,
+                record.sms_error
+            )
+        );
         setText(detailsBranchName, branchName);
         setText(detailsNotes, record.notes || "-");
         setAvatar(record.name || "R");

@@ -6,6 +6,7 @@ const {
     listNotifications,
     getUnreadCount,
     markNotificationRead,
+    resolveNotification,
     markAllNotificationsRead,
     deleteNotification,
     clearAllNotifications
@@ -18,6 +19,7 @@ router.param("id", validateIdParam);
 router.get("/", listNotifications);
 router.get("/unread-count", getUnreadCount);
 router.patch("/:id/read", markNotificationRead);
+router.patch("/:id/resolve", resolveNotification);
 router.post("/read-all", markAllNotificationsRead);
 router.delete("/clear-all", clearAllNotifications);
 router.delete("/:id", deleteNotification);

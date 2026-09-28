@@ -12,6 +12,11 @@ const {
 } = require("../utils/authSecurity");
 const { boundedText } = require("../utils/inputValidation");
 const {
+    NOTIFICATION_TYPES,
+    NOTIFICATION_PRIORITIES,
+    notifyAdminsGrouped
+} = require("../utils/notifications");
+const {
     clearLoginFailures,
     recordLoginFailure
 } = require("../middleware/loginRateLimiter");
@@ -21,6 +26,51 @@ function normalizeRole(role) {
         .toLowerCase()
         .replace(/[\s-]+/g, "_")
         .replace(/_+/g, "_");
+}
+
+async function trackLoginFailure(req, user = null) {
+    const state = recordLoginFailure(req);
+    const email = String(user?.email || req.body?.email || "").trim().toLowerCase();
+
+    await recordAuthActivity({
+        userId: user?.id,
+        name: user?.name,
+        email,
+        role: user?.role,
+        request: req,
+        activityType: ACTIVITY_TYPES.LOGIN_FAILURE,
+        details: "Invalid credentials."
+    });
+
+    if (state.thresholdReached) {
+        try {
+            await notifyAdminsGrouped({
+                type: NOTIFICATION_TYPES.FAILED_LOGIN_ALERT,
+                title: "Security Alert",
+                message: `${state.count} failed login attempts detected for ${email || "an unknown account"}.`,
+                priority: NOTIFICATION_PRIORITIES.CRITICAL,
+                groupingKey: `LOGIN_SECURITY:${email || req.ip || "unknown"}`,
+                groupingWindowMinutes: 15,
+                eventId: `login-failure:${email || req.ip || "unknown"}:${state.count}`,
+                metadata: {
+                    account: email || null,
+                    attempts: state.count,
+                    window_minutes: 15,
+                    last_attempt_at: new Date().toISOString(),
+                    ip: String(req.ip || "").slice(0, 64) || null
+                },
+                render: ({ metadata }) => ({
+                    title: "Security Alert",
+                    message: `${metadata.attempts || state.count} failed login attempts detected for ${metadata.account || "an unknown account"}.`,
+                    metadata
+                })
+            });
+        } catch (error) {
+            console.error("FAILED LOGIN NOTIFICATION ERROR:", error.message);
+        }
+    }
+
+    return state;
 }
 
 function normalizeAccountStatus(status) {
@@ -70,6 +120,7 @@ const DEFAULT_ACCOUNT_SETTINGS = {
         PENDING_APPROVAL: true,
         SMS_ACTIVITY: true,
         SMS_FAILED: true,
+        SMS_SERVICE_UNAVAILABLE: true,
         SYNC_SUCCEEDED: true,
         SYNC_FAILED: true,
         OFFLINE_RECORDS_PENDING: true,
@@ -77,7 +128,9 @@ const DEFAULT_ACCOUNT_SETTINGS = {
         USER_ENABLED: true,
         USER_DISABLED: true,
         BRANCH_ASSIGNMENT_CHANGED: true,
-        SETTINGS_CHANGED: true
+        SETTINGS_CHANGED: true,
+        FAILED_LOGIN_ALERT: true,
+        SYSTEM_ALERT: true
     }
 };
 
@@ -421,12 +474,7 @@ const login = async (req, res) => {
         const cleanEmail = String(email || "").trim().toLowerCase();
 
         if (!email || !password) {
-            recordLoginFailure(req);
-            await recordAuthActivity({
-                email: cleanEmail,
-                request: req,
-                activityType: ACTIVITY_TYPES.LOGIN_FAILURE
-            });
+            await trackLoginFailure(req);
 
             return res.status(400).json({
                 success: false,
@@ -437,12 +485,7 @@ const login = async (req, res) => {
         const user = await fetchUserByEmail(cleanEmail);
 
         if (!user) {
-            recordLoginFailure(req);
-            await recordAuthActivity({
-                email: cleanEmail,
-                request: req,
-                activityType: ACTIVITY_TYPES.LOGIN_FAILURE
-            });
+            await trackLoginFailure(req);
 
             return res.status(401).json({
                 message: "Invalid email or password."
@@ -455,15 +498,7 @@ const login = async (req, res) => {
         );
 
         if (!passwordMatch) {
-            recordLoginFailure(req);
-            await recordAuthActivity({
-                userId: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                request: req,
-                activityType: ACTIVITY_TYPES.LOGIN_FAILURE
-            });
+            await trackLoginFailure(req, user);
 
             return res.status(401).json({
                 message: "Invalid email or password."
@@ -473,15 +508,7 @@ const login = async (req, res) => {
         const accountStatus = normalizeAccountStatus(user.account_status);
 
         if (accountStatus === "pending") {
-            recordLoginFailure(req);
-            await recordAuthActivity({
-                userId: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                request: req,
-                activityType: ACTIVITY_TYPES.LOGIN_FAILURE
-            });
+            await trackLoginFailure(req, user);
 
             return res.status(401).json({
                 success: false,
@@ -490,15 +517,7 @@ const login = async (req, res) => {
         }
 
         if (accountStatus === "declined") {
-            recordLoginFailure(req);
-            await recordAuthActivity({
-                userId: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                request: req,
-                activityType: ACTIVITY_TYPES.LOGIN_FAILURE
-            });
+            await trackLoginFailure(req, user);
 
             return res.status(401).json({
                 success: false,
@@ -507,15 +526,7 @@ const login = async (req, res) => {
         }
 
         if (user.is_active === false) {
-            recordLoginFailure(req);
-            await recordAuthActivity({
-                userId: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                request: req,
-                activityType: ACTIVITY_TYPES.LOGIN_FAILURE
-            });
+            await trackLoginFailure(req, user);
 
             return res.status(401).json({
                 success: false,

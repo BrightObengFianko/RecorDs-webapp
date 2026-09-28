@@ -21,8 +21,9 @@
     let refreshTimer = null;
     let pollingStarted = false;
     let panelUnreadIndicator = null;
-    const urgentNotificationIds = new Set();
+    const urgentNotificationKeys = new Set();
     let urgentNotificationsInitialized = false;
+    let notificationAudioContext = null;
 
     if (!token || !isAdmin) return;
 
@@ -83,9 +84,44 @@
         }
         if (panelUnreadIndicator) {
             panelUnreadIndicator.hidden = unreadCount === 0;
-            panelUnreadIndicator.textContent = unreadCount > 99 ? "99+ unread" : `${unreadCount} unread`;
+            panelUnreadIndicator.textContent = unreadCount > 99 ? "99+ needs attention" : `${unreadCount} needs attention`;
         }
     }
+
+    function notificationSoundEnabled() {
+        return localStorage.getItem("recordNotificationSound") !== "false";
+    }
+
+    function playAttentionSound() {
+        if (!notificationSoundEnabled()) return;
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            notificationAudioContext ||= new AudioContext();
+            if (notificationAudioContext.state === "suspended") notificationAudioContext.resume().catch(() => {});
+            if (notificationAudioContext.state !== "running") return;
+            const oscillator = notificationAudioContext.createOscillator();
+            const gain = notificationAudioContext.createGain();
+            oscillator.type = "sine";
+            oscillator.frequency.setValueAtTime(880, notificationAudioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(660, notificationAudioContext.currentTime + 0.16);
+            gain.gain.setValueAtTime(0.0001, notificationAudioContext.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.07, notificationAudioContext.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, notificationAudioContext.currentTime + 0.18);
+            oscillator.connect(gain).connect(notificationAudioContext.destination);
+            oscillator.start();
+            oscillator.stop(notificationAudioContext.currentTime + 0.2);
+        } catch {
+            // Browser autoplay restrictions must not affect notifications.
+        }
+    }
+
+    document.addEventListener("pointerdown", () => {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (AudioContext && !notificationAudioContext) notificationAudioContext = new AudioContext();
+        } catch {}
+    }, { passive: true });
 
     function notificationMarkup(item) {
         const priority = String(item.priority || "INFO").toLowerCase();
@@ -104,6 +140,7 @@
         if (type === "DUPLICATE_DETECTED") return "Check Record";
         if (["SYNC_SUCCEEDED", "SYNC_FAILED", "OFFLINE_RECORDS_PENDING"].includes(type)) return "View Sync";
         if (["SMS_ACTIVITY", "SMS_FAILED"].includes(type)) return "View SMS";
+        if (type === "FAILED_LOGIN_ALERT") return "View Security Logs";
         return grouped ? "View Records" : "View Record";
     }
 
@@ -135,6 +172,7 @@
                 if (recordIds.length > 1) return "search-cases.html";
                 return recordId ? `case-details.html?id=${encodeURIComponent(recordId)}` : "";
             case "SMS_ACTIVITY":
+            case "SMS_FAILED":
                 return recordIds.length > 1
                     ? "search-cases.html"
                     : recordId
@@ -144,6 +182,10 @@
             case "SYNC_FAILED":
             case "OFFLINE_RECORDS_PENDING":
                 return "pending-sync.html";
+            case "FAILED_LOGIN_ALERT":
+                return "reports.html?activity=LOGIN_FAILURE";
+            case "SYSTEM_ALERT":
+                return "reports.html#notifications";
             default:
                 return "";
         }
@@ -153,7 +195,7 @@
         if (!panel) return;
         panel.querySelector(".admin-notification-list").innerHTML = '<p class="admin-notification-state">Loading notifications...</p>';
         try {
-            const data = await request("/?page=1&limit=10");
+            const data = await request("/?page=1&limit=10&attention=true");
             const items = data.notifications || [];
             panel.querySelector(".admin-notification-list").innerHTML = items.length
                 ? items.map(notificationMarkupWithAction).join("")
@@ -177,25 +219,27 @@
 
     async function loadUnreadCount() {
         try {
-            updateBadge((await request("/unread-count")).unreadCount);
+            const countData = await request("/unread-count");
+            updateBadge(countData.attentionCount);
             if (panel && !panel.hidden && !panel.contains(document.activeElement)) {
                 await loadDropdown();
             }
         } catch { /* Header remains usable if notifications are unavailable. */ }
 
         try {
-            const data = await request("/?unread=true&limit=5&priority=CRITICAL,IMPORTANT");
+            const data = await request("/?attention=true&limit=20&priority=CRITICAL,IMPORTANT");
             const urgentItems = data.notifications || [];
             if (!urgentNotificationsInitialized) {
-                urgentItems.forEach(item => urgentNotificationIds.add(String(item.id)));
+                urgentItems.forEach(item => urgentNotificationKeys.add(`${item.id}:${item.last_event_at || item.created_at}:${item.message}`));
                 urgentNotificationsInitialized = true;
                 return;
             }
 
             urgentItems.forEach(item => {
-                const id = String(item.id);
-                if (urgentNotificationIds.has(id)) return;
-                urgentNotificationIds.add(id);
+                const key = `${item.id}:${item.last_event_at || item.created_at}:${item.message}`;
+                if (urgentNotificationKeys.has(key)) return;
+                urgentNotificationKeys.add(key);
+                playAttentionSound();
                 const notify = String(item.priority || "").toUpperCase() === "CRITICAL"
                     ? window.Notification?.error
                     : window.Notification?.warning;
@@ -221,11 +265,11 @@
     async function markRead(id, item) {
         if (!item.classList.contains("is-unread")) return;
         item.classList.remove("is-unread");
-        try { await request(`/${encodeURIComponent(id)}/read`, { method: "PATCH" }); updateBadge(unreadCount - 1); } catch { item.classList.add("is-unread"); }
+        try { await request(`/${encodeURIComponent(id)}/read`, { method: "PATCH" }); await loadUnreadCount(); } catch { item.classList.add("is-unread"); }
     }
 
     async function markAllRead() {
-        try { await request("/read-all", { method: "POST" }); updateBadge(0); await loadDropdown(); } catch { /* Keep the current list on a transient failure. */ }
+        try { await request("/read-all", { method: "POST" }); await loadUnreadCount(); await loadDropdown(); } catch { /* Keep the current list on a transient failure. */ }
     }
 
     async function clearAllNotifications() {
