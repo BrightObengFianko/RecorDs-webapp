@@ -2945,6 +2945,10 @@ const sendSms = async (req, res) => {
                 dateOfBirth: record.date_of_birth,
                 dateOfDeath: record.date_of_death,
                 phoneNumber,
+                // Provide the canonical number under the field names used by
+                // both the webhook workflow and Arkesel request nodes.
+                phone_number: phoneNumber,
+                recipients: [phoneNumber],
                 registrar: record.registrar,
                 registrationDate: record.registration_date,
                 status: record.status,
