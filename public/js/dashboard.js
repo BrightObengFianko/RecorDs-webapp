@@ -1654,8 +1654,10 @@ async function loadDashboard() {
             renderDashboardProfile(getDashboardProfile(user));
         }
 
-        await loadDashboardSummary();
-        await loadSmsAccountSummary();
+        await Promise.all([
+            loadDashboardSummary(),
+            loadSmsAccountSummary()
+        ]);
 
     } catch (error) {
 

@@ -1199,7 +1199,9 @@ const getDashboardSummary = async (req, res) => {
             ? `${summaryClause} AND ${registrarPerformanceDateCondition} AND ${validRegistrarCondition}`
             : `WHERE ${registrarPerformanceDateCondition} AND ${validRegistrarCondition}`;
 
-        const recentToday = await queryRecentTodayRecords(
+        // Recent Records is independent of the dashboard aggregates. Start it
+        // now so it can run concurrently with the summary queries below.
+        const recentTodayPromise = queryRecentTodayRecords(
             req.user,
             req.query?.recentPage
         );
@@ -1217,7 +1219,8 @@ const getDashboardSummary = async (req, res) => {
             statusSmsResult,
             yearOptionsResult,
             branchStaffMetricsResult,
-            branchStaffMonthlyResult
+            branchStaffMonthlyResult,
+            recentToday
         ] = await Promise.all([
             pool.query(
                 `
@@ -1436,7 +1439,9 @@ const getDashboardSummary = async (req, res) => {
                     ORDER BY date_trunc('month', r.registration_date) ASC
                 `,
                 branchStaff ? values : []
-            )
+            ),
+
+            recentTodayPromise
         ]);
 
         const stats =

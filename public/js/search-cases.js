@@ -395,6 +395,7 @@ let hasActiveSearch = false;
 let refreshInFlight = false;
 
 let searchRequestInFlight = false;
+let searchSmsRequestInFlight = false;
 
 let automaticSearchTimer = null;
 
@@ -562,11 +563,20 @@ async function loadSearchSmsBalance() {
         return;
     }
 
+    if (
+        searchSmsRequestInFlight ||
+        document.visibilityState !== "visible"
+    ) {
+        return;
+    }
+
     if (isBranchStaffSearchUser()) {
         searchSmsBalance.remove();
         searchSmsError.remove();
         return;
     }
+
+    searchSmsRequestInFlight = true;
 
     searchSmsBalance.hidden = true;
     searchSmsError.hidden = true;
@@ -629,6 +639,8 @@ async function loadSearchSmsBalance() {
         searchSmsError.hidden = false;
         searchSmsError.querySelector("strong").textContent = "Unavailable";
         console.error("Unable to load Search page SMS balance:", error.message);
+    } finally {
+        searchSmsRequestInFlight = false;
     }
 }
 
@@ -2559,6 +2571,7 @@ window.setInterval(refreshSearchResults, SEARCH_REFRESH_INTERVAL_MS);
 
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
+        loadSearchSmsBalance();
         refreshSearchResults();
     }
 });

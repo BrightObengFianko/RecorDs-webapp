@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v37";
+const CACHE_NAME = "records-shell-v38";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -99,8 +99,10 @@ self.addEventListener("fetch", event => {
     // Fetch CSS and JavaScript from the network first so normal navigation
     // receives deployed UI fixes, while retaining the cached shell offline.
     if (request.destination === "style" || request.destination === "script") {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 1500);
         event.respondWith(
-            fetch(request)
+            fetch(request, { signal: controller.signal })
                 .then(response => {
                     if (response.ok) {
                         const copy = response.clone();
@@ -109,6 +111,7 @@ self.addEventListener("fetch", event => {
                     return response;
                 })
                 .catch(() => caches.match(request).then(cached => cached || Response.error()))
+                .finally(() => clearTimeout(timeout))
         );
         return;
     }
