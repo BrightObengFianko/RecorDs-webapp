@@ -2182,8 +2182,11 @@ const updateRecord = async (req, res) => {
                         date_of_birth = $3,
                         date_of_death = $4,
                         phone_number = $5,
-                        -- Keep the existing registration date when an edit does not change it.
-                        registration_date = COALESCE($6::date, registration_date),
+                        -- Branch Staff cannot change registration dates. For Admin/Staff,
+                        -- an omitted date keeps the existing value.
+                        registration_date = ${isBranchStaff(req.user)
+                            ? "registration_date"
+                            : "COALESCE($6::date, registration_date)"},
                         status = $7,
                         registrar = $8,
                         notes = $9,

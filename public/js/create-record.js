@@ -1035,7 +1035,7 @@ if (registrationDate) {
     registrationDate.setAttribute("aria-disabled", String(isBranchStaff));
     registrationDate.classList.toggle("branch-staff-locked", isBranchStaff);
 
-    if (!isEditMode || isBranchStaff) {
+    if (!isEditMode) {
         registrationDate.value = getTodayInAccra();
     }
 
