@@ -820,7 +820,13 @@ They can login immediately.
 
         // Create Staff Account Modal Events
         if (createStaffBtn) {
-            createStaffBtn.addEventListener("click", openCreateStaffModal);
+            createStaffBtn.addEventListener("click", () => {
+                createStaffBtn.classList.remove("is-activating");
+                void createStaffBtn.offsetWidth;
+                createStaffBtn.classList.add("is-activating");
+                window.setTimeout(() => createStaffBtn.classList.remove("is-activating"), 380);
+                openCreateStaffModal();
+            });
         }
 
         if (cancelCreateStaffBtn) {

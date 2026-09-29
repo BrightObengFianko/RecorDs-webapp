@@ -899,25 +899,67 @@ body.reduced-motion *::after {
 .users-header-actions {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 10px;
-    margin-left: auto;
+    width: 100%;
+    margin-left: 0;
+    min-width: 0;
+}
+
+.users-all-shell .users-header {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+}
+
+.users-all-heading-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-width: 0;
+}
+
+.users-all-heading-row .users-header-copy {
     min-width: 0;
 }
 
 .users-create-staff-button {
     flex: 0 0 auto;
     white-space: nowrap;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.users-create-staff-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(87, 53, 232, .2);
+}
+
+.users-create-staff-button:active,
+.users-create-staff-button.is-activating {
+    transform: scale(.96);
+}
+
+.users-create-staff-button.is-activating {
+    animation: create-staff-pulse 360ms ease-out;
+}
+
+@keyframes create-staff-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(87, 53, 232, .34); }
+    100% { box-shadow: 0 0 0 10px rgba(87, 53, 232, 0); }
 }
 
 @media (max-width: 700px) {
-    .users-header-actions {
+    .users-header-actions .users-search {
         width: 100%;
-        margin-left: 0;
-        flex-wrap: wrap;
     }
 
-    .users-header-actions .users-search {
-        flex: 1 1 180px;
+    .users-all-heading-row {
+        align-items: flex-start;
+    }
+
+    .users-create-staff-button {
+        min-height: 44px;
     }
 }

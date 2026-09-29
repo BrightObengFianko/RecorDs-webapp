@@ -337,21 +337,30 @@
 
                 </section>
 
-                <section class="users-shell">
+                <section class="users-shell users-all-shell">
 
                     <div class="users-header">
 
-                        <div class="users-header-copy">
-                            <div class="users-header-icon">
-                                <svg class="ui-icon" aria-hidden="true">
-                                    <use href="#icon-users"></use>
-                                </svg>
+                        <div class="users-all-heading-row">
+                            <div class="users-header-copy">
+                                <div class="users-header-icon">
+                                    <svg class="ui-icon" aria-hidden="true">
+                                        <use href="#icon-users"></use>
+                                    </svg>
+                                </div>
+
+                                <div>
+                                    <h2>All Users</h2>
+                                    <p id="usersCount">0 users found</p>
+                                </div>
                             </div>
 
-                            <div>
-                                <h2>All Users</h2>
-                                <p id="usersCount">0 users found</p>
-                            </div>
+                            <button class="action-button users-create-staff-button" id="createStaffBtn" type="button" title="Create a new staff account">
+                                <svg class="ui-icon" aria-hidden="true">
+                                    <use href="#icon-plus"></use>
+                                </svg>
+                                <span>Create Staff</span>
+                            </button>
                         </div>
 
                         <div class="users-header-actions">
@@ -366,13 +375,6 @@
                                     autocomplete="off"
                                 >
                             </label>
-
-                            <button class="action-button users-create-staff-button" id="createStaffBtn" type="button" title="Create a new staff account">
-                                <svg class="ui-icon" aria-hidden="true">
-                                    <use href="#icon-plus"></use>
-                                </svg>
-                                <span>Create Staff</span>
-                            </button>
                         </div>
 
                     </div>
