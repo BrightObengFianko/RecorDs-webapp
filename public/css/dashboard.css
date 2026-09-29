@@ -1289,10 +1289,15 @@ th {
         font-size: 16px;
     }
 
-    .page-title span {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+    /* Keep the mobile header focused on navigation and account actions. */
+    .page-title .page-title-icon,
+    .page-title > span {
+        display: none;
+    }
+
+    .page-title {
+        flex: 0 0 auto;
+        gap: 0;
     }
 
     .menu-button {
