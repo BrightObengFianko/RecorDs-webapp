@@ -895,6 +895,63 @@ body.reduced-motion *::after {
         display: none;
     }
 }
+
+/* Keep the Edit User dialog usable when its fields exceed the viewport. */
+#userModal .modal-card {
+    width: min(680px, calc(100vw - 24px));
+    max-height: min(92vh, 760px);
+    padding: 0;
+    overflow: hidden;
+}
+
+#userModal .modal-form {
+    min-height: 0;
+    padding: 20px 24px 24px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#userModal .modal-form::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+#userModal .modal-actions {
+    position: static;
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+#userModal .modal-actions > div {
+    display: none;
+}
+
+#userModal #deleteUserButton {
+    margin-right: auto !important;
+}
+
+@media (max-width: 760px) {
+    #userModal .modal-form {
+        grid-template-columns: 1fr;
+        padding: 16px;
+    }
+
+    #userModal .modal-actions {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 14px 16px 16px;
+    }
+
+    #userModal .modal-actions button {
+        width: 100%;
+        margin: 0 !important;
+    }
+}
+
 /* Keep the staff action with the All Users table controls. */
 .users-header-actions {
     display: flex;
