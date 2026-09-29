@@ -3,9 +3,16 @@
 }
 
 body.account-page {
-    font-family: inherit;
+    font-family: Arial, sans-serif;
     background: var(--app-bg);
     color: var(--app-text);
+}
+
+body.account-page button,
+body.account-page input,
+body.account-page select,
+body.account-page textarea {
+    font-family: Arial, sans-serif;
 }
 
 .account-page .sidebar {
