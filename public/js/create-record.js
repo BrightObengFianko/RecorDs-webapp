@@ -334,6 +334,10 @@ function formatDateForInput(value) {
 
 }
 
+function getRecordRegistrationDate(record) {
+    return record?.registration_date || record?.created_at || record?.createdAt || "";
+}
+
 function formatDateWhileTyping(value) {
     const digits = String(value || "").replace(/\D/g, "").slice(0, 8);
 
@@ -732,7 +736,7 @@ async function loadRecordForEdit() {
 
 
         if (registrationDate) {
-            originalRegistrationDate = formatDateForInput(record.registration_date);
+            originalRegistrationDate = formatDateForInput(getRecordRegistrationDate(record));
             registrationDate.value = originalRegistrationDate;
 
         }
@@ -805,7 +809,7 @@ async function loadOfflineRecordForEdit() {
     setRegistrarValue(record.registrar || readStoredUser().name || "Unknown");
     setStatusValue(record.status || "Processing");
     if (registrationDate) {
-        originalRegistrationDate = formatDateForInput(record.registration_date);
+        originalRegistrationDate = formatDateForInput(getRecordRegistrationDate(record));
         registrationDate.value = originalRegistrationDate;
     }
 
