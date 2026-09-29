@@ -959,6 +959,83 @@ body.reduced-motion *::after {
     animation: create-staff-pulse 360ms ease-out;
 }
 
+.device-summary-button {
+    min-width: 72px;
+    min-height: 34px;
+    padding: 6px 10px;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: var(--app-surface-2);
+    color: var(--accent-ink);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.device-summary-button:hover,
+.device-summary-button:focus-visible {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.device-management-modal {
+    width: min(620px, calc(100vw - 24px));
+}
+
+.device-session-list {
+    display: grid;
+    gap: 10px;
+    max-height: min(460px, 55vh);
+    overflow: auto;
+    padding: 4px 0 16px;
+}
+
+.device-session-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px;
+    border: 1px solid var(--app-border);
+    border-radius: 10px;
+    background: var(--app-surface-2);
+}
+
+.device-session-card > div {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.device-session-card span,
+.device-session-card small,
+.device-session-empty {
+    color: var(--app-muted);
+    font-size: 12px;
+}
+
+.device-session-card small {
+    line-height: 1.5;
+}
+
+.device-revoke-button {
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 8px 11px;
+}
+
+@media (max-width: 600px) {
+    .device-session-card {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .device-revoke-button {
+        width: 100%;
+    }
+}
+
 @keyframes create-staff-pulse {
     0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #5735e8) 34%, transparent); }
     100% { box-shadow: 0 0 0 10px transparent; }

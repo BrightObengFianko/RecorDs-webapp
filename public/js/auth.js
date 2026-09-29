@@ -8,6 +8,17 @@ const passwordToggle =
 const passwordInput =
     document.getElementById("password");
 
+function getDeviceId() {
+    const key = "recordsDeviceId";
+    const existing = String(localStorage.getItem(key) || "").trim();
+    if (/^[A-Za-z0-9_-]{16,128}$/.test(existing)) return existing;
+
+    const generated = window.crypto?.randomUUID?.() ||
+        `device-${Date.now()}-${Math.random().toString(36).slice(2, 18)}`;
+    localStorage.setItem(key, generated);
+    return generated;
+}
+
 
 if (passwordToggle && passwordInput) {
 
@@ -62,13 +73,23 @@ if (loginForm) {
 
                 body: JSON.stringify({
                     email: email,
-                    password: password
+                    password: password,
+                    device_id: getDeviceId()
                 })
             });
 
             const data = await response.json();
 
             if (!response.ok) {
+                if (data.status === "DEVICE_LIMIT_REACHED" && window.ConfirmDialog?.show) {
+                    await window.ConfirmDialog.show(
+                        data.message || "This account is already active on the maximum number of devices.",
+                        "Device limit reached",
+                        "Close"
+                    );
+                    return;
+                }
+
                 if (
                     data.status === "PENDING" ||
                     data.status === "DECLINED"

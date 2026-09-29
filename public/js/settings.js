@@ -79,6 +79,9 @@ const notificationPreferenceInputs = [...document.querySelectorAll("[data-notifi
 const notificationPreferencesSection = document.getElementById("notificationPreferencesSection");
 const saveNotificationPreferencesButton = document.getElementById("saveNotificationPreferences");
 const resetNotificationPreferencesButton = document.getElementById("resetNotificationPreferences");
+const mySessionsList = document.getElementById("mySessionsList");
+const sessionsSummary = document.getElementById("sessionsSummary");
+const logoutAllDevicesButton = document.getElementById("logoutAllDevicesButton");
 
 const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
 let toastTimer = null;
@@ -86,6 +89,15 @@ let currentUserRole = "";
 let currentUserId = "";
 let currentUserEmail = "";
 let state = null;
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 
 try {
     const cachedUser = JSON.parse(localStorage.getItem("user") || "null");
@@ -631,6 +643,92 @@ async function loadAuthenticatedUser() {
     }
 }
 
+function formatSessionDate(value) {
+    if (!value) return "-";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("en-GB");
+}
+
+async function sessionRequest(url, options = {}) {
+    const response = await fetch(url, {
+        ...options,
+        headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            ...(options.headers || {})
+        }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 401 || response.status === 403) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "index.html";
+        return null;
+    }
+    if (!response.ok) throw new Error(data.message || "Unable to manage active devices.");
+    return data;
+}
+
+async function loadMySessions() {
+    if (!mySessionsList || !sessionsSummary) return;
+    try {
+        const data = await sessionRequest("/api/auth/sessions");
+        if (!data) return;
+        const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+        sessionsSummary.textContent = `${sessions.length} active of ${data.max_devices || 2} allowed`;
+        mySessionsList.innerHTML = sessions.length
+            ? sessions.map(session => `
+                <article class="session-card">
+                    <div class="session-card-copy">
+                        <strong>${escapeHtml(session.device_name || "Unknown device")}</strong>
+                        <span>${escapeHtml(session.browser || "Unknown browser")} - ${escapeHtml(session.operating_system || "Unknown")}</span>
+                        <small>Signed in: ${escapeHtml(formatSessionDate(session.created_at))}<br>Last active: ${escapeHtml(formatSessionDate(session.last_active_at))}</small>
+                    </div>
+                    ${session.is_current
+                        ? '<span class="session-current">This device</span>'
+                        : `<button class="outline-button session-revoke-button" type="button" data-session-id="${escapeHtml(session.session_id)}">Log Out</button>`}
+                </article>
+            `).join("")
+            : '<p class="sessions-empty">No active devices found.</p>';
+    } catch (error) {
+        sessionsSummary.textContent = "Unable to load active devices";
+        mySessionsList.innerHTML = `<p class="sessions-empty">${escapeHtml(error.message)}</p>`;
+    }
+}
+
+async function revokeMySession(sessionId) {
+    const confirmed = await ConfirmDialog.show(
+        "The selected device will be signed out of your account.",
+        "Log out this device?",
+        "Log Out"
+    );
+    if (!confirmed) return;
+    try {
+        await sessionRequest(`/api/auth/sessions/${encodeURIComponent(sessionId)}/revoke`, { method: "POST" });
+        showToast("Device logged out.");
+        await loadMySessions();
+    } catch (error) {
+        showToast(error.message || "Unable to log out device.");
+    }
+}
+
+async function revokeAllOtherSessions() {
+    const confirmed = await ConfirmDialog.show(
+        "All active devices, including this one, will be signed out.",
+        "Log out all devices?",
+        "Log Out All"
+    );
+    if (!confirmed) return;
+    try {
+        await sessionRequest("/api/auth/sessions/revoke-all", { method: "POST" });
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "index.html";
+    } catch (error) {
+        showToast(error.message || "Unable to log out devices.");
+    }
+}
+
 async function saveProfileFromForm() {
     const previousState = JSON.parse(JSON.stringify(state));
     state.profile.fullName = fullNameInput.value.trim();
@@ -877,6 +975,12 @@ function bindEvents() {
         });
     }
 
+    logoutAllDevicesButton?.addEventListener("click", revokeAllOtherSessions);
+    mySessionsList?.addEventListener("click", event => {
+        const button = event.target.closest("[data-session-id]");
+        if (button) revokeMySession(button.dataset.sessionId);
+    });
+
     if (themeGrid) {
         themeGrid.addEventListener("change", event => {
             const input = event.target.closest('input[name="theme"]');
@@ -958,5 +1062,6 @@ if (token) {
         state = loadSettings();
         fillMissingProfileData(readStoredUser() || {});
         renderSettings();
+        loadMySessions();
     });
 }

@@ -26,6 +26,11 @@ const {
     verifyResetCode,
     resetPassword
 } = require("../controllers/passwordResetController");
+const {
+    listMySessions,
+    revokeMySession,
+    revokeAllMySessions
+} = require("../controllers/sessionController");
 const auditMutatingRequest = require("../middleware/auditMiddleware");
 
 
@@ -47,6 +52,9 @@ router.get("/account-access", authenticateToken, requireRole("admin", "staff", "
         role: req.user.role
     });
 });
+router.get("/sessions", authenticateToken, listMySessions);
+router.post("/sessions/:sessionId/revoke", authenticateToken, revokeMySession);
+router.post("/sessions/revoke-all", authenticateToken, revokeAllMySessions);
 
 // Admin-only endpoints (authenticateToken first, then requireRole)
 router.post("/signup", authenticateToken, requireRole("admin"), signup);

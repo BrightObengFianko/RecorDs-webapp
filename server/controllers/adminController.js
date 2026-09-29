@@ -95,6 +95,15 @@ async function fetchUserById(userId) {
                     WHEN COALESCE(u.is_active, TRUE) THEN 'Active'
                     ELSE 'Inactive'
                 END AS status,
+                COALESCE(u.max_devices, 2) AS max_devices,
+                (
+                    SELECT COUNT(DISTINCT us.device_id)::int
+                    FROM user_sessions us
+                    WHERE us.user_id = u.id
+                      AND us.is_active = TRUE
+                      AND us.revoked_at IS NULL
+                      AND us.expires_at > CURRENT_TIMESTAMP
+                ) AS active_devices,
                 COALESCE(b.name, '') AS branch,
                 u.created_at
             FROM users u
@@ -143,6 +152,15 @@ async function listUsers(req, res) {
                         WHEN COALESCE(u.is_active, TRUE) THEN 'Active'
                         ELSE 'Inactive'
                     END AS status,
+                    COALESCE(u.max_devices, 2) AS max_devices,
+                    (
+                        SELECT COUNT(DISTINCT us.device_id)::int
+                        FROM user_sessions us
+                        WHERE us.user_id = u.id
+                          AND us.is_active = TRUE
+                          AND us.revoked_at IS NULL
+                          AND us.expires_at > CURRENT_TIMESTAMP
+                    ) AS active_devices,
                     COALESCE(b.name, '') AS branch,
                     u.created_at
                 FROM users u
@@ -706,7 +724,7 @@ async function declineUser(req, res) {
 
 async function createUser(req, res) {
     try {
-        const { name, email, password, role, branch_id, is_active, status } = req.body;
+        const { name, email, password, role, branch_id, is_active, status, max_devices } = req.body;
 
         if (!name || !email || !password) {
             return res.status(400).json({
@@ -801,11 +819,22 @@ async function createUser(req, res) {
 
         const hashedPassword = await hashPassword(password);
 
+        const nextMaxDevices = max_devices === undefined
+            ? 2
+            : Number.parseInt(String(max_devices), 10);
+
+        if (!Number.isInteger(nextMaxDevices) || nextMaxDevices < 1 || nextMaxDevices > 50) {
+            return res.status(400).json({
+                success: false,
+                message: "Maximum devices must be a whole number between 1 and 50."
+            });
+        }
+
         const created = await pool.query(
             `
                 INSERT INTO users
-                (name, email, password, role, branch_id, is_active, account_status)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                (name, email, password, role, branch_id, is_active, account_status, max_devices)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id
             `,
             [
@@ -815,7 +844,8 @@ async function createUser(req, res) {
                 cleanRole,
                 branch.id,
                 cleanIsActive,
-                "APPROVED"
+                "APPROVED",
+                nextMaxDevices
             ]
         );
 
@@ -847,7 +877,7 @@ async function createUser(req, res) {
 async function updateUser(req, res) {
     try {
         const { id } = req.params;
-        const { name, email, password, role, branch_id, is_active, status } = req.body;
+        const { name, email, password, role, branch_id, is_active, status, max_devices } = req.body;
 
         const existing = await fetchUserById(id);
 
@@ -866,6 +896,16 @@ async function updateUser(req, res) {
             is_active !== undefined ? is_active : status,
             existing.is_active !== false
         );
+        const nextMaxDevices = max_devices === undefined
+            ? Math.max(1, Number(existing.max_devices || 1))
+            : Number.parseInt(String(max_devices), 10);
+
+        if (!Number.isInteger(nextMaxDevices) || nextMaxDevices < 1 || nextMaxDevices > 50) {
+            return res.status(400).json({
+                success: false,
+                message: "Maximum devices must be a whole number between 1 and 50."
+            });
+        }
 
         if (!nextName) {
             return res.status(400).json({
@@ -979,9 +1019,16 @@ async function updateUser(req, res) {
 
             updateValues.push(hashedPassword);
 
+            const passwordIndex = updateValues.length + 1;
             query += `,
-                password = $4`;
+                password = $${passwordIndex}`;
         }
+
+        const maxDevicesIndex = updateValues.length + 1;
+        updateValues.push(nextMaxDevices);
+
+        query += `,
+                max_devices = $${maxDevicesIndex}`;
 
         const isActiveIndex = updateValues.length + 1;
 
@@ -1014,6 +1061,21 @@ async function updateUser(req, res) {
 
         const user = await fetchUserById(id);
 
+        // The existing token-version update invalidates all JWTs for this account.
+        // Revoke the matching DB sessions too so invalidated devices do not consume slots.
+        await pool.query(
+            `
+                UPDATE user_sessions
+                SET is_active = FALSE,
+                    revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP),
+                    revoked_by = $1,
+                    revocation_reason = COALESCE(revocation_reason, 'Account updated by administrator')
+                WHERE user_id = $2
+                  AND is_active = TRUE
+            `,
+            [req.user.id, id]
+        );
+
         if (existing.is_active !== user.is_active) {
             await logAdminActivity(req, user.is_active ? ACTIVITY_TYPES.USER_ENABLED : ACTIVITY_TYPES.USER_DISABLED, {
                 affectedUserId: user.id,
@@ -1033,6 +1095,18 @@ async function updateUser(req, res) {
                 previousValue: existing.branch,
                 newValue: user.branch,
                 details: "User branch assignment changed."
+            });
+        }
+
+        if (Number(existing.max_devices || 1) !== Number(user.max_devices || 1)) {
+            await logAdminActivity(req, ACTIVITY_TYPES.DEVICE_LIMIT_CHANGED, {
+                affectedUserId: user.id,
+                affectedUserName: user.name,
+                branchId: user.branch_id,
+                branchName: user.branch,
+                previousValue: existing.max_devices || 1,
+                newValue: user.max_devices || 1,
+                details: "Maximum active devices changed."
             });
         }
 

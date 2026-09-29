@@ -346,6 +346,87 @@ body.settings-page::before {
     align-items: start;
 }
 
+.sessions-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+    color: var(--muted);
+    font-size: 14px;
+}
+
+.sessions-list {
+    display: grid;
+    gap: 10px;
+}
+
+.session-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-soft, rgba(255, 255, 255, 0.5));
+}
+
+.session-card-copy {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.session-card-copy strong,
+.session-card-copy span,
+.session-card-copy small {
+    overflow-wrap: anywhere;
+}
+
+.session-card-copy span,
+.session-card-copy small,
+.sessions-empty {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.session-current {
+    flex: 0 0 auto;
+    padding: 5px 9px;
+    border-radius: 999px;
+    color: var(--success, #147a47);
+    background: color-mix(in srgb, var(--success, #147a47) 12%, transparent);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.session-revoke-button {
+    flex: 0 0 auto;
+    min-height: 38px;
+}
+
+@media (max-width: 600px) {
+    .sessions-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .sessions-toolbar .outline-button {
+        width: 100%;
+    }
+
+    .session-card {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .session-revoke-button {
+        width: 100%;
+    }
+}
+
 .profile-visual {
     padding-right: 28px;
 

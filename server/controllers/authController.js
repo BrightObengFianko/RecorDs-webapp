@@ -1,4 +1,5 @@
 const bcrypt = require("bcrypt");
+const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const pool = require("../config/database");
 const { ACTIVITY_TYPES, recordActivity, recordAuthActivity } = require("../utils/authActivity");
@@ -20,6 +21,10 @@ const {
     clearLoginFailures,
     recordLoginFailure
 } = require("../middleware/loginRateLimiter");
+const {
+    getDeviceMetadata,
+    sessionExpiresAt
+} = require("../utils/sessionManager");
 function normalizeRole(role) {
     return String(role || "")
         .trim()
@@ -215,6 +220,7 @@ async function fetchUserByEmail(email) {
                 COALESCE(u.is_active, TRUE) AS is_active,
                 UPPER(COALESCE(u.account_status, 'APPROVED')) AS account_status,
                 COALESCE(u.auth_token_version, 0) AS auth_token_version,
+                COALESCE(u.max_devices, 2) AS max_devices,
                 COALESCE(b.name, '') AS branch,
                 u.created_at
             FROM users u
@@ -241,6 +247,7 @@ async function fetchUserById(id) {
                 COALESCE(u.is_active, TRUE) AS is_active,
                 UPPER(COALESCE(u.account_status, 'APPROVED')) AS account_status,
                 COALESCE(u.auth_token_version, 0) AS auth_token_version,
+                COALESCE(u.max_devices, 2) AS max_devices,
                 COALESCE(b.name, '') AS branch,
                 u.account_settings,
                 u.created_at
@@ -534,6 +541,162 @@ const login = async (req, res) => {
             });
         }
 
+        const device = getDeviceMetadata(req, req.body?.device_id);
+        const sessionExpiry = sessionExpiresAt();
+        const sessionClient = await pool.connect();
+        let sessionId = null;
+        let deviceLimitReached = false;
+        let activeDeviceCount = 0;
+        let sessionCreated = false;
+
+        try {
+            await sessionClient.query("BEGIN");
+
+            const lockedUser = await sessionClient.query(
+                `
+                    SELECT COALESCE(max_devices, 2)::int AS max_devices
+                    FROM users
+                    WHERE id = $1
+                    FOR UPDATE
+                `,
+                [user.id]
+            );
+            const maxDevices = Math.max(1, Number(lockedUser.rows[0]?.max_devices || user.max_devices || 2));
+
+            await sessionClient.query(
+                `
+                    UPDATE user_sessions
+                    SET is_active = FALSE,
+                        revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP),
+                        revocation_reason = COALESCE(revocation_reason, 'Session expired')
+                    WHERE user_id = $1
+                      AND is_active = TRUE
+                      AND (expires_at <= CURRENT_TIMESTAMP OR revoked_at IS NOT NULL)
+                `,
+                [user.id]
+            );
+
+            const activeSessions = await sessionClient.query(
+                `
+                    SELECT session_id, device_id
+                    FROM user_sessions
+                    WHERE user_id = $1
+                      AND is_active = TRUE
+                      AND revoked_at IS NULL
+                      AND expires_at > CURRENT_TIMESTAMP
+                    FOR UPDATE
+                `,
+                [user.id]
+            );
+
+            activeDeviceCount = new Set(activeSessions.rows.map(session => session.device_id)).size;
+            const existingDevice = activeSessions.rows.find(
+                session => session.device_id === device.deviceId
+            );
+
+            if (existingDevice) {
+                sessionId = existingDevice.session_id;
+                await sessionClient.query(
+                    `
+                        UPDATE user_sessions
+                        SET device_name = $1,
+                            device_type = $2,
+                            browser = $3,
+                            operating_system = $4,
+                            ip_address = $5,
+                            user_agent = $6,
+                            last_active_at = CURRENT_TIMESTAMP,
+                            last_seen_at = CURRENT_TIMESTAMP,
+                            expires_at = $7,
+                            is_active = TRUE,
+                            revoked_at = NULL,
+                            revoked_by = NULL,
+                            revocation_reason = NULL
+                        WHERE session_id = $8
+                    `,
+                    [
+                        device.deviceName,
+                        device.deviceType,
+                        device.browser,
+                        device.operatingSystem,
+                        String(req.ip || "").slice(0, 64) || null,
+                        device.userAgent || null,
+                        sessionExpiry,
+                        sessionId
+                    ]
+                );
+            } else if (activeDeviceCount >= maxDevices) {
+                deviceLimitReached = true;
+            } else {
+                sessionId = crypto.randomUUID();
+                await sessionClient.query(
+                    `
+                        INSERT INTO user_sessions (
+                            user_id, session_id, device_id, device_name,
+                            device_type, browser, operating_system,
+                            ip_address, user_agent, expires_at
+                        )
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    `,
+                    [
+                        user.id,
+                        sessionId,
+                        device.deviceId,
+                        device.deviceName,
+                        device.deviceType,
+                        device.browser,
+                        device.operatingSystem,
+                        String(req.ip || "").slice(0, 64) || null,
+                        device.userAgent || null,
+                        sessionExpiry
+                    ]
+                );
+                sessionCreated = true;
+            }
+
+            if (deviceLimitReached) {
+                await sessionClient.query("ROLLBACK");
+            } else {
+                await sessionClient.query("COMMIT");
+            }
+        } catch (sessionError) {
+            await sessionClient.query("ROLLBACK").catch(() => {});
+            throw sessionError;
+        } finally {
+            sessionClient.release();
+        }
+
+        if (deviceLimitReached) {
+            await recordAuthActivity({
+                userId: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                request: req,
+                activityType: ACTIVITY_TYPES.DEVICE_LIMIT_REACHED,
+                details: `Device limit reached (${activeDeviceCount}/${Math.max(1, Number(user.max_devices || 2))}).`,
+                success: false
+            });
+
+            return res.status(409).json({
+                success: false,
+                status: "DEVICE_LIMIT_REACHED",
+                message: "This account is already active on the maximum number of devices. Please sign out from another device before signing in here."
+            });
+        }
+
+        if (sessionCreated) {
+            await recordAuthActivity({
+                userId: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                request: req,
+                activityType: ACTIVITY_TYPES.DEVICE_SESSION_CREATED,
+                details: `${device.deviceName} via ${device.browser}.`
+            });
+        }
+
         const userPayload = {
             id: user.id,
             name: user.name,
@@ -542,7 +705,8 @@ const login = async (req, res) => {
             branch_id: user.branch_id,
             is_active: user.is_active,
             account_status: accountStatus.toUpperCase(),
-            token_version: user.auth_token_version
+            token_version: user.auth_token_version,
+            sid: sessionId
         };
 
         const token = jwt.sign(
@@ -574,6 +738,7 @@ const login = async (req, res) => {
                 email: user.email,
                 role: normalizeRole(user.role),
                 branch_id: user.branch_id,
+                device_id: device.deviceId,
                 is_active: user.is_active,
                 account_status: accountStatus.toUpperCase(),
                 branch: user.branch,
@@ -590,14 +755,31 @@ const login = async (req, res) => {
 };
 
 const logout = async (req, res) => {
-    await pool.query(
-        `
-            UPDATE users
-            SET auth_token_version = COALESCE(auth_token_version, 0) + 1
-            WHERE id = $1
-        `,
-        [req.user.id]
-    );
+    if (req.user.session_id) {
+        await pool.query(
+            `
+                UPDATE user_sessions
+                SET is_active = FALSE,
+                    revoked_at = CURRENT_TIMESTAMP,
+                    revoked_by = $1,
+                    revocation_reason = 'User logout'
+                WHERE user_id = $1
+                  AND session_id = $2
+                  AND is_active = TRUE
+            `,
+            [req.user.id, req.user.session_id]
+        );
+    } else {
+        // Preserve legacy-token behavior until old JWTs naturally expire.
+        await pool.query(
+            `
+                UPDATE users
+                SET auth_token_version = COALESCE(auth_token_version, 0) + 1
+                WHERE id = $1
+            `,
+            [req.user.id]
+        );
+    }
 
     await recordAuthActivity({
         userId: req.user.id,
@@ -605,7 +787,8 @@ const logout = async (req, res) => {
         email: req.user.email,
         role: req.user.role,
         request: req,
-        activityType: ACTIVITY_TYPES.LOGOUT_SUCCESS
+        activityType: ACTIVITY_TYPES.LOGOUT_SUCCESS,
+        details: req.user.session_id ? "Session logged out." : "Legacy session logged out."
     });
 
     return res.json({

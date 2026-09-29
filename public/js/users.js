@@ -19,11 +19,18 @@
     const userRoleInput = document.getElementById("userRole");
     const userBranchInput = document.getElementById("userBranch");
     const userStatusInput = document.getElementById("userStatus");
+    const userMaxDevicesInput = document.getElementById("userMaxDevices");
     const saveUserButton = document.getElementById("saveUserButton");
     const deleteUserButton = document.getElementById("deleteUserButton");
     const logoutButton = document.getElementById("logoutButton");
     const pendingUsersBody = document.getElementById("pendingUsersBody");
     const pendingUsersCount = document.getElementById("pendingUsersCount");
+    const deviceModal = document.getElementById("deviceModal");
+    const deviceModalSummary = document.getElementById("deviceModalSummary");
+    const deviceSessionList = document.getElementById("deviceSessionList");
+    const closeDeviceModalButton = document.getElementById("closeDeviceModalButton");
+    const closeDeviceModalFooter = document.getElementById("closeDeviceModalFooter");
+    const forceLogoutAllButton = document.getElementById("forceLogoutAllButton");
 
     // Create Staff Account Modal Elements
     const createStaffBtn = document.getElementById("createStaffBtn");
@@ -219,7 +226,7 @@
 
         usersBody.innerHTML = `
             <tr>
-                <td colspan="7" class="empty">
+                <td colspan="8" class="empty">
                     ${escapeHtml(message)}
                 </td>
             </tr>
@@ -259,7 +266,7 @@
         if (!filteredUsers.length) {
             usersBody.innerHTML = `
                 <tr>
-                    <td colspan="7" class="empty">
+                    <td colspan="8" class="empty">
                         No users found.
                     </td>
                 </tr>
@@ -286,6 +293,11 @@
                         </span>
                     </td>
                     <td>${escapeHtml(branchLabel)}</td>
+                    <td>
+                        <button type="button" class="device-summary-button" data-device-user-id="${escapeHtml(user.id)}" title="Manage active devices">
+                            ${escapeHtml(`${Number(user.active_devices || 0)} / ${Math.max(1, Number(user.max_devices || 2))}`)}
+                        </button>
+                    </td>
                     <td>
                         <span class="status-pill ${statusClass}">
                             ${escapeHtml(statusLabel)}
@@ -434,6 +446,9 @@
         userEmailInput.value = user.email || "";
         userRoleInput.value = normalize(user.role).replace(/\s+/g, "_") || "staff";
         userStatusInput.value = isActiveUser(user) ? "Active" : "Inactive";
+        if (userMaxDevicesInput) {
+            userMaxDevicesInput.value = Math.max(1, Number(user.max_devices || 2));
+        }
         userBranchInput.innerHTML = buildBranchOptions(user.branch_id, user.branch);
         userBranchInput.value = user.branch_id ? String(user.branch_id) : "";
 
@@ -454,6 +469,87 @@
         userForm.reset();
         userIdInput.value = "";
         userBranchInput.innerHTML = "<option value=\"\">Select branch</option>";
+    }
+
+    let managedUserId = null;
+
+    function formatSessionDate(value) {
+        if (!value) return "-";
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("en-GB");
+    }
+
+    async function loadManagedSessions(userId) {
+        managedUserId = String(userId);
+        const user = allUsers.find(item => String(item.id) === managedUserId);
+        if (!deviceModal || !deviceSessionList || !user) return;
+
+        deviceModal.hidden = false;
+        deviceModalSummary.textContent = `${user.name} - loading active devices...`;
+        deviceSessionList.innerHTML = '<p class="device-session-empty">Loading active devices...</p>';
+
+        try {
+            const data = await fetchJson(`/api/admin/users/${encodeURIComponent(managedUserId)}/sessions`);
+            const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+            deviceModalSummary.textContent = `${user.name} - ${sessions.length} active of ${data.max_devices || 2} allowed`;
+            deviceSessionList.innerHTML = sessions.length
+                ? sessions.map(session => `
+                    <article class="device-session-card">
+                        <div>
+                            <strong>${escapeHtml(session.device_name || "Unknown device")}</strong>
+                            <span>${escapeHtml(session.browser || "Unknown browser")} - ${escapeHtml(session.operating_system || "Unknown")}</span>
+                            <small>Logged in: ${escapeHtml(formatSessionDate(session.created_at))}<br>Last active: ${escapeHtml(formatSessionDate(session.last_active_at))}</small>
+                        </div>
+                        <button type="button" class="danger-button device-revoke-button" data-device-session-id="${escapeHtml(session.session_id)}">Force Logout</button>
+                    </article>
+                `).join("")
+                : '<p class="device-session-empty">No active devices.</p>';
+        } catch (error) {
+            deviceSessionList.innerHTML = `<p class="device-session-empty">${escapeHtml(error.message || "Unable to load active devices.")}</p>`;
+        }
+    }
+
+    function closeDeviceModal() {
+        if (deviceModal) deviceModal.hidden = true;
+        managedUserId = null;
+    }
+
+    async function forceLogoutManagedSession(sessionId) {
+        if (!managedUserId || !sessionId) return;
+        const confirmed = await ConfirmDialog.show(
+            "The selected device will lose access to this account.",
+            "Force logout this device?",
+            "Force Logout"
+        );
+        if (!confirmed) return;
+
+        try {
+            await fetchJson(`/api/admin/users/${encodeURIComponent(managedUserId)}/sessions/${encodeURIComponent(sessionId)}/revoke`, { method: "POST" });
+            Notification.success("Device logged out.");
+            await loadManagedSessions(managedUserId);
+            await loadUsers();
+        } catch (error) {
+            Notification.error(error.message || "Unable to log out device.");
+        }
+    }
+
+    async function forceLogoutAllManagedSessions() {
+        if (!managedUserId) return;
+        const confirmed = await ConfirmDialog.show(
+            "All active devices for this user will lose access. This action cannot be undone.",
+            "Log out all devices?",
+            "Log Out All"
+        );
+        if (!confirmed) return;
+
+        try {
+            await fetchJson(`/api/admin/users/${encodeURIComponent(managedUserId)}/sessions/revoke-all`, { method: "POST" });
+            Notification.success("All devices logged out.");
+            await loadManagedSessions(managedUserId);
+            await loadUsers();
+        } catch (error) {
+            Notification.error(error.message || "Unable to log out devices.");
+        }
     }
 
     async function loadBranches() {
@@ -529,12 +625,13 @@
         const role = String(userRoleInput.value || "").trim();
         const branchId = String(userBranchInput.value || "").trim();
         const status = String(userStatusInput.value || "Active").trim();
+        const maxDevices = Number.parseInt(String(userMaxDevicesInput?.value || "1"), 10);
 
         if (!userId) {
             return;
         }
 
-        if (!name || !email || !role || !branchId) {
+        if (!name || !email || !role || !branchId || !Number.isInteger(maxDevices) || maxDevices < 1 || maxDevices > 50) {
             Notification.warning("Please complete all fields.");
             return;
         }
@@ -544,7 +641,8 @@
             email,
             role,
             branch_id: Number(branchId),
-            is_active: status === "Active"
+            is_active: status === "Active",
+            max_devices: maxDevices
         };
 
         if (!Number.isFinite(payload.branch_id)) {
@@ -748,6 +846,12 @@ They can login immediately.
 
         if (usersBody) {
             usersBody.addEventListener("click", event => {
+                const deviceButton = event.target.closest("[data-device-user-id]");
+                if (deviceButton) {
+                    loadManagedSessions(deviceButton.dataset.deviceUserId);
+                    return;
+                }
+
                 const button = event.target.closest(".action-button");
 
                 if (!button) {
@@ -765,6 +869,21 @@ They can login immediately.
                 openModal(user);
             });
         }
+
+        if (deviceSessionList) {
+            deviceSessionList.addEventListener("click", event => {
+                const button = event.target.closest("[data-device-session-id]");
+                if (button) forceLogoutManagedSession(button.dataset.deviceSessionId);
+            });
+        }
+
+        closeDeviceModalButton?.addEventListener("click", closeDeviceModal);
+        closeDeviceModalFooter?.addEventListener("click", closeDeviceModal);
+        forceLogoutAllButton?.addEventListener("click", forceLogoutAllManagedSessions);
+
+        deviceModal?.addEventListener("click", event => {
+            if (event.target === deviceModal) closeDeviceModal();
+        });
 
         if (pendingUsersBody) {
             pendingUsersBody.addEventListener("click", event => {
@@ -808,6 +927,9 @@ They can login immediately.
         document.addEventListener("keydown", event => {
             if (event.key === "Escape" && userModal && !userModal.hidden) {
                 closeModal();
+            }
+            if (event.key === "Escape" && deviceModal && !deviceModal.hidden) {
+                closeDeviceModal();
             }
         });
 

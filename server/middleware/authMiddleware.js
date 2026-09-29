@@ -42,6 +42,7 @@ async function loadUserById(userId) {
                 COALESCE(u.is_active, TRUE) AS is_active,
                 UPPER(COALESCE(u.account_status, 'APPROVED')) AS account_status,
                 COALESCE(u.auth_token_version, 0) AS auth_token_version,
+                COALESCE(u.max_devices, 2) AS max_devices,
                 COALESCE(b.name, '') AS branch,
                 u.created_at
             FROM users u
@@ -88,7 +89,7 @@ function requireAuth(req, res, next) {
         }
 
         loadUserById(decoded.id)
-            .then(user => {
+            .then(async user => {
                 if (!user) {
                     return res.status(401).json({
                         success: false,
@@ -104,6 +105,43 @@ function requireAuth(req, res, next) {
                         success: false,
                         message: "Authentication required."
                     });
+                }
+
+                let activeSession = null;
+                if (decoded.sid) {
+                    const sessionResult = await pool.query(
+                        `
+                            SELECT id, session_id, device_id, device_name, device_type,
+                                   browser, operating_system, expires_at
+                            FROM user_sessions
+                            WHERE user_id = $1
+                              AND session_id = $2
+                              AND is_active = TRUE
+                              AND revoked_at IS NULL
+                              AND expires_at > CURRENT_TIMESTAMP
+                            LIMIT 1
+                        `,
+                        [user.id, decoded.sid]
+                    );
+
+                    activeSession = sessionResult.rows[0] || null;
+                    if (!activeSession) {
+                        return res.status(401).json({
+                            success: false,
+                            message: "Your session has expired or been revoked. Please log in again."
+                        });
+                    }
+
+                    await pool.query(
+                        `
+                            UPDATE user_sessions
+                            SET last_active_at = CURRENT_TIMESTAMP,
+                                last_seen_at = CURRENT_TIMESTAMP
+                            WHERE id = $1
+                              AND last_seen_at < CURRENT_TIMESTAMP - INTERVAL '60 seconds'
+                        `,
+                        [activeSession.id]
+                    );
                 }
 
                 const accountStatus =
@@ -143,6 +181,9 @@ function requireAuth(req, res, next) {
                     is_active: user.is_active,
                     account_status: user.account_status,
                     auth_token_version: user.auth_token_version,
+                    max_devices: user.max_devices,
+                    session_id: activeSession?.session_id || null,
+                    device_id: activeSession?.device_id || null,
                     branch: user.branch,
                     created_at: user.created_at
                 };

@@ -389,13 +389,14 @@
                                     <th>Email</th>
                                     <th>Role</th>
                                     <th>Branch</th>
+                                    <th>Devices</th>
                                     <th>Status</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody id="usersBody">
                                 <tr>
-                                    <td colspan="7" class="empty">
+                                    <td colspan="8" class="empty">
                                         Loading users...
                                     </td>
                                 </tr>
@@ -470,6 +471,12 @@
                     </select>
                 </div>
 
+                <div class="field">
+                    <label for="userMaxDevices">Maximum Devices</label>
+                    <input type="number" id="userMaxDevices" min="1" max="50" step="1" value="1" required>
+                    <small>Active sessions allowed for this account.</small>
+                </div>
+
                 <div class="field field-spacer"></div>
 
                 <div class="modal-actions">
@@ -480,6 +487,23 @@
                 </div>
             </form>
 
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="deviceModal" hidden>
+        <div class="modal-card device-management-modal" role="dialog" aria-modal="true" aria-labelledby="deviceModalTitle">
+            <div class="modal-header">
+                <div>
+                    <h3 id="deviceModalTitle">Active Devices</h3>
+                    <p id="deviceModalSummary">Manage active sessions for this user.</p>
+                </div>
+                <button type="button" class="icon-button" id="closeDeviceModalButton" aria-label="Close active devices">&times;</button>
+            </div>
+            <div id="deviceSessionList" class="device-session-list"></div>
+            <div class="modal-actions">
+                <button type="button" class="secondary-button" id="closeDeviceModalFooter">Close</button>
+                <button type="button" class="danger-button" id="forceLogoutAllButton">Log Out All Devices</button>
+            </div>
         </div>
     </div>
 

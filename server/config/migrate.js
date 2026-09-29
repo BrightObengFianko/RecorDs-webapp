@@ -118,6 +118,108 @@ async function ensureDatabaseSchema() {
 
     await pool.query(
         `
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS max_devices INTEGER
+            DEFAULT 2
+        `
+    );
+
+    await pool.query(
+        `
+            UPDATE users
+            SET max_devices = 2
+            WHERE max_devices IS NULL OR max_devices < 1
+        `
+    );
+
+    await pool.query(
+        `
+            ALTER TABLE users
+            ALTER COLUMN max_devices SET DEFAULT 2
+        `
+    );
+
+    await pool.query(
+        `
+            ALTER TABLE users
+            ALTER COLUMN max_devices SET NOT NULL
+        `
+    );
+
+    await pool.query(
+        `
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conname = 'users_max_devices_check'
+                ) THEN
+                    ALTER TABLE users
+                    ADD CONSTRAINT users_max_devices_check CHECK (max_devices >= 1);
+                END IF;
+            END $$;
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id BIGSERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                session_id VARCHAR(128) NOT NULL UNIQUE,
+                device_id VARCHAR(128) NOT NULL,
+                device_name VARCHAR(100) NOT NULL DEFAULT 'Unknown device',
+                device_type VARCHAR(30) NOT NULL DEFAULT 'Desktop',
+                browser VARCHAR(80) NOT NULL DEFAULT 'Unknown browser',
+                operating_system VARCHAR(80) NOT NULL DEFAULT 'Unknown',
+                ip_address VARCHAR(64),
+                user_agent VARCHAR(500),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_active_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                revoked_at TIMESTAMP,
+                revoked_by INTEGER,
+                revocation_reason VARCHAR(200),
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                CONSTRAINT user_sessions_user_id_fkey
+                    FOREIGN KEY (user_id)
+                    REFERENCES users(id)
+                    ON UPDATE CASCADE
+                    ON DELETE CASCADE,
+                CONSTRAINT user_sessions_revoked_by_fkey
+                    FOREIGN KEY (revoked_by)
+                    REFERENCES users(id)
+                    ON UPDATE CASCADE
+                    ON DELETE SET NULL
+            )
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_user_sessions_active_user
+            ON user_sessions(user_id, is_active, expires_at)
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_user_sessions_device
+            ON user_sessions(user_id, device_id, is_active)
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE INDEX IF NOT EXISTS idx_user_sessions_last_active
+            ON user_sessions(last_active_at DESC)
+        `
+    );
+
+    await pool.query(
+        `
             UPDATE users
             SET auth_token_version = COALESCE(auth_token_version, 0)
             WHERE auth_token_version IS NULL

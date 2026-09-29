@@ -385,6 +385,27 @@
                 </div>
             </section>
 
+            <section class="panel sessions-panel" id="sessions">
+                <div class="panel-head">
+                    <div class="section-icon">
+                        <svg class="icon" aria-hidden="true">
+                            <use href="#icon-user"></use>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2>Active Devices</h2>
+                        <p>Review where your RecorDs account is signed in.</p>
+                    </div>
+                </div>
+                <div class="sessions-toolbar">
+                    <span id="sessionsSummary">Loading active devices...</span>
+                    <button class="outline-button" type="button" id="logoutAllDevicesButton">Log Out All Other Devices</button>
+                </div>
+                <div class="sessions-list" id="mySessionsList" aria-live="polite">
+                    <p class="sessions-empty">Loading active devices...</p>
+                </div>
+            </section>
+
             <section class="panel appearance-panel">
                 <div class="panel-head">
                     <div class="section-icon">

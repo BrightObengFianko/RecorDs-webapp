@@ -20,6 +20,11 @@ const {
     updateBranch,
     deleteBranch
 } = require("../controllers/adminController");
+const {
+    listUserSessions,
+    forceLogoutSession,
+    forceLogoutAllSessions
+} = require("../controllers/sessionController");
 const validateIdParam = require("../middleware/validateIdParam");
 const auditMutatingRequest = require("../middleware/auditMiddleware");
 
@@ -29,6 +34,9 @@ router.use(auditMutatingRequest);
 router.param("id", validateIdParam);
 
 router.get("/users", listUsers);
+router.get("/users/:id/sessions", listUserSessions);
+router.post("/users/:id/sessions/:sessionId/revoke", forceLogoutSession);
+router.post("/users/:id/sessions/revoke-all", forceLogoutAllSessions);
 router.get("/users/pending", listPendingUsers);
 router.post("/users", createUser);
 router.patch("/users/:id", updateUser);
