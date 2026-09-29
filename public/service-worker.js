@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v46";
+const CACHE_NAME = "records-shell-v48";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -46,7 +46,8 @@ const APP_SHELL = [
     "/assets/records-icon-192.png",
     "/assets/records-icon-512.png",
     "/assets/records-icon-maskable-512.png",
-    "/manifest.webmanifest"
+    "/manifest.webmanifest",
+    "/favicon.ico"
 ];
 
 self.addEventListener("install", event => {
