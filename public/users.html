@@ -275,15 +275,6 @@
                     </div>
                 </div>
 
-                <div class="users-topbar-actions">
-                    <button class="action-button" id="createStaffBtn" type="button" title="Create a new staff account">
-                        <svg class="ui-icon" aria-hidden="true">
-                            <use href="#icon-plus"></use>
-                        </svg>
-                        <span>Create Staff Account</span>
-                    </button>
-                </div>
-
                 <div class="users-topbar-profile">
                     <div class="topbar-profile-chip">
                         <div class="avatar top-avatar" id="topAvatar">A</div>
@@ -363,17 +354,26 @@
                             </div>
                         </div>
 
-                        <label class="users-search" for="searchInput">
-                            <svg class="ui-icon search-icon" aria-hidden="true">
-                                <use href="#icon-search"></use>
-                            </svg>
-                            <input
-                                type="search"
-                                id="searchInput"
-                                placeholder="Search users..."
-                                autocomplete="off"
-                            >
-                        </label>
+                        <div class="users-header-actions">
+                            <label class="users-search" for="searchInput">
+                                <svg class="ui-icon search-icon" aria-hidden="true">
+                                    <use href="#icon-search"></use>
+                                </svg>
+                                <input
+                                    type="search"
+                                    id="searchInput"
+                                    placeholder="Search users..."
+                                    autocomplete="off"
+                                >
+                            </label>
+
+                            <button class="action-button users-create-staff-button" id="createStaffBtn" type="button" title="Create a new staff account">
+                                <svg class="ui-icon" aria-hidden="true">
+                                    <use href="#icon-plus"></use>
+                                </svg>
+                                <span>Create Staff</span>
+                            </button>
+                        </div>
 
                     </div>
 

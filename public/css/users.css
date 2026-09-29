@@ -895,3 +895,29 @@ body.reduced-motion *::after {
         display: none;
     }
 }
+/* Keep the staff action with the All Users table controls. */
+.users-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-left: auto;
+    min-width: 0;
+}
+
+.users-create-staff-button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+    .users-header-actions {
+        width: 100%;
+        margin-left: 0;
+        flex-wrap: wrap;
+    }
+
+    .users-header-actions .users-search {
+        flex: 1 1 180px;
+    }
+}
