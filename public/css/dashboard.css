@@ -1309,15 +1309,20 @@ th {
     }
 
     .dashboard-sms-balance {
-        max-width: 112px;
+        max-width: none;
+        flex: 0 1 auto;
         padding: 6px 8px;
     }
 
-    .dashboard-sms-balance span,
     .dashboard-sms-balance strong {
-        overflow: hidden;
-        text-overflow: ellipsis;
+        max-width: none;
+        overflow: visible;
+        text-overflow: clip;
         white-space: nowrap;
+    }
+
+    .dashboard-sms-balance span {
+        display: none;
     }
 
     .logout-button {
@@ -1562,7 +1567,7 @@ th {
     }
 
     .dashboard-sms-balance {
-        max-width: 92px;
+        max-width: none;
     }
 
     .overview-range button {

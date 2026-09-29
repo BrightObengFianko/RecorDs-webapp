@@ -1634,6 +1634,11 @@ body.search-page .content {
         overflow: hidden;
     }
 
+    /* Keep the mobile Search header focused on the balance and core actions. */
+    .search-sms-error {
+        display: none !important;
+    }
+
     .search-sms-balance strong,
     .search-sms-error strong {
         min-width: 0;
