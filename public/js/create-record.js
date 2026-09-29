@@ -46,6 +46,7 @@ const offlineRecordUuid =
     searchParams.get("offlineUuid");
 
 let offlineEditMode = Boolean(offlineRecordUuid);
+let originalRegistrationDate = "";
 
 const isEditMode =
     Boolean(recordId);
@@ -731,11 +732,8 @@ async function loadRecordForEdit() {
 
 
         if (registrationDate) {
-
-            registrationDate.value =
-                formatDateForInput(
-                    record.registration_date
-                );
+            originalRegistrationDate = formatDateForInput(record.registration_date);
+            registrationDate.value = originalRegistrationDate;
 
         }
 
@@ -806,7 +804,10 @@ async function loadOfflineRecordForEdit() {
     if (notesInput) notesInput.value = record.notes || "";
     setRegistrarValue(record.registrar || readStoredUser().name || "Unknown");
     setStatusValue(record.status || "Processing");
-    if (registrationDate) registrationDate.value = formatDateForInput(record.registration_date);
+    if (registrationDate) {
+        originalRegistrationDate = formatDateForInput(record.registration_date);
+        registrationDate.value = originalRegistrationDate;
+    }
 
     const dateValue = String(record.category || "").trim().toLowerCase() === "death"
         ? record.date_of_death
@@ -1264,7 +1265,7 @@ recordForm.addEventListener(
                 formatPhoneNumber(phoneNumber),
 
             registration_date:
-                registrationDate.value,
+                registrationDate.value || (isEditMode ? originalRegistrationDate : ""),
 
             status: status,
 
