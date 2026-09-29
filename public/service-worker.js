@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v50";
+const CACHE_NAME = "records-shell-v51";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -80,39 +80,41 @@ self.addEventListener("fetch", event => {
     }
 
     if (request.mode === "navigate") {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 1200);
-
         event.respondWith(
-            fetch(request, { signal: controller.signal })
-                .then(response => {
-                    const copy = response.clone();
-                    caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-                    return response;
-                })
-                .catch(() => caches.match(request, { ignoreSearch: true })
-                    .then(cached => cached || caches.match("/index.html")))
-                .finally(() => clearTimeout(timeout))
+            caches.match(request, { ignoreSearch: true }).then(cached => {
+                const refresh = fetch(request)
+                    .then(response => {
+                        if (response.ok) {
+                            const copy = response.clone();
+                            caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+                        }
+                        return response;
+                    })
+                    .catch(() => null);
+
+                return cached || refresh.then(response => response || caches.match("/index.html"));
+            })
         );
         return;
     }
 
-    // Fetch CSS and JavaScript from the network first so normal navigation
-    // receives deployed UI fixes, while retaining the cached shell offline.
+    // Serve cached CSS/JavaScript immediately and refresh in the background
+    // so online and offline navigation stay responsive.
     if (request.destination === "style" || request.destination === "script") {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 1500);
         event.respondWith(
-            fetch(request, { signal: controller.signal })
-                .then(response => {
-                    if (response.ok) {
-                        const copy = response.clone();
-                        caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-                    }
-                    return response;
-                })
-                .catch(() => caches.match(request).then(cached => cached || Response.error()))
-                .finally(() => clearTimeout(timeout))
+            caches.match(request).then(cached => {
+                const refresh = fetch(request)
+                    .then(response => {
+                        if (response.ok) {
+                            const copy = response.clone();
+                            caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+                        }
+                        return response;
+                    })
+                    .catch(() => null);
+
+                return cached || refresh.then(response => response || Response.error());
+            })
         );
         return;
     }

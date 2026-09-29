@@ -69,7 +69,7 @@
         }
 
         if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/service-worker.js?v=50", {
+        navigator.serviceWorker.register("/service-worker.js?v=51", {
                 updateViaCache: "none"
             }).then(registration => {
                 // Do not make offline startup wait on a service-worker update check.
@@ -516,7 +516,7 @@
                 place-items: center;
                 pointer-events: none;
                 background: transparent;
-                animation: record-page-transition-fade 420ms ease-out both;
+                animation: record-page-transition-fade 300ms ease-out both;
             }
 
             .record-page-logo-transition .record-auth-loader-box {
@@ -528,7 +528,7 @@
                 border-radius: 28px;
                 background: rgba(255, 255, 255, 0.96);
                 box-shadow: 0 18px 44px rgba(5, 10, 32, 0.24);
-                animation: record-brand-transition 360ms ease-out both;
+                animation: record-brand-transition 260ms ease-out both;
             }
 
             .record-page-logo-transition .record-auth-loader-box::before {
@@ -537,7 +537,7 @@
                 inset: -13px;
                 border: 1px solid rgba(91, 77, 245, 0.28);
                 border-radius: 38px;
-                animation: record-brand-ring 420ms ease-out both;
+                animation: record-brand-ring 300ms ease-out both;
             }
 
             .record-page-logo-transition .record-auth-loader-logo {
@@ -593,7 +593,7 @@
         const removeTransition = () => transition.remove();
         transition.addEventListener("animationend", removeTransition, { once: true });
         // Keep the effect non-blocking even if animation events are throttled.
-        window.setTimeout(removeTransition, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 460);
+        window.setTimeout(removeTransition, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 320);
     }
 
     function showAuthLoadingState() {
@@ -640,8 +640,63 @@
 
         try {
             const cachedUser = readStoredUser();
-            if (navigator.onLine === false && cachedUser && cachedUser.role) {
-                document.body.dataset.connectionState = "offline";
+
+            // Open from the cached session immediately. The server still
+            // validates the token in the background and remains authoritative.
+            if (cachedUser && cachedUser.role) {
+                const currentPage = getCurrentPageName();
+                const allowedPages = getAllowedPages(normalizeRole(cachedUser.role));
+
+                if (
+                    currentPage !== "index.html" &&
+                    currentPage !== "signup.html" &&
+                    !allowedPages.has(currentPage)
+                ) {
+                    window.location.replace("dashboard.html");
+                    return false;
+                }
+
+                document.body.dataset.connectionState = navigator.onLine === false ? "offline" : "online";
+
+                if (navigator.onLine !== false) {
+                    void fetch("/api/auth/me", {
+                        method: "GET",
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            "Content-Type": "application/json"
+                        }
+                    }).then(async response => {
+                        if (localStorage.getItem("token") !== token) return;
+
+                        if (response.status === 401 || response.status === 403) {
+                            localStorage.removeItem("token");
+                            localStorage.removeItem("user");
+                            window.location.replace("index.html");
+                            return;
+                        }
+
+                        if (!response.ok) return;
+                        const data = await response.json().catch(() => ({}));
+                        const user = data?.user;
+                        if (!user?.role) return;
+
+                        localStorage.setItem("user", JSON.stringify({
+                            id: user.id || "",
+                            name: user.name || "",
+                            email: user.email || "",
+                            role: user.role || "staff",
+                            avatar: user.avatar || "",
+                            phoneNumber: user.phoneNumber || "",
+                            username: user.username || "",
+                            bio: user.bio || "",
+                            branch: user.branch || "",
+                            branch_id: user.branch_id || ""
+                        }));
+                    }).catch(() => {
+                        document.body.dataset.connectionState = "offline";
+                    });
+                }
+
                 return true;
             }
 
