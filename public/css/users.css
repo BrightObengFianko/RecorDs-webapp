@@ -933,7 +933,7 @@ body.reduced-motion *::after {
 
 .users-create-staff-button:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(87, 53, 232, .2);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--accent, #5735e8) 20%, transparent);
 }
 
 .users-create-staff-button:active,
@@ -946,8 +946,8 @@ body.reduced-motion *::after {
 }
 
 @keyframes create-staff-pulse {
-    0% { box-shadow: 0 0 0 0 rgba(87, 53, 232, .34); }
-    100% { box-shadow: 0 0 0 10px rgba(87, 53, 232, 0); }
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #5735e8) 34%, transparent); }
+    100% { box-shadow: 0 0 0 10px transparent; }
 }
 
 @media (max-width: 700px) {

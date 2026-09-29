@@ -29,6 +29,7 @@
     const createStaffBtn = document.getElementById("createStaffBtn");
     const createStaffModal = document.getElementById("createStaffModal");
     const createStaffForm = document.getElementById("createStaffForm");
+    const createStaffCloseButton = createStaffModal?.querySelector(".modal-close");
     const togglePasswordBtn = document.getElementById("togglePassword");
     const cancelCreateStaffBtn = document.getElementById("cancelCreateStaffBtn");
     const staffPasswordInput = document.getElementById("staffPassword");
@@ -831,6 +832,10 @@ They can login immediately.
 
         if (cancelCreateStaffBtn) {
             cancelCreateStaffBtn.addEventListener("click", closeCreateStaffModal);
+        }
+
+        if (createStaffCloseButton) {
+            createStaffCloseButton.addEventListener("click", closeCreateStaffModal);
         }
 
         if (createStaffModal) {
