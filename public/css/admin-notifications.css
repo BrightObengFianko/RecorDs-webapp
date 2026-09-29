@@ -129,6 +129,26 @@
         margin: 0;
     }
 
+    /* Keep the Online/Offline notification beside the page menu button. */
+    .pending-sync-heading {
+        position: relative;
+        width: 100%;
+    }
+
+    .pending-sync-heading-copy {
+        box-sizing: border-box;
+        width: 100%;
+        padding-right: 58px;
+    }
+
+    .pending-sync-heading > .admin-notification-button {
+        position: absolute;
+        top: 0;
+        right: 0;
+        z-index: 2;
+        margin: 0;
+    }
+
     .admin-notification-panel.is-mobile {
         top: calc(env(safe-area-inset-top, 0px) + 64px) !important;
         right: max(12px, env(safe-area-inset-right, 0px)) !important;
