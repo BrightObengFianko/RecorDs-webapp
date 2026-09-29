@@ -69,7 +69,7 @@
         }
 
         if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/service-worker.js?v=48", {
+        navigator.serviceWorker.register("/service-worker.js?v=49", {
                 updateViaCache: "none"
             }).then(registration => {
                 // Do not make offline startup wait on a service-worker update check.
@@ -508,6 +508,51 @@
                 border-radius: 20px;
             }
 
+            .record-page-logo-transition {
+                position: fixed;
+                inset: 0;
+                z-index: 9990;
+                display: grid;
+                place-items: center;
+                pointer-events: none;
+                background: transparent;
+                animation: record-page-transition-fade 420ms ease-out both;
+            }
+
+            .record-page-logo-transition .record-auth-loader-box {
+                position: relative;
+                display: grid;
+                place-items: center;
+                width: 104px;
+                height: 104px;
+                border-radius: 28px;
+                background: rgba(255, 255, 255, 0.96);
+                box-shadow: 0 18px 44px rgba(5, 10, 32, 0.24);
+                animation: record-brand-transition 360ms ease-out both;
+            }
+
+            .record-page-logo-transition .record-auth-loader-box::before {
+                content: "";
+                position: absolute;
+                inset: -13px;
+                border: 1px solid rgba(91, 77, 245, 0.28);
+                border-radius: 38px;
+                animation: record-brand-ring 420ms ease-out both;
+            }
+
+            .record-page-logo-transition .record-auth-loader-logo {
+                display: block;
+                width: 76px;
+                height: 76px;
+                object-fit: contain;
+                border-radius: 20px;
+            }
+
+            @keyframes record-page-transition-fade {
+                from { opacity: 1; }
+                to { opacity: 0; }
+            }
+
             @keyframes record-brand-transition {
                 from { opacity: 0; transform: scale(0.9); }
                 to { opacity: 1; transform: scale(1); }
@@ -520,12 +565,35 @@
 
             @media (prefers-reduced-motion: reduce) {
                 #record-auth-loader .record-auth-loader-box,
-                #record-auth-loader .record-auth-loader-box::before {
+                #record-auth-loader .record-auth-loader-box::before,
+                .record-page-logo-transition,
+                .record-page-logo-transition .record-auth-loader-box,
+                .record-page-logo-transition .record-auth-loader-box::before {
                     animation: none;
                 }
             }
         `;
         document.head.appendChild(style);
+    }
+
+    function playPageLogoTransition() {
+        if (!document.body || document.getElementById("record-page-logo-transition")) {
+            return;
+        }
+
+        injectLoadingStyles();
+
+        const transition = document.createElement("div");
+        transition.id = "record-page-logo-transition";
+        transition.className = "record-page-logo-transition";
+        transition.setAttribute("aria-hidden", "true");
+        transition.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/records-icon-192.png" alt=""></div>';
+        document.body.appendChild(transition);
+
+        const removeTransition = () => transition.remove();
+        transition.addEventListener("animationend", removeTransition, { once: true });
+        // Keep the effect non-blocking even if animation events are throttled.
+        window.setTimeout(removeTransition, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 460);
     }
 
     function showAuthLoadingState() {
@@ -976,6 +1044,7 @@
         const state = applySettings(readSettings());
         const profileState = applyProfile(readProfile());
         initAdminHeaderLogout();
+        playPageLogoTransition();
 
         window.RecordSettings = {
             storageKey: getSettingsStorageKey(),
