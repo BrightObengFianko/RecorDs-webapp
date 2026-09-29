@@ -1065,6 +1065,23 @@ body.reduced-motion *::after {
     min-width: 0;
 }
 
+.device-session-actions {
+    display: grid;
+    justify-items: end;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.device-session-status {
+    padding: 4px 9px;
+    border-radius: 999px;
+    color: #147a47;
+    background: rgba(20, 122, 71, 0.12);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
 .device-session-card span,
 .device-session-card small,
 .device-session-empty {
@@ -1090,6 +1107,14 @@ body.reduced-motion *::after {
 
     .device-revoke-button {
         width: 100%;
+    }
+
+    .device-session-actions {
+        justify-items: stretch;
+    }
+
+    .device-session-status {
+        text-align: center;
     }
 }
 

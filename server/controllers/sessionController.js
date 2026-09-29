@@ -1,8 +1,8 @@
 const pool = require("../config/database");
 const { ACTIVITY_TYPES, recordActivity } = require("../utils/authActivity");
 
-function sessionView(row) {
-    return {
+function sessionView(row, includeIp = false) {
+    const session = {
         id: row.id,
         session_id: row.session_id,
         device_id: row.device_id,
@@ -13,8 +13,12 @@ function sessionView(row) {
         created_at: row.created_at,
         last_active_at: row.last_active_at,
         expires_at: row.expires_at,
+        status: row.status || "ACTIVE",
         is_current: row.session_id === row.current_session_id
     };
+
+    if (includeIp) session.ip_address = row.ip_address || "-";
+    return session;
 }
 
 async function getUser(userId) {
@@ -34,12 +38,12 @@ async function getUser(userId) {
     return result.rows[0] || null;
 }
 
-async function listSessionsForUser(userId, currentSessionId = null) {
+async function listSessionsForUser(userId, currentSessionId = null, includeIp = false) {
     const result = await pool.query(
         `
             SELECT id, session_id, device_id, device_name, device_type,
-                   browser, operating_system, created_at, last_active_at,
-                   expires_at, $2::text AS current_session_id
+                   browser, operating_system, ip_address, created_at, last_active_at,
+                   expires_at, 'ACTIVE' AS status, $2::text AS current_session_id
             FROM user_sessions
             WHERE user_id = $1
               AND is_active = TRUE
@@ -50,7 +54,7 @@ async function listSessionsForUser(userId, currentSessionId = null) {
         [userId, currentSessionId]
     );
 
-    return result.rows.map(sessionView);
+    return result.rows.map(row => sessionView(row, includeIp));
 }
 
 async function listMySessions(req, res) {
@@ -191,7 +195,7 @@ async function listUserSessions(req, res) {
             success: true,
             user: { id: user.id, name: user.name, role: user.role },
             max_devices: Math.max(1, Number(user.max_devices || 2)),
-            sessions: await listSessionsForUser(user.id)
+            sessions: await listSessionsForUser(user.id, null, true)
         });
     } catch (error) {
         console.error("LIST USER SESSIONS ERROR:", error);

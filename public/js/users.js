@@ -479,6 +479,19 @@
         return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("en-GB");
     }
 
+    function formatSessionAge(value) {
+        if (!value) return "-";
+        const timestamp = new Date(value).getTime();
+        if (Number.isNaN(timestamp)) return "-";
+        const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
+        if (minutes < 1) return "Active now";
+        if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+        const days = Math.floor(hours / 24);
+        return `${days} day${days === 1 ? "" : "s"} ago`;
+    }
+
     async function loadManagedSessions(userId) {
         managedUserId = String(userId);
         const user = allUsers.find(item => String(item.id) === managedUserId);
@@ -497,10 +510,13 @@
                     <article class="device-session-card">
                         <div>
                             <strong>${escapeHtml(session.device_name || "Unknown device")}</strong>
-                            <span>${escapeHtml(session.browser || "Unknown browser")} - ${escapeHtml(session.operating_system || "Unknown")}</span>
-                            <small>Logged in: ${escapeHtml(formatSessionDate(session.created_at))}<br>Last active: ${escapeHtml(formatSessionDate(session.last_active_at))}</small>
+                            <span>${escapeHtml(session.device_type || "Desktop")} - ${escapeHtml(session.operating_system || "Unknown")} - ${escapeHtml(session.browser || "Unknown browser")}</span>
+                            <small>IP address: ${escapeHtml(session.ip_address || "-")}<br>Logged in: ${escapeHtml(formatSessionDate(session.created_at))}<br>Last active: ${escapeHtml(formatSessionAge(session.last_active_at))} (${escapeHtml(formatSessionDate(session.last_active_at))})</small>
                         </div>
-                        <button type="button" class="danger-button device-revoke-button" data-device-session-id="${escapeHtml(session.session_id)}">Force Logout</button>
+                        <div class="device-session-actions">
+                            <span class="device-session-status">${escapeHtml(session.status || "ACTIVE")}</span>
+                            <button type="button" class="danger-button device-revoke-button" data-device-session-id="${escapeHtml(session.session_id)}">Force Logout</button>
+                        </div>
                     </article>
                 `).join("")
                 : '<p class="device-session-empty">No active devices.</p>';
