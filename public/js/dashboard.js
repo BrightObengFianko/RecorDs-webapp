@@ -1520,13 +1520,15 @@ async function loadDashboardSummary() {
         if (window.RecordOfflineQueue && typeof window.RecordOfflineQueue.getPendingRecords === "function") {
             try {
                 const pendingRecords = await window.RecordOfflineQueue.getPendingRecords();
-                const localRecords = pendingRecords.map(entry => ({
-                    ...entry.payload,
-                    id: `offline_${entry.uuid}`,
-                    is_offline: true,
-                    status: "Pending Sync",
-                    offline_created_at: entry.createdAt
-                }));
+                const localRecords = pendingRecords
+                    .filter(entry => isBranchStaffDashboardUser() || ["pending", "ready", "not ready"].includes(normalizeStatus(entry.payload?.status)))
+                    .map(entry => ({
+                        ...entry.payload,
+                        id: `offline_${entry.uuid}`,
+                        is_offline: true,
+                        status: "Pending Sync",
+                        offline_created_at: entry.createdAt
+                    }));
 
                 offlineRecentRecords = localRecords.sort((left, right) =>
                     new Date(right.offline_created_at || 0).getTime() -

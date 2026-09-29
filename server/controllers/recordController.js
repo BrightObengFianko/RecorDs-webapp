@@ -467,13 +467,17 @@ async function queryRecentTodayRecords(user, requestedPage) {
         ...values,
         selectedDateText
     ];
-    const branchStaffStatusClause = isBranchStaff(user)
+    const statusClause = isBranchStaff(user)
         ? ` AND LOWER(REPLACE(REPLACE(COALESCE(r.status, ''), '_', ' '), '-', ' ')) IN (
                 'processing',
                 'waiting for approval'
             )`
-        : "";
-    const filteredDateClause = `${selectedDateClause}${branchStaffStatusClause}`;
+        : ` AND LOWER(REPLACE(REPLACE(COALESCE(r.status, ''), '_', ' '), '-', ' ')) IN (
+                'pending',
+                'ready',
+                'not ready'
+            )`;
+    const filteredDateClause = `${selectedDateClause}${statusClause}`;
 
     const [countResult, recordsResult] = await Promise.all([
         pool.query(
