@@ -906,6 +906,13 @@ body.reduced-motion *::after {
     min-width: 0;
 }
 
+.users-main > .users-topbar {
+    position: static;
+    top: auto;
+    right: auto;
+    left: auto;
+}
+
 .users-all-shell .users-header {
     display: flex;
     flex-direction: column;
@@ -928,10 +935,14 @@ body.reduced-motion *::after {
 .users-create-staff-button {
     flex: 0 0 auto;
     white-space: nowrap;
-    transition: transform 160ms ease, box-shadow 160ms ease;
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
-.users-create-staff-button:hover {
+.users-create-staff-button:hover,
+.users-create-staff-button:focus-visible {
+    background: var(--accent, #5735e8) !important;
+    border-color: var(--accent, #5735e8) !important;
+    color: var(--accent-foreground, #fff) !important;
     transform: translateY(-1px);
     box-shadow: 0 6px 16px color-mix(in srgb, var(--accent, #5735e8) 20%, transparent);
 }
@@ -942,6 +953,9 @@ body.reduced-motion *::after {
 }
 
 .users-create-staff-button.is-activating {
+    background: var(--accent, #5735e8) !important;
+    border-color: var(--accent, #5735e8) !important;
+    color: var(--accent-foreground, #fff) !important;
     animation: create-staff-pulse 360ms ease-out;
 }
 
