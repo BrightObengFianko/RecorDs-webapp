@@ -877,6 +877,35 @@ th {
     font-weight: 700;
 }
 
+.registrar-today-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--app-border);
+    border-radius: 12px;
+    background: var(--app-table-head);
+    color: var(--app-muted-strong);
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.registrar-today-total strong {
+    color: var(--accent-ink);
+    font-size: 1.3rem;
+    line-height: 1;
+}
+
+@media (max-width: 560px) {
+    .registrar-today-total {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 8px;
+    }
+}
+
 .status-sms-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

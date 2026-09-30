@@ -1203,6 +1203,14 @@ const getDashboardSummary = async (req, res) => {
             ? `${summaryClause} AND ${registrarPerformanceDateCondition} AND ${validRegistrarCondition}`
             : `WHERE ${registrarPerformanceDateCondition} AND ${validRegistrarCondition}`;
 
+        const todayCasesDateCondition = `COALESCE(
+            r.registration_date::date,
+            r.created_at::date
+        ) = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date`;
+        const todayCasesClause = clause
+            ? `${clause} AND ${todayCasesDateCondition}`
+            : `WHERE ${todayCasesDateCondition}`;
+
         // Recent Records is independent of the dashboard aggregates. Start it
         // now so it can run concurrently with the summary queries below.
         const recentTodayPromise = queryRecentTodayRecords(
@@ -1220,6 +1228,7 @@ const getDashboardSummary = async (req, res) => {
             branchResult,
             categoryOptionsResult,
             registrarPerformanceResult,
+            todayCasesResult,
             statusSmsResult,
             yearOptionsResult,
             branchStaffMetricsResult,
@@ -1353,6 +1362,15 @@ const getDashboardSummary = async (req, res) => {
                     ORDER BY count DESC, label ASC
                 `,
                 summaryValues
+            ),
+
+            pool.query(
+                `
+                    SELECT COUNT(*)::int AS total
+                    FROM records r
+                    ${todayCasesClause}
+                `,
+                values
             ),
 
             pool.query(
@@ -1589,6 +1607,8 @@ const getDashboardSummary = async (req, res) => {
                     categoryOptionsResult.rows || [],
                 registrarPerformance:
                     registrarPerformanceResult.rows || [],
+                todayCases:
+                    Number(todayCasesResult.rows[0]?.total || 0),
                 statusSms:
                     statusSmsSummary,
                 branchStaffDashboard,

@@ -31,6 +31,7 @@ const overviewCategoryFilter = document.getElementById("overviewCategoryFilter")
 const overviewYearFilter = document.getElementById("overviewYearFilter");
 const registrarPerformanceList = document.getElementById("registrarPerformanceList");
 const registrarPerformanceInsight = document.getElementById("registrarPerformanceInsight");
+const registrarPerformanceTodayTotal = document.getElementById("registrarPerformanceTodayTotal");
 const statusSmsGrid = document.getElementById("statusSmsGrid");
 const buySmsBundleButton = document.getElementById("buySmsBundleButton");
 const dashboardSmsBalance = document.getElementById("dashboardSmsBalance");
@@ -562,6 +563,12 @@ function renderRegistrarPerformance(summary) {
         registrarPerformanceInsight.textContent = highest && highest.count
             ? `Highest-performing registrar: ${highest.label}`
             : "No registrar performance data for this selection.";
+    }
+
+    if (registrarPerformanceTodayTotal) {
+        registrarPerformanceTodayTotal.textContent = formatNumber(
+            Number(summary?.todayCases ?? 0) || 0
+        );
     }
 }
 
