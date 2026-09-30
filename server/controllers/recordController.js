@@ -1207,9 +1207,13 @@ const getDashboardSummary = async (req, res) => {
             r.registration_date::date,
             r.created_at::date
         ) = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date`;
+        const todayCasesStatusCondition = `LOWER(REPLACE(REPLACE(COALESCE(r.status, ''), '_', ' '), '-', ' ')) NOT IN (
+            'processing',
+            'waiting for approval'
+        )`;
         const todayCasesClause = clause
-            ? `${clause} AND ${todayCasesDateCondition}`
-            : `WHERE ${todayCasesDateCondition}`;
+            ? `${clause} AND ${todayCasesDateCondition} AND ${todayCasesStatusCondition}`
+            : `WHERE ${todayCasesDateCondition} AND ${todayCasesStatusCondition}`;
 
         // Recent Records is independent of the dashboard aggregates. Start it
         // now so it can run concurrently with the summary queries below.
