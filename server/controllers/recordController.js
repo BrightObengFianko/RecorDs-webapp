@@ -616,6 +616,13 @@ const createRecord = async (req, res) => {
             });
         }
 
+        if (!isValidPhoneNumber(phone_number)) {
+            return res.status(400).json({
+                success: false,
+                message: "Phone number must be 9 digits without a leading 0 or 10 digits with a leading 0."
+            });
+        }
+
         if (
             category &&
             String(category).toLowerCase().trim() === "death" &&
@@ -2138,6 +2145,13 @@ const updateRecord = async (req, res) => {
                 success: false,
                 message:
                     "Customer name is required."
+            });
+        }
+
+        if (!isValidPhoneNumber(phone_number)) {
+            return res.status(400).json({
+                success: false,
+                message: "Phone number must be 9 digits without a leading 0 or 10 digits with a leading 0."
             });
         }
 

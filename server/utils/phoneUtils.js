@@ -48,13 +48,19 @@ function isValidPhoneNumber(phone) {
 
     const cleaned = String(phone).replace(/\D/g, "");
 
-    // Should be 12 digits: 233 + 9-digit number
-    if (cleaned.length !== 12) return false;
+    // Accept the user-facing Ghana formats:
+    // - 9 digits without a leading zero
+    // - 10 digits with a leading zero
+    // Also accept the canonical value stored by RecorDs: 233 + 9 digits.
+    if (cleaned.length === 9) {
+        return !cleaned.startsWith("0");
+    }
 
-    // Should start with 233
-    if (!cleaned.startsWith("233")) return false;
+    if (cleaned.length === 10) {
+        return cleaned.startsWith("0");
+    }
 
-    return true;
+    return cleaned.length === 12 && cleaned.startsWith("233");
 }
 
 module.exports = {

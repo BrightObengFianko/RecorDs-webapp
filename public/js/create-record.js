@@ -925,7 +925,6 @@ if (dateInput) {
 // AUTO-FORMAT PHONE NUMBER
 // =========================================
 
-const MIN_PHONE_DIGITS = 10;
 let phoneLengthNoticeTimer = null;
 let phoneLengthNoticeShown = false;
 
@@ -933,21 +932,38 @@ function getPhoneDigits(value) {
     return String(value || "").replace(/\D/g, "");
 }
 
+function isValidPhoneInput(value) {
+    const digits = getPhoneDigits(value);
+
+    if (digits.length === 9) {
+        return !digits.startsWith("0");
+    }
+
+    if (digits.length === 10) {
+        return digits.startsWith("0");
+    }
+
+    return digits.length === 12 && digits.startsWith("233");
+}
+
+const PHONE_NUMBER_ERROR =
+    "Phone number must be 9 digits without a leading 0 or 10 digits with a leading 0.";
+
 function validatePhoneNumberLength({ notify = false } = {}) {
     if (!phoneNumberInput) return true;
 
     const digits = getPhoneDigits(phoneNumberInput.value);
-    const isValid = digits.length >= MIN_PHONE_DIGITS;
+    const isValid = isValidPhoneInput(digits);
 
     phoneNumberInput.setCustomValidity(
         digits && !isValid
-            ? "Phone number must contain at least 10 digits."
+            ? PHONE_NUMBER_ERROR
             : ""
     );
 
     if (notify && digits && !isValid && !phoneLengthNoticeShown) {
         phoneLengthNoticeShown = true;
-        Notification.warning("Phone number has to be 10 digits.");
+        Notification.warning(PHONE_NUMBER_ERROR);
     }
 
     if (isValid) {
@@ -1240,13 +1256,11 @@ recordForm.addEventListener(
 
         }
 
-        if (getPhoneDigits(phoneNumber).length < MIN_PHONE_DIGITS) {
-            Notification.warning(
-                "Phone number has to be 10 digits."
-            );
+        if (!isValidPhoneInput(phoneNumber)) {
+            Notification.warning(PHONE_NUMBER_ERROR);
 
             phoneNumberInput.setCustomValidity(
-                "Phone number must contain at least 10 digits."
+                PHONE_NUMBER_ERROR
             );
             phoneNumberInput.focus();
             return;

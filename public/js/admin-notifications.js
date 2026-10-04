@@ -350,7 +350,7 @@
         panel.setAttribute("role", "dialog");
         panel.setAttribute("aria-label", "Notifications");
         panel.hidden = true;
-        panel.innerHTML = `<header><strong>Notifications</strong><span class="admin-notification-header-actions"><button type="button" class="admin-notification-mark-all">Mark all read</button><button type="button" class="admin-notification-clear-all">Clear all</button></span></header><div class="admin-notification-list"></div><a class="admin-notification-view-all" href="reports.html#notifications">View All Notifications →</a>`;
+        panel.innerHTML = `<header><strong>Notifications</strong><span class="admin-notification-header-actions"><button type="button" class="admin-notification-mark-all">Mark all read</button><button type="button" class="admin-notification-clear-all">Clear all</button></span><button type="button" class="admin-notification-close" aria-label="Close notifications" title="Close notifications">&times;</button></header><div class="admin-notification-list"></div><a class="admin-notification-view-all" href="reports.html#notifications">View All Notifications →</a>`;
         panelUnreadIndicator = document.createElement("span");
         panelUnreadIndicator.className = "admin-notification-unread-copy";
         panelUnreadIndicator.hidden = true;
@@ -363,6 +363,11 @@
         });
         panel.querySelector(".admin-notification-mark-all").addEventListener("click", markAllRead);
         panel.querySelector(".admin-notification-clear-all").addEventListener("click", clearAllNotifications);
+        panel.querySelector(".admin-notification-close").addEventListener("click", () => {
+            panel.hidden = true;
+            button.setAttribute("aria-expanded", "false");
+            button.focus();
+        });
         document.addEventListener("click", closePanel);
         document.addEventListener("keydown", event => {
             if (event.key === "Escape" && panel && !panel.hidden) {

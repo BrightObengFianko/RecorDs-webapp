@@ -141,6 +141,18 @@
                 notes: String(values.get("notes") || "").trim()
             };
             if (!updatedPayload.name) return;
+
+            const phoneDigits = updatedPayload.phone_number.replace(/\D/g, "");
+            const validPhone =
+                (phoneDigits.length === 9 && !phoneDigits.startsWith("0")) ||
+                (phoneDigits.length === 10 && phoneDigits.startsWith("0")) ||
+                (phoneDigits.length === 12 && phoneDigits.startsWith("233"));
+
+            if (!validPhone) {
+                Notification.warning("Phone number must be 9 digits without a leading 0 or 10 digits with a leading 0.");
+                return;
+            }
+
             await window.RecordOfflineQueue.queueRecord(updatedPayload, { operationType: "CREATE" });
             close();
             await renderQueue();
