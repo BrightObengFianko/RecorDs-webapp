@@ -1967,7 +1967,6 @@ function displayResults() {
             const smsProcessing = smsStatus === "sending";
             const smsError = String(record.sms_error || "").trim();
             const smsHasError = !smsSent && Boolean(smsError || smsStatus === "error");
-            const canSendSms = normalizeStatus(status) === "ready" && !smsSent && !smsProcessing;
 
 
             // =================================
@@ -2166,18 +2165,6 @@ function displayResults() {
                                     <use href="#icon-trash"></use>
                                 </svg>
                                 <span>Delete</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                class="action-item is-success"
-                                data-action="send-sms"
-                                data-id="${escapeHtml(record.id || "")}"${canSendSms ? "" : " disabled"}
-                            >
-                                <svg class="ui-icon action-item-icon" aria-hidden="true">
-                                    <use href="#icon-mail"></use>
-                                </svg>
-                                <span>Send SMS</span>
                             </button>
 
                             <button
@@ -3001,18 +2988,6 @@ if (resultsBody) {
                     return;
 
                 }
-
-                if (action === "send-sms") {
-                    const record = findRecordById(id);
-                    if (!record) {
-                        Notification.error("Unable to load this case for SMS.");
-                        return;
-                    }
-
-                    openSmsSendModal(record);
-                    return;
-                }
-
 
                 const newStatus =
                     action === "ready"
