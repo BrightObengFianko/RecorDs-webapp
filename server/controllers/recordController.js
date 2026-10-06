@@ -68,23 +68,23 @@ function normalizeSmsWorkflowResult(workflowResult) {
         (status === "error" || status === "failed" || status === "failure" ? rawResponse.message : "") ||
         ""
     ).trim();
-    const explicitFailure = sources.some(source =>
-        (source.final === true || source.terminal === true) && (
+    const terminalSources = sources.filter(source =>
+        source.final === true || source.terminal === true
+    );
+    const explicitFailure = terminalSources.some(source =>
             source.success === false ||
             source.sms_sent === false ||
             source.sent === false ||
             source.delivered === false ||
             ["error", "failed", "failure"].includes(String(source.status || "").trim().toLowerCase())
-        )
     );
-    const explicitSuccess = sources.some(source =>
+    const explicitSuccess = terminalSources.some(source =>
         source.sms_sent === true ||
         source.sent === true ||
         source.delivered === true ||
         source.sms_sent_candidate === true ||
-        Boolean(source.messageId) ||
-        Boolean(source.message_id)
-    ) || ["sent", "delivered", "success"].includes(status);
+        ["sent", "delivered", "success"].includes(String(source.status || "").trim().toLowerCase())
+    );
     const acceptedForProcessing = sources.some(source =>
         source.accepted === true ||
         ["sending", "processing", "queued", "accepted", "pending"].includes(
