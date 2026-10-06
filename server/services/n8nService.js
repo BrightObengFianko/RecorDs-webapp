@@ -70,10 +70,13 @@ const sendToN8N = async (data) => {
             signal: AbortSignal.timeout(timeoutMs)
         });
     } catch (error) {
-        const networkError = new Error("Unable to reach the SMS service. Please try again.");
-        networkError.code = "N8N_NETWORK_ERROR";
-        networkError.cause = error;
-        throw networkError;
+        return {
+            success: false,
+            accepted: true,
+            status: "SENDING",
+            message: "The SMS request may still be processing; its final status will be checked.",
+            transportError: error.message
+        };
     }
 
     if (!response.ok) {
@@ -95,20 +98,39 @@ const sendToN8N = async (data) => {
         error.code = "N8N_HTTP_ERROR";
         error.status = response.status;
         error.response = responseBody;
+
+        if (response.status >= 500) {
+            return {
+                success: false,
+                accepted: true,
+                status: "SENDING",
+                message: "The SMS request may still be processing; its final status will be checked.",
+                httpStatus: response.status
+            };
+        }
+
         throw error;
     }
 
     const responseText = await response.text();
 
     if (!responseText.trim()) {
-        return { success: true };
+        return {
+            success: false,
+            accepted: true,
+            status: "SENDING",
+            httpStatus: response.status
+        };
     }
 
     try {
         return JSON.parse(responseText);
     } catch (error) {
         return {
-            success: true,
+            success: false,
+            accepted: true,
+            status: "SENDING",
+            httpStatus: response.status,
             message: responseText
         };
     }

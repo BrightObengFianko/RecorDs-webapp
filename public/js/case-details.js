@@ -83,12 +83,8 @@ function formatSmsDetails(smsSent, smsDate, smsStatus, smsError) {
     const normalizedStatus = String(smsStatus || "").trim().toLowerCase();
     const currentError = String(smsError || "").trim();
 
-    if (normalizedStatus === "error" || currentError) {
-        return `Error: ${currentError || "SMS attempt failed."}`;
-    }
-
     if (normalizedStatus === "sending") {
-        return "Sending...";
+        return "Sending SMS...";
     }
 
     const sent =
@@ -100,8 +96,10 @@ function formatSmsDetails(smsSent, smsDate, smsStatus, smsError) {
         smsSent === 1 ||
         smsSent === "1";
 
-    if (!sent) {
-        return "Not Sent";
+    if (!sent && normalizedStatus !== "sent") {
+        return normalizedStatus === "error" || currentError
+            ? `Error: ${currentError || "SMS attempt failed."}`
+            : "Not Sent";
     }
 
     if (!smsDate) {

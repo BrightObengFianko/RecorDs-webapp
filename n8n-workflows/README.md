@@ -28,6 +28,13 @@ N8N_WEBHOOK_TIMEOUT_MS=10000
 
 The backend sends the secret only in the `X-N8N-Webhook-Secret` request header. Configure the n8n Webhook workflow to reject requests unless that header exactly matches the secret. Never place the secret in browser code, n8n workflow response data, or frontend environment variables.
 
+SMS request and completion contract:
+- RecorDs sends one POST to `N8N_WEBHOOK_URL` with the record fields and `recipients` as an array of strings, for example `{"recipients":["233501234567"]}`. The number is normalized by RecorDs' Ghana phone utility before the request; an already canonical `233` number is preserved.
+- Arkesel v2 expects the provider request's `recipients` value to be an array of phone-number strings. Do not pass an object such as `{"number":"233...","recipient":"233..."}` as an item. The checked-in live workflow previously did that; it now passes `[phone]`.
+- If the webhook accepts work asynchronously, respond immediately with HTTP 202 and `{"success":true,"accepted":true,"status":"SENDING"}`. Do not put an intermediate provider error into a response that claims final failure while the workflow continues.
+- After the provider returns a terminal result, the workflow must update PostgreSQL for that record: on success set `sms_sent = 'true'`, `sms_status = 'SENT'`, `sms_date = NOW()`, and clear `sms_error`/`sms_error_at`; on confirmed failure set `sms_sent = 'false'`, `sms_status = 'ERROR'`, and store the latest useful provider error. RecorDs reads that row while polling; a timeout or a response without a terminal result remains `SENDING`. A webhook response reporting failure is considered terminal only when it includes `final: true` or `terminal: true` as well as an error/failure status.
+- The repository's `ready-sms-live.json` is a scheduled workflow export, not the configured webhook workflow. The live `OFFICE FLOW` definition and its actual execution/provider response are not stored in this repository, so deploy the same request, response, and database-update contract to that workflow in n8n.
+
 Use the production webhook URL for deployed RecorDs. A Railway/Render backend cannot reach n8n running on your computer's `localhost` or private LAN address. For local development, use a local URL in a local environment file only; for production, expose n8n through a secured HTTPS endpoint or tunnel.
 
 Duplicate protection:

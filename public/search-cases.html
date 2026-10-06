@@ -649,17 +649,17 @@
     </div>
 
     <!-- SMS Modal -->
-    <div id="smsModal" class="modal-overlay" style="display: none;">
+    <div id="smsSendModal" class="modal-overlay" style="display: none;">
         <div class="modal-content" style="width: 90%; max-width: 500px; background: var(--app-surface); border-radius: 12px; box-shadow: var(--app-shadow-soft); padding: 24px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                 <h2 style="margin: 0; font-size: 20px; font-weight: 600; color: var(--app-text);">Send SMS</h2>
-                <button id="smsCancelBtn" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--app-muted);" aria-label="Close SMS modal">×</button>
+                <button id="smsSendCancelBtn" type="button" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--app-muted);" aria-label="Close SMS modal">×</button>
             </div>
 
             <form id="smsForm" style="display: flex; flex-direction: column; gap: 16px;">
                 <div>
-                    <label for="smsPhone" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--app-text);">Phone Number</label>
-                    <input type="tel" id="smsPhone" name="phone" placeholder="Enter phone number" readonly style="width: 100%; padding: 10px 12px; border: 1px solid var(--app-border); border-radius: 8px; font-size: 14px; background: var(--app-input-bg); color: var(--app-text);">
+                    <label for="smsSendPhone" style="display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--app-text);">Phone Number</label>
+                    <input type="tel" id="smsSendPhone" name="phone" placeholder="Enter phone number" readonly style="width: 100%; padding: 10px 12px; border: 1px solid var(--app-border); border-radius: 8px; font-size: 14px; background: var(--app-input-bg); color: var(--app-text);">
                 </div>
 
                 <div>
@@ -669,12 +669,14 @@
                 </div>
 
                 <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px;">
-                    <button type="button" id="smsFormCancelBtn" class="cancel-button" style="padding: 10px 20px; border: 1px solid var(--app-border); background: transparent; color: var(--app-text); border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s;">Cancel</button>
+                    <button type="button" id="smsSendFormCancelBtn" class="cancel-button" style="padding: 10px 20px; border: 1px solid var(--app-border); background: transparent; color: var(--app-text); border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s;">Cancel</button>
                     <button type="submit" class="submit-button" id="smsSendBtn" style="padding: 10px 20px; background: var(--accent); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s;">Send SMS</button>
                 </div>
             </form>
         </div>
     </div>
+
+    <div id="smsModal" class="modal-overlay" style="display: none;"></div>
 
     <script src="js/notification.js"></script>
     <script src="js/confirm-dialog.js"></script>
@@ -682,7 +684,7 @@
     <script src="js/offline-records.js"></script>
     <script src="js/admin-notifications.js"></script>
     <script src="js/category-colors.js"></script>
-    <script src="js/search-cases.js?v=action-menu-portal-1"></script>
+    <script src="js/search-cases.js?v=sms-async-status-1"></script>
 
 </body>
 

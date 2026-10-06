@@ -69,13 +69,15 @@ function normalizeSmsWorkflowResult(workflowResult) {
         ""
     ).trim();
     const explicitFailure = sources.some(source =>
-        source.success === false ||
-        source.sms_sent === false ||
-        source.sent === false ||
-        source.delivered === false
+        (source.final === true || source.terminal === true) && (
+            source.success === false ||
+            source.sms_sent === false ||
+            source.sent === false ||
+            source.delivered === false ||
+            ["error", "failed", "failure"].includes(String(source.status || "").trim().toLowerCase())
+        )
     );
     const explicitSuccess = sources.some(source =>
-        source.success === true ||
         source.sms_sent === true ||
         source.sent === true ||
         source.delivered === true ||
@@ -83,13 +85,30 @@ function normalizeSmsWorkflowResult(workflowResult) {
         Boolean(source.messageId) ||
         Boolean(source.message_id)
     ) || ["sent", "delivered", "success"].includes(status);
+    const acceptedForProcessing = sources.some(source =>
+        source.accepted === true ||
+        ["sending", "processing", "queued", "accepted", "pending"].includes(
+            String(source.status || "").trim().toLowerCase()
+        )
+    );
 
-    if (explicitFailure || ["error", "failed", "failure"].includes(status) || error) {
+    if (explicitFailure) {
         return {
             success: false,
             status: "ERROR",
             message: null,
             error: error || "SMS workflow failed.",
+            rawResponse
+        };
+    }
+
+    if (acceptedForProcessing) {
+        return {
+            success: false,
+            accepted: true,
+            status: "SENDING",
+            message: String(rawResponse.message || "SMS request accepted and is processing.").trim(),
+            error: null,
             rawResponse
         };
     }
@@ -106,9 +125,10 @@ function normalizeSmsWorkflowResult(workflowResult) {
 
     return {
         success: false,
-        status: "ERROR",
+        accepted: true,
+        status: "SENDING",
         message: null,
-        error: "SMS service did not confirm delivery.",
+        error: null,
         rawResponse
     };
 }
@@ -116,7 +136,8 @@ function normalizeSmsWorkflowResult(workflowResult) {
 async function saveSmsWorkflowState(recordId, workflowResult, attemptBy) {
     const smsResult = normalizeSmsWorkflowResult(workflowResult);
 
-    await pool.query(
+    if (smsResult.status !== "SENDING") {
+        await pool.query(
         `
             UPDATE records
             SET
@@ -129,21 +150,70 @@ async function saveSmsWorkflowState(recordId, workflowResult, attemptBy) {
                 sms_last_attempt_by = $6,
                 sms_date = CASE WHEN $7 THEN CURRENT_TIMESTAMP ELSE sms_date END,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = $8
+                        WHERE id = $8
+                            AND LOWER(COALESCE(sms_status, '')) = 'sending'
+                            AND LOWER(COALESCE(sms_sent::text, '')) NOT IN ('true', 't', 'yes', 'y', '1', 'sent', 'success')
         `,
         [
-            smsResult.success ? "true" : "false",
+            smsResult.status === "SENT" ? "true" : "false",
             smsResult.status,
             smsResult.error,
-            !smsResult.success,
+            smsResult.status === "ERROR",
             JSON.stringify(smsResult.rawResponse || {}),
             attemptBy || null,
-            smsResult.success,
+            smsResult.status === "SENT",
             recordId
         ]
-    );
+        );
+    }
 
-    return smsResult;
+    const currentResult = await pool.query(
+        `
+            SELECT sms_sent, sms_status, sms_error, sms_error_at, sms_last_response,
+                   sms_last_attempt_at, sms_date
+            FROM records
+            WHERE id = $1
+            LIMIT 1
+        `,
+        [recordId]
+    );
+    const current = currentResult.rows[0] || {};
+    const currentStatus = String(current.sms_status || "").trim().toLowerCase();
+    const currentSmsSent = ["true", "t", "yes", "y", "1", "sent", "success"].includes(
+        String(current.sms_sent || "").trim().toLowerCase()
+    );
+    const finalStatus = currentSmsSent || currentStatus === "sent"
+        ? "SENT"
+        : currentStatus === "error" || String(current.sms_error || "").trim()
+            ? "ERROR"
+            : "SENDING";
+
+    if (finalStatus === "SENT" && (current.sms_error || currentStatus !== "sent")) {
+        await pool.query(
+            `
+                UPDATE records
+                SET sms_status = 'SENT',
+                    sms_error = NULL,
+                    sms_error_at = NULL,
+                    sms_date = COALESCE(sms_date, CURRENT_TIMESTAMP)
+                WHERE id = $1
+                  AND LOWER(COALESCE(sms_sent::text, '')) IN ('true', 't', 'yes', 'y', '1', 'sent', 'success')
+            `,
+            [recordId]
+        );
+        current.sms_status = "SENT";
+        current.sms_error = null;
+        current.sms_error_at = null;
+    }
+
+    return {
+        ...smsResult,
+        success: finalStatus === "SENT",
+        status: finalStatus,
+        error: finalStatus === "ERROR" ? current.sms_error || smsResult.error : null,
+        rawResponse: current.sms_last_response || smsResult.rawResponse,
+        record: current
+    };
 }
 
 function normalizeStatusValue(value) {
@@ -3013,10 +3083,22 @@ const sendSms = async (req, res) => {
             });
         }
 
-        if (String(record.sms_sent).toLowerCase() === "true") {
+        if (
+            ["true", "t", "yes", "y", "1", "sent", "success"].includes(
+                String(record.sms_sent || "").trim().toLowerCase()
+            ) || String(record.sms_status || "").trim().toLowerCase() === "sent"
+        ) {
             return res.status(409).json({
                 success: false,
                 message: "SMS has already been sent for this record."
+            });
+        }
+
+        if (String(record.sms_status || "").trim().toLowerCase() === "sending") {
+            return res.status(409).json({
+                success: false,
+                status: "SENDING",
+                message: "An SMS is already being processed for this record."
             });
         }
 
@@ -3042,11 +3124,8 @@ const sendSms = async (req, res) => {
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $1
                   AND status = 'Ready'
-                  AND COALESCE(LOWER(sms_sent), 'false') <> 'true'
-                  AND (
-                      COALESCE(sms_status, '') <> 'Sending'
-                      OR updated_at < CURRENT_TIMESTAMP - INTERVAL '10 minutes'
-                  )
+                                    AND LOWER(COALESCE(sms_sent, 'false')) NOT IN ('true', 't', 'yes', 'y', '1', 'sent', 'success')
+                                    AND LOWER(COALESCE(sms_status, '')) NOT IN ('sending', 'sent')
                 RETURNING id, updated_at
             `,
             [id, req.user?.id || null]
@@ -3067,8 +3146,7 @@ const sendSms = async (req, res) => {
                 dateOfBirth: record.date_of_birth,
                 dateOfDeath: record.date_of_death,
                 phoneNumber,
-                // Provide the canonical number under the field names used by
-                // both the webhook workflow and Arkesel request nodes.
+                // Arkesel v2 requires recipients to be an array of phone strings.
                 phone_number: phoneNumber,
                 recipients: [phoneNumber],
                 registrar: record.registrar,
@@ -3085,6 +3163,22 @@ const sendSms = async (req, res) => {
             );
 
             if (!smsResult.success) {
+                if (smsResult.status === "SENDING") {
+                    return res.status(202).json({
+                        success: true,
+                        accepted: true,
+                        status: "SENDING",
+                        message: "SMS request accepted. Delivery is still processing.",
+                        record: {
+                            id: record.id,
+                            sms_sent: "false",
+                            sms_status: "SENDING",
+                            sms_error: null,
+                            sms_date: record.sms_date
+                        }
+                    });
+                }
+
                 const smsError = smsResult.error;
                 await recordActivity({
                     request: req,
@@ -3126,7 +3220,7 @@ const sendSms = async (req, res) => {
                 });
             }
 
-            const smsSent = smsResult.success;
+            const smsSent = smsResult.status === "SENT";
 
             await recordActivity({
                 request: req,
@@ -3176,7 +3270,6 @@ const sendSms = async (req, res) => {
                 }
             });
         } catch (workflowError) {
-            const smsError = String(workflowError.message || "SMS service unavailable.").slice(0, 1000);
             const workflowResponse = workflowError.smsResult?.rawResponse || workflowError.response || null;
             await pool.query(
                 `

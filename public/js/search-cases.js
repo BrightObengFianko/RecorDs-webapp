@@ -123,6 +123,14 @@ const searchSmsBalance =
 
 const searchSmsError =
     document.getElementById("searchSmsError");
+const smsSendModal = document.getElementById("smsSendModal");
+const smsSendForm = document.getElementById("smsForm");
+const smsSendPhone = document.getElementById("smsSendPhone");
+const smsSendMessage = document.getElementById("smsMessage");
+const smsSendButton = document.getElementById("smsSendBtn");
+const smsSendCancelButton = document.getElementById("smsSendCancelBtn");
+const smsSendFormCancelButton = document.getElementById("smsSendFormCancelBtn");
+const smsCharCount = document.getElementById("smsCharCount");
 
 
 // =========================================
@@ -1954,15 +1962,12 @@ function displayResults() {
             // SMS
             // =================================
 
-            const smsSent =
-                record.sms_sent === true ||
-                record.sms_sent === "true" ||
-                record.sms_sent === "YES" ||
-                record.sms_sent === "Yes";
-
-            const smsHasError = Boolean(
-                String(record.sms_error || "").trim()
-            ) || String(record.sms_status || "").toLowerCase() === "error";
+            const smsStatus = String(record.sms_status || "").trim().toLowerCase();
+            const smsSent = isSmsSentValue(record.sms_sent) || smsStatus === "sent";
+            const smsProcessing = smsStatus === "sending";
+            const smsError = String(record.sms_error || "").trim();
+            const smsHasError = !smsSent && Boolean(smsError || smsStatus === "error");
+            const canSendSms = normalizeStatus(status) === "ready" && !smsSent && !smsProcessing;
 
 
             // =================================
@@ -2004,10 +2009,12 @@ function displayResults() {
             // =================================
 
             const smsHtml =
-                smsHasError
+                smsProcessing
+                    ? `<span class="sms-sending">Sending SMS...</span>`
+                    : smsHasError
                     ? `
-                        <span class="sms-error" title="${escapeHtml(record.sms_error || "SMS error")}">
-                            Error
+                        <span class="sms-error" title="${escapeHtml(smsError || "SMS failed")}">
+                            SMS ERROR
                         </span>
                     `
                     : smsSent
@@ -2159,6 +2166,18 @@ function displayResults() {
                                     <use href="#icon-trash"></use>
                                 </svg>
                                 <span>Delete</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                class="action-item is-success"
+                                data-action="send-sms"
+                                data-id="${escapeHtml(record.id || "")}"${canSendSms ? "" : " disabled"}
+                            >
+                                <svg class="ui-icon action-item-icon" aria-hidden="true">
+                                    <use href="#icon-mail"></use>
+                                </svg>
+                                <span>Send SMS</span>
                             </button>
 
                             <button
@@ -2983,6 +3002,17 @@ if (resultsBody) {
 
                 }
 
+                if (action === "send-sms") {
+                    const record = findRecordById(id);
+                    if (!record) {
+                        Notification.error("Unable to load this case for SMS.");
+                        return;
+                    }
+
+                    openSmsSendModal(record);
+                    return;
+                }
+
 
                 const newStatus =
                     action === "ready"
@@ -3146,6 +3176,9 @@ let clearNoteBtn =
 let activeSmsRecordId =
     null;
 
+let activeSmsSendRecordId = null;
+let smsSendInFlight = false;
+
 let smsCancelBtn =
     document.getElementById("smsCancelBtn");
 
@@ -3259,6 +3292,202 @@ function renderSmsDetailsModal() {
 
 renderSmsDetailsModal();
 
+function openSmsSendModal(record) {
+    if (!smsSendModal || !smsSendForm || !record) {
+        return;
+    }
+
+    const status = String(record.sms_status || "").trim().toLowerCase();
+    if (isSmsSentValue(record.sms_sent) || status === "sent" || status === "sending") {
+        Notification.info(status === "sending" ? "An SMS is already processing." : "This case already has an SMS sent.");
+        return;
+    }
+
+    activeSmsSendRecordId = record.id;
+    smsSendPhone.value = record.phone_number || "";
+    smsSendMessage.value = `Hello ${record.name || "customer"}, your case is ready. Please visit the office. Thank you.`;
+    if (smsCharCount) {
+        smsCharCount.textContent = `${smsSendMessage.value.length} / 160 characters`;
+    }
+    smsSendModal.style.display = "flex";
+    smsSendMessage.focus();
+}
+
+function closeSmsSendModal() {
+    if (!smsSendInFlight && smsSendModal) {
+        smsSendModal.style.display = "none";
+    }
+}
+
+function updateLocalSmsRecord(record) {
+    if (!record) {
+        return;
+    }
+
+    const recordIndex = allResults.findIndex(item => String(item.id) === String(record.id));
+    if (recordIndex === -1) {
+        return;
+    }
+
+    allResults[recordIndex] = {
+        ...allResults[recordIndex],
+        ...record
+    };
+    displayResults();
+}
+
+async function pollSmsStatus(recordId) {
+    const delays = [0, 1000, 2000, 4000, 4000, 4000, 4000, 4000, 4000];
+    let latestRecord = null;
+
+    for (const delay of delays) {
+        if (delay) {
+            await new Promise(resolve => window.setTimeout(resolve, delay));
+        }
+
+        try {
+            const data = await sendRecordRequest(
+                `/api/records/${encodeURIComponent(recordId)}`,
+                { method: "GET" }
+            );
+            latestRecord = data?.record || latestRecord;
+            if (latestRecord) {
+                updateLocalSmsRecord(latestRecord);
+            }
+
+            const status = String(latestRecord?.sms_status || "").trim().toLowerCase();
+            if (status === "sent" || isSmsSentValue(latestRecord?.sms_sent)) {
+                return { status: "SENT", record: latestRecord };
+            }
+            if (status === "error" || String(latestRecord?.sms_error || "").trim()) {
+                return { status: "ERROR", record: latestRecord };
+            }
+        } catch (error) {
+            console.warn("SMS status check failed; retrying:", error.message);
+        }
+    }
+
+    return { status: "SENDING", record: latestRecord };
+}
+
+if (smsCharCount && smsSendMessage) {
+    smsSendMessage.addEventListener("input", () => {
+        smsCharCount.textContent = `${smsSendMessage.value.length} / 160 characters`;
+    });
+}
+
+smsSendCancelButton?.addEventListener("click", closeSmsSendModal);
+smsSendFormCancelButton?.addEventListener("click", closeSmsSendModal);
+smsSendModal?.addEventListener("click", event => {
+    if (event.target === smsSendModal) {
+        closeSmsSendModal();
+    }
+});
+
+smsSendForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!activeSmsSendRecordId || smsSendInFlight) {
+        return;
+    }
+
+    const message = String(smsSendMessage.value || "").trim();
+    if (!message) {
+        Notification.error("Message is required.");
+        return;
+    }
+    if (message.length > 160) {
+        Notification.error("Message must not exceed 160 characters.");
+        return;
+    }
+
+    const recordId = activeSmsSendRecordId;
+    smsSendInFlight = true;
+    smsSendButton.disabled = true;
+    smsSendButton.textContent = "Sending SMS...";
+    smsSendFormCancelButton.disabled = true;
+
+    const currentRecord = findRecordById(recordId);
+    if (currentRecord) {
+        updateLocalSmsRecord({
+            ...currentRecord,
+            sms_sent: "false",
+            sms_status: "SENDING",
+            sms_error: null
+        });
+    }
+    Notification.info("Sending SMS...");
+
+    let confirmedError = "";
+    let requestError = "";
+    try {
+        const response = await fetch(`/api/records/${encodeURIComponent(recordId)}/send-sms`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ message })
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (data.record) {
+            updateLocalSmsRecord(data.record);
+        }
+
+        if (data.status === "ERROR") {
+            confirmedError = String(data.error || data.message || "SMS request failed.");
+        } else if (!response.ok && data.status !== "SENDING") {
+            if (response.status < 500) {
+                requestError = String(data.message || "Unable to submit the SMS request.");
+            }
+        }
+        loadSearchSmsBalance();
+    } catch (error) {
+        console.warn("SMS request response was interrupted; checking database status:", error.message);
+    }
+
+    if (requestError) {
+        try {
+            const data = await sendRecordRequest(
+                `/api/records/${encodeURIComponent(recordId)}`,
+                { method: "GET" }
+            );
+            if (data?.record) {
+                updateLocalSmsRecord(data.record);
+            }
+        } catch (error) {
+            console.warn("Unable to refresh after SMS request rejection:", error.message);
+        }
+        Notification.error(requestError);
+    } else if (confirmedError) {
+        const latest = await pollSmsStatus(recordId);
+        if (latest.status === "SENT") {
+            Notification.success("SMS SENT");
+        } else if (latest.status === "ERROR") {
+            Notification.error(latest.record?.sms_error || confirmedError);
+        } else {
+            Notification.info("SMS request status is still being confirmed.");
+        }
+    } else {
+        const result = await pollSmsStatus(recordId);
+        if (result.status === "SENT") {
+            Notification.success("SMS SENT");
+        } else if (result.status === "ERROR") {
+            Notification.error(result.record?.sms_error || "SMS ERROR");
+        } else {
+            Notification.info("SMS is still processing. The case status will update when n8n finishes.");
+        }
+    }
+
+    smsSendInFlight = false;
+    smsSendButton.disabled = false;
+    smsSendButton.textContent = "Send SMS";
+    smsSendFormCancelButton.disabled = false;
+    if (smsSendModal) {
+        smsSendModal.style.display = "none";
+    }
+});
+
 function setSmsField(element, value) {
 
     if (!element) {
@@ -3313,17 +3542,19 @@ function openSmsDetailsModal(record) {
     setSmsField(
         smsStatusValue,
         smsStatus === "sending"
-            ? "Sending..."
-            : smsError || smsStatus === "error"
-            ? "Error"
+            ? "Sending SMS..."
             : smsSent || smsStatus === "sent"
                 ? "Sent"
+            : smsError || smsStatus === "error"
+                ? "SMS ERROR"
                 : "Not Sent"
     );
 
     setSmsField(
         smsErrorValue,
-        smsError || "No error"
+        smsStatus === "sending" || smsSent || smsStatus === "sent"
+            ? "No confirmed error"
+            : smsError || "No error"
     );
 
     setSmsField(

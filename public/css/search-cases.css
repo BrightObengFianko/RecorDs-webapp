@@ -994,6 +994,15 @@ tbody tr:hover {
     font-weight: 700;
 }
 
+.sms-sending {
+    padding: 5px 8px;
+    border-radius: 5px;
+    background: #fff7df;
+    color: #8a5a00;
+    font-size: 10px;
+    font-weight: 700;
+}
+
 .note-cell {
     max-width: 220px;
 }
@@ -1043,21 +1052,21 @@ tbody tr:hover {
     align-items: center;
     gap: 7px;
     min-height: 40px;
-    max-width: 260px;
+    max-width: min(520px, 48vw);
     padding: 0 11px;
     border: 1px solid #fecaca;
     border-radius: 10px;
     color: var(--app-muted);
     background: var(--app-surface);
     font-size: 11px;
-    white-space: nowrap;
+    white-space: normal;
 }
 
 .search-sms-error strong {
-    overflow: hidden;
+    min-width: 0;
     color: #dc2626;
     font-size: 13px;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
 }
 
 
@@ -1634,16 +1643,10 @@ body.search-page .content {
         overflow: hidden;
     }
 
-    /* Keep the mobile Search header focused on the balance and core actions. */
-    .search-sms-error {
-        display: none !important;
-    }
-
     .search-sms-balance strong,
     .search-sms-error strong {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        overflow-wrap: anywhere;
     }
 
     .page-top-right .heading-action-button {
