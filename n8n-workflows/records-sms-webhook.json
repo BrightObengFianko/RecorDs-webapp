@@ -1,0 +1,336 @@
+{
+  "name": "RecorDS",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sms.arkesel.com/api/v2/sms/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "api-key",
+              "value": "={{ $env.ARKESEL_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "sender",
+              "value": "KASOABDR"
+            },
+            {
+              "name": "recipients",
+              "value": "={{ [$json.phone_number] }}"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.message }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1088,
+        816
+      ],
+      "id": "bea93919-92dc-47a7-a86e-c01eb9bf518d",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-sms",
+        "options": {},
+        "authentication": "headerAuth",
+        "responseMode": "onReceived"
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1920,
+        800
+      ],
+      "id": "e6be850c-1501-44f0-ab49-928b75b9ffa9",
+      "name": "Webhook",
+      "webhookId": "cb0f7de3-3836-46bc-91fc-29a1055c8c60",
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "RecorDs SMS webhook secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    id,\n    name,\n    phone_number,\n    category,\n    registrar,\n    status,\n    sms_sent,\n    sms_date\nFROM records\nWHERE id = {{ $json.body.recordId }};",
+        "options": {}
+      },
+      "id": "45e6f93e-fb7d-493e-9adb-5cc838d34916",
+      "name": "Get Ready Records1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1712,
+        768
+      ],
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE records\nSET sms_sent = 'true',\n    sms_date = NOW() AT TIME ZONE 'Africa/Accra',\n    sms_status = 'SENT',\n    sms_error = NULL,\n    sms_error_at = NULL,\n    sms_last_response = '{{ JSON.stringify($json.arkesel_response ?? {}).replace(/'/g, \"''\") }}'::jsonb,\n    updated_at = NOW()\nWHERE id = {{ Number($json.record_id) }}\n  AND status = 'Ready'\n  AND LOWER(COALESCE(sms_status, '')) = 'sending'\n  AND LOWER(COALESCE(sms_sent::text, '')) NOT IN ('true', 't', 'yes', 'y', '1', 'sent', 'success');",
+        "options": {}
+      },
+      "id": "c356507a-0927-4c88-bc25-16e6604937da",
+      "name": "Mark SMS Sent1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -416,
+        688
+      ],
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4a2dcd1a-d608-451d-b657-b3f141e9f711",
+              "leftValue": "={{ Boolean($json.arkesel_response.success === true || $json.arkesel_response.status === 'success' || $json.arkesel_response.messageId || $json.arkesel_response.data?.messageId) }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals",
+                "name": "filter.operator.notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -672,
+        848
+      ],
+      "id": "5195256f-516d-4689-9867-571eb2e3145d",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d050835b-2edd-4b96-b074-6179672a3d24",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "Ready",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "2104533a-1ea5-4aa5-9ec4-bf57cdce688c",
+              "leftValue": "={{ $json.sms_sent }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1536,
+        768
+      ],
+      "id": "16dbeff3-9572-4c0b-ab4f-afd21424b1ff",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE records\nSET sms_sent = 'false',\n    sms_status = 'ERROR',\n    sms_error = '{{ String($json.arkesel_response?.error || $json.arkesel_response?.message || \"Arkesel rejected the SMS request.\").replace(/'/g, \"''\") }}',\n    sms_error_at = NOW(),\n    sms_last_response = '{{ JSON.stringify($json.arkesel_response ?? {}).replace(/'/g, \"''\") }}'::jsonb,\n    sms_last_attempt_at = NOW(),\n    updated_at = NOW()\nWHERE id = {{ Number($json.record_id) }}\n  AND LOWER(COALESCE(sms_status, '')) = 'sending'\n  AND LOWER(COALESCE(sms_sent::text, '')) NOT IN ('true', 't', 'yes', 'y', '1', 'sent', 'success');",
+        "options": {}
+      },
+      "id": "a55e9bce-8018-44df-8e42-067abb614c04",
+      "name": "Mark SMS Failed1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -448,
+        944
+      ],
+      "credentials": {
+        "postgres": {
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const arkesel = $json;\n\nconst original = $('prepare sms2').item.json;\n\nreturn {\n  json: {\n    record_id: original.record_id,\n    phone_number: original.phone_number,\n    message: original.message,\n    arkesel_status: arkesel.status,\n    arkesel_response: arkesel\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -864,
+        672
+      ],
+      "id": "0a3f7fb1-ebf7-4245-8363-b873ec9928be",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const name = $json.name;\nconst record_id = $json.id;\n\n// Clean registrar\nconst registrar = String($json.registrar || \"\")\n  .trim()\n  .toUpperCase();\n\n// Clean category\nconst category = String($json.category || \"\")\n  .trim()\n  .toUpperCase();\n\n// Determine certificate type\nconst certificateType = category === \"DEATH\"\n  ? \"Death certificate\"\n  : \"Birth certificate\";\n\nlet message;\n\nif (registrar === \"OFFICE\") {\n\n  message = `Dear ${name}, your ${certificateType} is ready. Visit Birth & Deaths Registry, Kasoa, Mon-Fri, 8am-4:30pm to collect your certificate. Thank you.`;\n\n} else if (registrar === \"POLYCLINIC\") {\n\n  message = `Dear ${name}, your ${certificateType} is ready. Visit Kasoa Polyclinic, Mon-Fri, 8am-3pm, to collect your certificate. Thank you.`;\n\n} else if (registrar === \"NEW MARKET\") {\n\n  message = `Dear ${name}, your ${certificateType} is ready. Visit New Market Polyclinic, Kasoa, Mon-Fri, 8am-4:30pm, to collect your certificate. Thank you.`;\n\n} else {\n\n \n  message = `Dear ${name}, your ${certificateType} is ready. Visit Birth & Deaths Registry, Kasoa, Mon-Fri, 8am-4:30pm to collect your certificate. Thank you.`;\n}\n\nreturn {\n  json: {\n    ...$json,\n    record_id: record_id,\n    registrar_checked: registrar,\n    category_checked: category,\n    certificate_type: certificateType,\n    message: message\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1312,
+        768
+      ],
+      "id": "74b5d1fc-eb37-4ab0-b42e-27d4131bc7cb",
+      "name": "prepare sms2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Ready Records1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Ready Records1": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Mark SMS Sent1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark SMS Failed1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "prepare sms2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "prepare sms2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "nodeGroups": [],
+  "tags": []
+}
