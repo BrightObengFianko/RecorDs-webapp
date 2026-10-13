@@ -29,14 +29,16 @@ const {
     resolveRecordNotifications,
     refreshPendingApprovalNotifications
 } = require("../utils/notifications");
-const { isSystemSuperAdmin, isOfficeAdmin } = require("../utils/officeUtils");
-
 function normalizeRole(role) {
     return String(role || "")
         .trim()
         .toLowerCase()
         .replace(/[\s-]+/g, "_")
         .replace(/_+/g, "_");
+}
+
+function isSystemSuperAdmin(user) {
+    return normalizeRole(user?.role) === "system_super_admin";
 }
 
 function isBranchStaff(user) {
