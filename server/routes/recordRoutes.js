@@ -15,6 +15,7 @@ const {
     createRecord,
     updateRecord,
     updateSmsDetails,
+    markRecordReceived,
     approveRecord,
     approveProcessingRecord,
     deleteRecord,
@@ -148,9 +149,24 @@ router.patch(
     "/:id/sms-details",
     requireRole(
         "admin",
+        "office_admin",
+        "system_super_admin",
         "staff"
     ),
     updateSmsDetails
+);
+
+// MARK READY RECORD AS RECEIVED
+
+router.post(
+    "/:id/received",
+    requireRole(
+        "admin",
+        "office_admin",
+        "system_super_admin",
+        "staff"
+    ),
+    markRecordReceived
 );
 
 

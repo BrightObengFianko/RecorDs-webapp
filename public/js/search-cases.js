@@ -377,13 +377,14 @@ function isBranchStaffSearchUser() {
 
 
 function canManageRecords() {
+    const role = getCurrentUserRole().replace(/[\s-]+/g, "_");
 
     return [
         "admin",
+        "office_admin",
+        "system_super_admin",
         "staff"
-    ].includes(
-        getCurrentUserRole()
-    );
+    ].includes(role);
 
 }
 
@@ -2184,6 +2185,23 @@ function displayResults() {
                                 <span>SMS Details / Note</span>
                             </button>
 
+                            <button
+                                type="button"
+                                class="action-item is-success"
+                                data-action="received"
+                                data-id="${escapeHtml(
+                                    record.id || ""
+                                )}"
+                            >
+                                <svg
+                                    class="ui-icon action-item-icon"
+                                    aria-hidden="true"
+                                >
+                                    <use href="#icon-check"></use>
+                                </svg>
+                                <span>Received</span>
+                            </button>
+
                         </div>
 
                     </div>
@@ -2987,6 +3005,39 @@ if (resultsBody) {
 
                     return;
 
+                }
+
+                if (action === "received") {
+                    const data = await sendRecordRequest(
+                        `/api/records/${encodeURIComponent(id)}/received`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            }
+                        }
+                    );
+
+                    if (!data) {
+                        return;
+                    }
+
+                    const recordIndex = allResults.findIndex(
+                        item => String(item.id) === String(id)
+                    );
+
+                    if (recordIndex !== -1 && data.record) {
+                        allResults[recordIndex] = {
+                            ...allResults[recordIndex],
+                            ...data.record
+                        };
+                    }
+
+                    displayResults();
+                    Notification.success(
+                        data.message || "Case marked as received successfully."
+                    );
+                    return;
                 }
 
                 const newStatus =

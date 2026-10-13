@@ -29,6 +29,7 @@ const {
     resolveRecordNotifications,
     refreshPendingApprovalNotifications
 } = require("../utils/notifications");
+const { isSystemSuperAdmin, isOfficeAdmin } = require("../utils/officeUtils");
 
 function normalizeRole(role) {
     return String(role || "")
@@ -43,13 +44,19 @@ function isBranchStaff(user) {
 }
 
 function canMutateRecords(user) {
-    return ["admin", "staff"].includes(normalizeRole(user?.role));
+    return ["admin", "office_admin", "system_super_admin", "staff"].includes(normalizeRole(user?.role));
 }
 
 function canCreateRecords(user) {
-    return ["admin", "staff", "branch_staff"].includes(
+    return ["admin", "office_admin", "system_super_admin", "staff", "branch_staff"].includes(
         normalizeRole(user?.role)
     );
+}
+
+function addOfficeFilter(query, values, user, alias = "r") {
+    if (isSystemSuperAdmin(user)) return query;
+    values.push(user?.office_id || null);
+    return `${query} AND ${alias}.office_id = $${values.length}`;
 }
 
 function normalizeSmsWorkflowResult(workflowResult) {
@@ -235,6 +242,37 @@ function normalizeStatusValue(value) {
                 word.slice(1)
         )
         .join(" ");
+}
+
+const RECEIVED_NOTE_MARKER = "RECEIVED STATUS: RECEIVED";
+
+function getReceiptDetails(notes) {
+    const text = String(notes || "");
+    const markerIndex = text.toUpperCase().lastIndexOf(RECEIVED_NOTE_MARKER);
+
+    if (markerIndex < 0) {
+        return null;
+    }
+
+    const entry = text.slice(markerIndex);
+    const valueFor = label => {
+        const match = entry.match(new RegExp(`^${label}:\\s*(.+)$`, "im"));
+        return match ? match[1].trim() : "";
+    };
+
+    return {
+        date: valueFor("Received Date"),
+        time: valueFor("Received Time"),
+        by: valueFor("Received By")
+    };
+}
+
+function formatReceiptMessage(receipt) {
+    if (!receipt) {
+        return "This case has already been marked as received.";
+    }
+
+    return `This case has already been marked as received. Received Date: ${receipt.date || "-"}; Received Time: ${receipt.time || "-"}; Received By: ${receipt.by || "-"}.`;
 }
 
 function normalizeClientUuid(value) {
@@ -2649,6 +2687,117 @@ const updateSmsDetails = async (req, res) => {
 };
 
 // =========================================
+// MARK RECORD AS RECEIVED
+// =========================================
+
+const markRecordReceived = async (req, res) => {
+    try {
+        if (!canMutateRecords(req.user)) {
+            return res.status(403).json({
+                success: false,
+                message: "You do not have permission to mark records as received."
+            });
+        }
+
+        const { id } = req.params;
+        const receiverName = String(req.user?.name || req.user?.email || "Unknown user").trim();
+        const officeId = isSystemSuperAdmin(req.user) ? null : req.user?.office_id;
+
+        // The READY check, duplicate check, office scope, and note append are
+        // one atomic update so two simultaneous clicks cannot create entries.
+        const updatedResult = await pool.query(
+            `
+                UPDATE records
+                SET notes = CASE
+                    WHEN NULLIF(BTRIM(COALESCE(notes, '')), '') IS NULL THEN
+                        'RECEIVED STATUS: RECEIVED' || E'\\n' ||
+                        'Received Date: ' || to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra', 'DD FMMonth YYYY') || E'\\n' ||
+                        'Received Time: ' || to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra', 'FMHH12:MI AM') || E'\\n' ||
+                        'Received By: ' || $1
+                    ELSE
+                        notes || E'\\n\\n' ||
+                        'RECEIVED STATUS: RECEIVED' || E'\\n' ||
+                        'Received Date: ' || to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra', 'DD FMMonth YYYY') || E'\\n' ||
+                        'Received Time: ' || to_char(CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra', 'FMHH12:MI AM') || E'\\n' ||
+                        'Received By: ' || $1
+                END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $2
+                  AND ($3::int IS NULL OR office_id = $3)
+                  AND LOWER(REPLACE(REPLACE(COALESCE(status, ''), '_', ' '), '-', ' ')) = 'ready'
+                  AND POSITION('${RECEIVED_NOTE_MARKER}' IN UPPER(COALESCE(notes, ''))) = 0
+                RETURNING *
+            `,
+            [receiverName, id, officeId]
+        );
+
+        if (updatedResult.rows.length) {
+            const record = normalizeRecordRows(updatedResult.rows)[0];
+            const receipt = getReceiptDetails(record.notes);
+
+            await recordActivity({
+                request: req,
+                userId: req.user?.id,
+                name: req.user?.name,
+                email: req.user?.email,
+                role: req.user?.role,
+                activityType: ACTIVITY_TYPES.RECORD_EDITED,
+                recordId: record.id,
+                branchId: record.branch_id,
+                branchName: req.user?.branch,
+                details: "Record marked as received."
+            });
+
+            return res.json({
+                success: true,
+                message: "Case marked as received successfully.",
+                record,
+                receipt
+            });
+        }
+
+        const currentResult = await pool.query(
+            `
+                SELECT *
+                FROM records
+                WHERE id = $1
+                  AND ($2::int IS NULL OR office_id = $2)
+                LIMIT 1
+            `,
+            [id, officeId]
+        );
+
+        const currentRecord = currentResult.rows[0];
+        if (!currentRecord) {
+            return res.status(404).json({
+                success: false,
+                message: "Record not found."
+            });
+        }
+
+        const receipt = getReceiptDetails(currentRecord.notes);
+        if (receipt) {
+            return res.status(409).json({
+                success: false,
+                message: formatReceiptMessage(receipt),
+                receipt
+            });
+        }
+
+        return res.status(409).json({
+            success: false,
+            message: "This case is not READY yet. You cannot mark it as received."
+        });
+    } catch (error) {
+        console.error("MARK RECORD RECEIVED ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to mark this case as received."
+        });
+    }
+};
+
+// =========================================
 // APPROVE / SET READY
 // =========================================
 
@@ -3350,6 +3499,7 @@ module.exports = {
     getRecordById,
     updateRecord,
     updateSmsDetails,
+    markRecordReceived,
     approveRecord,
     approveProcessingRecord,
     deleteRecord,
