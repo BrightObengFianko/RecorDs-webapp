@@ -634,6 +634,9 @@ async function loadAuthenticatedUser() {
             } else {
                 fillMissingProfileData(user);
             }
+            if (!state.profile.avatar && user.avatar) {
+                state.profile.avatar = user.avatar;
+            }
             persistUserCache();
             updateAvatarViews();
             updateFormFields();

@@ -334,8 +334,26 @@ function formatDateForInput(value) {
 
 }
 
+function formatDateForDateInput(value) {
+    if (!value) return "";
+
+    const text = String(value).trim();
+    const dateOnlyMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T|\s)/);
+
+    // Keep the calendar date returned by PostgreSQL. Do not parse a date-only
+    // value through the browser timezone, or it can shift by one day.
+    if (dateOnlyMatch) {
+        return `${dateOnlyMatch[1]}-${dateOnlyMatch[2]}-${dateOnlyMatch[3]}`;
+    }
+
+    const date = new Date(text);
+    if (Number.isNaN(date.getTime())) return "";
+
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
 function getRecordRegistrationDate(record) {
-    return record?.registration_date || record?.created_at || record?.createdAt || "";
+    return record?.registration_date || "";
 }
 
 function formatDateWhileTyping(value) {
@@ -736,7 +754,7 @@ async function loadRecordForEdit() {
 
 
         if (registrationDate) {
-            originalRegistrationDate = formatDateForInput(getRecordRegistrationDate(record));
+            originalRegistrationDate = formatDateForDateInput(getRecordRegistrationDate(record));
             registrationDate.value = originalRegistrationDate;
 
         }
@@ -809,7 +827,7 @@ async function loadOfflineRecordForEdit() {
     setRegistrarValue(record.registrar || readStoredUser().name || "Unknown");
     setStatusValue(record.status || "Processing");
     if (registrationDate) {
-        originalRegistrationDate = formatDateForInput(getRecordRegistrationDate(record));
+        originalRegistrationDate = formatDateForDateInput(getRecordRegistrationDate(record));
         registrationDate.value = originalRegistrationDate;
     }
 
