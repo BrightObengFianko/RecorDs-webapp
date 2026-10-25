@@ -627,6 +627,33 @@ a {
     cursor: pointer;
 }
 
+.filter-toggle-icon {
+    display: inline-block;
+    margin-left: 4px;
+    color: var(--app-muted-strong);
+    font-size: 22px;
+    font-weight: 400;
+    line-height: 1;
+    transform: rotate(0deg);
+    transition: transform 180ms ease;
+}
+
+.filters.is-expanded .filter-toggle-icon {
+    transform: rotate(90deg);
+}
+
+.filters:not(.is-expanded) .filter-grid {
+    display: none;
+}
+
+.filters.is-expanded .filter-grid {
+    display: grid;
+}
+
+.filters:not(.is-expanded) .filter-title {
+    margin-bottom: 0;
+}
+
 .custom-registrar-field {
     margin-top: 9px;
 }
@@ -1493,26 +1520,10 @@ tbody tr:hover {
     }
 
     .filter-toggle-icon {
-        display: inline-block;
         margin-left: auto;
-        color: var(--app-muted-strong);
-        font-size: 22px;
-        font-weight: 400;
-        line-height: 1;
-        transform: rotate(0deg);
-        transition: transform 180ms ease;
-    }
-
-    .filters.is-expanded .filter-toggle-icon {
-        transform: rotate(90deg);
-    }
-
-    .filters:not(.is-expanded) .filter-grid {
-        display: none;
     }
 
     .filters.is-expanded .filter-grid {
-        display: grid;
         margin-top: 13px;
     }
 

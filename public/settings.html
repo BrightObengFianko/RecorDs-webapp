@@ -385,7 +385,7 @@
                 </div>
             </section>
 
-            <section class="panel sessions-panel" id="sessions">
+            <section class="panel sessions-panel" id="sessions" hidden aria-hidden="true">
                 <div class="panel-head">
                     <div class="section-icon">
                         <svg class="icon" aria-hidden="true">
@@ -608,6 +608,23 @@
                         </svg>
                         <span>Save Changes</span>
                     </button>
+                </div>
+            </section>
+
+            <section class="panel office-sms-settings-panel" id="officeSmsSettingsSection" hidden aria-hidden="true">
+                <div class="panel-head">
+                    <div class="section-icon"><svg class="icon" aria-hidden="true"><use href="#icon-bell"></use></svg></div>
+                    <div><h2>Office SMS Settings</h2><p>Connect this office's Arkesel account. Credentials are encrypted and never displayed.</p></div>
+                </div>
+                <div class="settings-form-grid">
+                    <label class="field"><span>Arkesel API Key</span><input id="officeSmsApiKey" type="password" autocomplete="new-password" placeholder="Leave blank to keep current key"></label>
+                    <label class="field"><span>Sender ID</span><input id="officeSmsSenderId" maxlength="50" placeholder="Required before testing"></label>
+                </div>
+                <p class="office-sms-settings-status" id="officeSmsSettingsStatus">Not configured</p>
+                <div class="panel-actions panel-actions-end">
+                    <button class="outline-button" type="button" id="disconnectOfficeSmsSettings">Disconnect</button>
+                    <button class="outline-button" type="button" id="testOfficeSmsSettings">Test Connection</button>
+                    <button class="primary-button" type="button" id="saveOfficeSmsSettings">Save SMS Settings</button>
                 </div>
             </section>
 

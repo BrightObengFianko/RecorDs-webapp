@@ -19,6 +19,11 @@ const statusSelect =
 const categorySelect =
     document.getElementById("category");
 
+const searchOfficeField =
+    document.getElementById("searchOfficeField");
+const searchOfficeSelect =
+    document.getElementById("searchOffice");
+
 const registrarSelect =
     document.getElementById("registrar");
 const customRegistrarField =
@@ -1266,6 +1271,39 @@ async function loadRegistrars() {
 
 }
 
+async function loadSearchOffices() {
+    if (!searchOfficeField || !searchOfficeSelect) return;
+
+    const user = readStoredUser();
+    const role = String(user.role || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, "_");
+
+    if (role !== "system_super_admin") {
+        searchOfficeField.hidden = true;
+        return;
+    }
+
+    try {
+        const data = await sendRecordRequest("/api/admin/offices", { method: "GET" });
+        const offices = Array.isArray(data?.offices) ? data.offices : [];
+        searchOfficeSelect.innerHTML = `<option value="">All Offices</option>`;
+        offices.forEach(office => {
+            const option = document.createElement("option");
+            option.value = String(office.id);
+            option.textContent = office.code
+                ? `${office.name} (${office.code})`
+                : office.name;
+            searchOfficeSelect.appendChild(option);
+        });
+        searchOfficeField.hidden = false;
+    } catch (error) {
+        console.error("LOAD SEARCH OFFICES ERROR:", error);
+        searchOfficeField.hidden = true;
+    }
+}
+
 function setResultsSyncStatus(message, state = "") {
     if (!resultsSyncStatus) {
         return;
@@ -1309,6 +1347,7 @@ function scheduleAutomaticSearch() {
         statusSelect.value ||
         categorySelect.value ||
         getSelectedRegistrar() ||
+        searchOfficeSelect?.value ||
         fromDateInput.value ||
         toDateInput.value
     );
@@ -1339,6 +1378,7 @@ async function getOfflineSearchResults(filters) {
     const status = String(filters.status || "").trim().toLowerCase().replace(/[_-]+/g, " ");
     const registrar = (window.RecordRegistrar?.normalize(filters.registrar) || "")
         .toLowerCase();
+    const officeId = String(filters.officeId || "").trim();
 
     return entries
         .filter(entry => ["PENDING_SYNC", "SYNC_FAILED", "SYNCING", "SYNC_CONFLICT"].includes(entry.status))
@@ -1367,6 +1407,7 @@ async function getOfflineSearchResults(filters) {
             const toMatches = !filters.toDate || registrationDate <= filters.toDate;
 
             return (!name || recordName.includes(name))
+                && (!officeId || String(record.office_id || "") === officeId)
                 && (!category || recordCategory === category)
                 && (!status || recordStatus === status)
                 && (!registrar || recordRegistrar === registrar)
@@ -1397,6 +1438,9 @@ async function searchCases({ silent = false, automatic = false } = {}) {
 
     const category =
         categorySelect.value;
+
+    const officeId =
+        searchOfficeSelect?.value || "";
 
 
     const registrar = getSelectedRegistrar();
@@ -1489,6 +1533,13 @@ async function searchCases({ silent = false, automatic = false } = {}) {
                 name
             );
 
+        }
+
+        if (officeId) {
+            params.append(
+                "office_id",
+                officeId
+            );
         }
 
 
@@ -1714,11 +1765,12 @@ async function searchCases({ silent = false, automatic = false } = {}) {
                 status,
                 category,
                 registrar,
+                officeId,
                 fromDate,
                 toDate
             });
 
-            if (name || dateOfBirth || status || category || registrar || fromDate || toDate) {
+            if (name || dateOfBirth || status || category || registrar || officeId || fromDate || toDate) {
                 const changed = recordsHaveChanged(allResults, offlineResults);
                 allResults = offlineResults;
                 hasActiveSearch = true;
@@ -2153,8 +2205,8 @@ function displayResults() {
 
                             <button
                                 type="button"
-                                class="action-item is-danger"
-                                data-action="delete"
+                                class="action-item is-success"
+                                data-action="received"
                                 data-id="${escapeHtml(
                                     record.id || ""
                                 )}"
@@ -2163,14 +2215,14 @@ function displayResults() {
                                     class="ui-icon action-item-icon"
                                     aria-hidden="true"
                                 >
-                                    <use href="#icon-trash"></use>
+                                    <use href="#icon-check"></use>
                                 </svg>
-                                <span>Delete</span>
+                                <span>Received</span>
                             </button>
 
                             <button
                                 type="button"
-                            class="action-item is-info"
+                                class="action-item is-info"
                                 data-action="sms-details"
                                 data-id="${escapeHtml(
                                     record.id || ""
@@ -2187,8 +2239,8 @@ function displayResults() {
 
                             <button
                                 type="button"
-                                class="action-item is-success"
-                                data-action="received"
+                                class="action-item is-danger"
+                                data-action="delete"
                                 data-id="${escapeHtml(
                                     record.id || ""
                                 )}"
@@ -2197,9 +2249,9 @@ function displayResults() {
                                     class="ui-icon action-item-icon"
                                     aria-hidden="true"
                                 >
-                                    <use href="#icon-check"></use>
+                                    <use href="#icon-trash"></use>
                                 </svg>
-                                <span>Received</span>
+                                <span>Delete</span>
                             </button>
 
                         </div>
@@ -2575,6 +2627,10 @@ if (categorySelect) {
 
 }
 
+if (searchOfficeSelect) {
+    searchOfficeSelect.addEventListener("change", searchCases);
+}
+
 if (refreshResultsButton) {
     refreshResultsButton.addEventListener("click", () => {
         if (hasActiveSearch) {
@@ -2665,6 +2721,11 @@ if (resetButton) {
             categorySelect.value =
                 "";
 
+            if (searchOfficeSelect) {
+                searchOfficeSelect.value =
+                    "";
+            }
+
             if (registrarSelect) {
                 registrarSelect.value =
                     "";
@@ -2728,6 +2789,7 @@ if (resetButton) {
 
 
 loadRegistrars();
+loadSearchOffices();
 
 
 // =========================================
@@ -3807,6 +3869,7 @@ if (exportButton) {
             ["status", statusSelect.value],
             ["category", categorySelect.value],
             ["registrar", getSelectedRegistrar()],
+            ["office_id", searchOfficeSelect?.value || ""],
             ["fromDate", fromDateInput.value],
             ["toDate", toDateInput.value],
             ["branch", exportBranchSelect?.value || ""]

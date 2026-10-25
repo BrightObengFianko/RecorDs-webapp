@@ -10,6 +10,18 @@ const activityDetailsModal = document.getElementById("activityDetailsModal");
 const activityDetailsBody = document.getElementById("activityDetailsBody");
 const activityDetailsTitle = document.getElementById("activityDetailsTitle");
 const activityDetailsSubtitle = document.getElementById("activityDetailsSubtitle");
+const reportsUser = (() => {
+    try { return JSON.parse(localStorage.getItem("user") || "null") || {}; } catch { return {}; }
+})();
+const reportsUserRole = String(reportsUser.role || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+const isSystemSuperAdmin = reportsUserRole === "system_super_admin";
+const officeFilterField = document.getElementById("officeFilterField");
+const officeFilter = document.getElementById("officeFilter");
+const resultFilter = document.getElementById("resultFilter");
+const activityScopeLabel = document.getElementById("activityScopeLabel");
+
+if (officeFilterField) officeFilterField.hidden = !isSystemSuperAdmin;
+if (!isSystemSuperAdmin && activityScopeLabel) activityScopeLabel.textContent = "Showing activity for your office.";
 
 function escapeReportHtml(value) {
     return String(value ?? "")
@@ -53,7 +65,22 @@ function activityLabel(type) {
         USER_DISABLED: "User disabled",
         USER_ENABLED: "User enabled",
         SETTINGS_CHANGED: "Settings changed",
-        BRANCH_ASSIGNMENT_CHANGED: "Branch assignment changed"
+        BRANCH_ASSIGNMENT_CHANGED: "Branch assignment changed",
+        USER_DELETED: "User deleted",
+        BRANCH_CREATED: "Branch created",
+        DATA_EXPORT: "Data export",
+        UNAUTHORIZED_EXPORT_ATTEMPT: "Unauthorized export attempt",
+        PASSWORD_RESET_REQUESTED: "Password reset requested",
+        PASSWORD_RESET_COMPLETED: "Password reset completed",
+        PASSWORD_RESET_FAILED: "Password reset failed",
+        DEVICE_SESSION_CREATED: "Device session created",
+        DEVICE_SESSION_REVOKED: "Device session revoked",
+        ADMIN_FORCED_LOGOUT: "Admin forced logout",
+        ALL_DEVICES_LOGGED_OUT: "All devices logged out",
+        DEVICE_LIMIT_CHANGED: "Device limit changed",
+        DEVICE_LIMIT_REACHED: "Device limit reached",
+        STAFF_QUOTA_CHANGED: "Staff quota changed",
+        STAFF_QUOTA_REJECTED: "Staff quota rejected"
     }[type] || type || "Unknown";
 }
 
@@ -116,6 +143,7 @@ function renderActivityDetails(activity) {
             <div class="activity-detail-row"><dt>Date/time</dt><dd>${formatActivityDate(activity.occurred_at)} ${formatActivityTime(activity.occurred_at)}</dd></div>
             <div class="activity-detail-row"><dt>Changed by</dt><dd>${formatDetailValue(activity.user_name)}</dd></div>
             <div class="activity-detail-row"><dt>Role</dt><dd>${escapeReportHtml(roleLabel(activity.user_role))}</dd></div>
+            <div class="activity-detail-row"><dt>Office</dt><dd>${formatDetailValue(activity.office_name || "Unassigned / legacy")}</dd></div>
             <div class="activity-detail-row"><dt>Branch</dt><dd>${formatDetailValue(activity.branch_name)}</dd></div>
             <div class="activity-detail-row"><dt>Success</dt><dd>${activity.success === false ? "Failed" : "Successful"}</dd></div>
             <div class="activity-detail-row"><dt>Details</dt><dd>${formatDetailValue(activity.details || activity.new_value)}</dd></div>
@@ -185,6 +213,8 @@ async function loadActivity({ resetPage = false } = {}) {
     const branch = document.getElementById("branchFilter").value;
     const role = document.getElementById("roleFilter").value;
     const activityType = document.getElementById("activityFilter").value;
+    const office = officeFilter?.value || "";
+    const result = resultFilter?.value || "";
     const sort = document.getElementById("sortFilter").value;
 
     if (fromDate) params.set("from_date", fromDate);
@@ -192,8 +222,10 @@ async function loadActivity({ resetPage = false } = {}) {
     if (user) params.set("user", user);
     if (search) params.set("search", search);
     if (branch) params.set("branch", branch);
+    if (isSystemSuperAdmin && office) params.set("office_id", office);
     if (role) params.set("role", role);
     if (activityType) params.set("activity_type", activityType);
+    if (result) params.set("result", result);
     if (sort) params.set("sort", sort);
     params.set("page", String(activityPage));
     params.set("limit", String(ACTIVITY_PAGE_SIZE));
@@ -221,7 +253,7 @@ async function loadActivity({ resetPage = false } = {}) {
         updateActivityPagination(total);
 
         if (!activities.length) {
-            activityBody.innerHTML = '<tr><td colspan="9" class="reports-empty">No activity logs found.</td></tr>';
+        activityBody.innerHTML = `<tr><td colspan="${isSystemSuperAdmin ? 10 : 9}" class="reports-empty">No activity logs found.</td></tr>`;
             return;
         }
 
@@ -230,6 +262,7 @@ async function loadActivity({ resetPage = false } = {}) {
                 <td data-label="User" class="activity-user"><strong>${escapeReportHtml(activity.user_name || "Unknown user")}</strong><span>${escapeReportHtml(activity.user_email || "Email unavailable")}</span></td>
                 <td data-label="Role">${escapeReportHtml(roleLabel(activity.user_role))}</td>
                 <td data-label="Activity"><span class="activity-badge ${escapeReportHtml(activityClass(activity.activity_type))}">${escapeReportHtml(activityLabel(activity.activity_type))}</span></td>
+                ${isSystemSuperAdmin ? `<td data-label="Office" class="activity-office-column">${escapeReportHtml(activity.office_name || "Unassigned / legacy")}</td>` : ""}
                 <td data-label="Branch">${escapeReportHtml(activity.branch_name || "-")}</td>
                 <td data-label="Case">${escapeReportHtml(activity.record_id || "-")}</td>
                 <td data-label="Details">${escapeReportHtml(activity.details || activity.new_value || "-")}</td>
@@ -255,7 +288,7 @@ async function loadActivity({ resetPage = false } = {}) {
             });
         });
     } catch (error) {
-        activityBody.innerHTML = `<tr><td colspan="9" class="reports-empty">${escapeReportHtml(error.message)}</td></tr>`;
+        activityBody.innerHTML = `<tr><td colspan="${isSystemSuperAdmin ? 10 : 9}" class="reports-empty">${escapeReportHtml(error.message)}</td></tr>`;
         if (window.Notification) Notification.error(error.message);
     }
 }
@@ -307,6 +340,13 @@ if (!reportsToken) {
     document.addEventListener("keydown", event => {
         if (event.key === "Escape") closeActivityDetails();
     });
+    async function loadOffices() {
+        if (!isSystemSuperAdmin || !officeFilter) return;
+        const response = await fetch("/api/admin/offices", { headers: { Authorization: `Bearer ${reportsToken}` } });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) return;
+        officeFilter.innerHTML = '<option value="">All offices</option>' + (data.offices || []).map(office => `<option value="${escapeReportHtml(office.id)}">${escapeReportHtml(office.name)}</option>`).join("");
+    }
     async function loadBranches() {
         const response = await fetch("/api/admin/branches", { headers: { Authorization: `Bearer ${reportsToken}` } });
         const data = await response.json().catch(() => ({}));
@@ -324,9 +364,11 @@ if (!reportsToken) {
         document.getElementById("toDateFilter").value = "";
         document.getElementById("userFilter").value = "";
         document.getElementById("searchFilter").value = "";
+        if (officeFilter) officeFilter.value = "";
         document.getElementById("branchFilter").value = "";
         document.getElementById("roleFilter").value = "";
         document.getElementById("activityFilter").value = "";
+        if (resultFilter) resultFilter.value = "";
         document.getElementById("sortFilter").value = "newest";
         loadActivity({ resetPage: true });
     });
@@ -359,5 +401,5 @@ if (!reportsToken) {
         if (window.Notification) Notification.success(data.message || "Activity logs cleared successfully.");
         loadActivity({ resetPage: true });
     });
-    loadBranches().finally(() => loadActivity({ resetPage: true }));
+    Promise.all([loadOffices(), loadBranches()]).finally(() => loadActivity({ resetPage: true }));
 }

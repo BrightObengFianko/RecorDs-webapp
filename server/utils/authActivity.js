@@ -11,9 +11,11 @@ const ACTIVITY_TYPES = Object.freeze({
     RECORD_RESTORED: "RECORD_RESTORED",
     SMS_ACTIVITY: "SMS_ACTIVITY",
     USER_CREATED: "USER_CREATED",
+    USER_DELETED: "USER_DELETED",
     USER_DISABLED: "USER_DISABLED",
     USER_ENABLED: "USER_ENABLED",
     SETTINGS_CHANGED: "SETTINGS_CHANGED",
+    BRANCH_CREATED: "BRANCH_CREATED",
     BRANCH_ASSIGNMENT_CHANGED: "BRANCH_ASSIGNMENT_CHANGED",
     DATA_EXPORT: "DATA_EXPORT",
     UNAUTHORIZED_EXPORT_ATTEMPT: "UNAUTHORIZED_EXPORT_ATTEMPT",
@@ -28,7 +30,9 @@ const ACTIVITY_TYPES = Object.freeze({
     ADMIN_FORCED_LOGOUT: "ADMIN_FORCED_LOGOUT",
     ALL_DEVICES_LOGGED_OUT: "ALL_DEVICES_LOGGED_OUT",
     DEVICE_LIMIT_CHANGED: "DEVICE_LIMIT_CHANGED",
-    DEVICE_LIMIT_REACHED: "DEVICE_LIMIT_REACHED"
+    DEVICE_LIMIT_REACHED: "DEVICE_LIMIT_REACHED",
+    STAFF_QUOTA_CHANGED: "STAFF_QUOTA_CHANGED",
+    STAFF_QUOTA_REJECTED: "STAFF_QUOTA_REJECTED"
 });
 
 async function recordActivity({
@@ -43,6 +47,7 @@ async function recordActivity({
     affectedUserName = null,
     branchId = null,
     branchName = null,
+    officeId = null,
     details = null,
     previousValue = null,
     newValue = null,
@@ -68,6 +73,7 @@ async function recordActivity({
                     affected_user_name,
                     branch_id,
                     branch_name,
+                    office_id,
                     details,
                     previous_value,
                     new_value,
@@ -77,7 +83,7 @@ async function recordActivity({
                     ip_address,
                     user_agent
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             `,
             [
                 userId || null,
@@ -90,6 +96,7 @@ async function recordActivity({
                 affectedUserName ? String(affectedUserName).trim().slice(0, 100) : null,
                 branchId || null,
                 branchName ? String(branchName).trim().slice(0, 100) : null,
+                officeId || request?.user?.office_id || null,
                 details ? String(details).slice(0, 5000) : null,
                 previousValue == null ? null : String(previousValue).slice(0, 2000),
                 newValue == null ? null : String(newValue).slice(0, 2000),
@@ -114,7 +121,7 @@ function makeRecordSnapshot(record) {
         "date_of_death", "registration_date", "registrar", "branch_id",
         "status", "sms_sent", "sms_status", "sms_date", "sms_error", "sms_error_at",
         "sms_last_response", "sms_last_attempt_at", "sms_last_attempt_by", "notes",
-        "created_by", "client_uuid"
+        "created_by", "client_uuid", "office_id"
     ];
 
     return fields.reduce((snapshot, field) => {

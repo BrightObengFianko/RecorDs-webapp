@@ -1,5 +1,6 @@
 const pool = require("../config/database");
 const { ACTIVITY_TYPES, recordActivity } = require("../utils/authActivity");
+const { isSystemSuperAdmin } = require("../utils/officeUtils");
 
 function sessionView(row, includeIp = false) {
     const session = {
@@ -24,7 +25,7 @@ function sessionView(row, includeIp = false) {
 async function getUser(userId) {
     const result = await pool.query(
         `
-            SELECT u.id, u.name, u.email, u.role, u.branch_id,
+            SELECT u.id, u.name, u.email, u.role, u.office_id, u.branch_id,
                    COALESCE(b.name, '') AS branch,
                    COALESCE(u.max_devices, 2) AS max_devices
             FROM users u
@@ -86,6 +87,9 @@ async function revokeSession(req, res, isAdmin = false) {
     try {
         const user = await getUser(targetUserId);
         if (!user) return res.status(404).json({ success: false, message: "User not found." });
+        if (isAdmin && !isSystemSuperAdmin(req.user) && String(user.office_id) !== String(req.user.office_id)) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
 
         const result = await pool.query(
             `
@@ -141,6 +145,9 @@ async function revokeAllSessions(req, res, isAdmin = false) {
     try {
         const user = await getUser(targetUserId);
         if (!user) return res.status(404).json({ success: false, message: "User not found." });
+        if (isAdmin && !isSystemSuperAdmin(req.user) && String(user.office_id) !== String(req.user.office_id)) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
 
         const result = await pool.query(
             `
@@ -190,6 +197,9 @@ async function listUserSessions(req, res) {
     try {
         const user = await getUser(req.params.id);
         if (!user) return res.status(404).json({ success: false, message: "User not found." });
+        if (!isSystemSuperAdmin(req.user) && String(user.office_id) !== String(req.user.office_id)) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
 
         return res.json({
             success: true,

@@ -5,6 +5,7 @@ const {
     notificationTypeSet,
     ATTENTION_NOTIFICATION_TYPES
 } = require("../utils/notifications");
+const { isSystemSuperAdmin } = require("../utils/officeUtils");
 
 function parsePage(value) {
     const page = Number.parseInt(String(value || "1"), 10);
@@ -41,6 +42,7 @@ async function listNotifications(req, res) {
         const page = parsePage(req.query.page);
         const limit = parseLimit(req.query.limit);
         const values = [req.user.id];
+        const systemSuperAdmin = isSystemSuperAdmin(req.user);
         const conditions = [
             "n.user_id = $1",
             "(u.account_settings->'notificationPreferences'->>n.type IS DISTINCT FROM 'false')"
@@ -67,6 +69,15 @@ async function listNotifications(req, res) {
         priorityValues.forEach(value => {
             if (!notificationPrioritySet.has(value)) throw new Error("Invalid notification priority filter.");
         });
+
+        if (systemSuperAdmin && req.query.office_id) {
+            const officeId = Number.parseInt(String(req.query.office_id), 10);
+            if (!Number.isInteger(officeId) || officeId <= 0) {
+                throw new Error("Invalid notification office filter.");
+            }
+            values.push(officeId);
+            conditions.push(`n.office_id = $${values.length}`);
+        }
 
         if (String(req.query.unread || "").toLowerCase() === "true" || readStatus === "unread") {
             conditions.push("n.is_read = FALSE");
@@ -102,17 +113,21 @@ async function listNotifications(req, res) {
 
         const whereClause = conditions.join(" AND ");
         const countResult = await pool.query(
-            `SELECT COUNT(*)::int AS total FROM notifications n JOIN users u ON u.id = n.user_id LEFT JOIN records r ON r.id = n.record_id WHERE ${whereClause}`,
+            `SELECT COUNT(*)::int AS total FROM notifications n JOIN users u ON u.id = n.user_id LEFT JOIN records r ON r.id = n.record_id LEFT JOIN offices o ON o.id = n.office_id LEFT JOIN branches b ON b.id = n.branch_id WHERE ${whereClause}`,
             values
         );
         const offset = (page - 1) * limit;
         const queryValues = [...values, limit, offset];
         const result = await pool.query(
             `
-                SELECT n.*
+                SELECT n.*,
+                       COALESCE(o.name, '') AS office_name,
+                       COALESCE(b.name, '') AS branch_name
                 FROM notifications n
                 JOIN users u ON u.id = n.user_id
                 LEFT JOIN records r ON r.id = n.record_id
+                LEFT JOIN offices o ON o.id = n.office_id
+                LEFT JOIN branches b ON b.id = n.branch_id
                 WHERE ${whereClause}
                 ORDER BY n.created_at ${sort === "oldest" ? "ASC" : "DESC"}, n.id ${sort === "oldest" ? "ASC" : "DESC"}
                 LIMIT $${queryValues.length - 1}

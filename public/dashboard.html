@@ -333,7 +333,6 @@
 
             <section class="content">
 
-
                 <!-- WELCOME -->
 
                 <div class="welcome">
@@ -519,8 +518,8 @@
                     <article class="admin-panel branch-staff-dashboard-panel" id="branchStaffDashboardPanel" hidden>
                         <div class="panel-header admin-panel-header">
                             <div>
-                                <h2>My Branch Progress</h2>
-                                <p>Current-year performance for your assigned branch</p>
+                                <h2>My Office Progress</h2>
+                                <p>Current-year performance for your office</p>
                             </div>
                         </div>
 
@@ -552,6 +551,13 @@
                                         <button type="button" class="chart-range-button" data-overview-range="90d">90D</button>
                                         <button type="button" class="chart-range-button" data-overview-range="1y">1Y</button>
                                     </div>
+
+                                    <label class="overview-filter" id="overviewOfficeField" hidden>
+                                        <span class="sr-only">Filter by Office</span>
+                                        <select id="overviewOfficeFilter">
+                                            <option value="">All Offices</option>
+                                        </select>
+                                    </label>
 
                                     <label class="overview-filter">
                                         <span class="sr-only">Filter by Registrar</span>
@@ -635,6 +641,12 @@
                                     <h2>Registrar Performance</h2>
                                     <p>Performance in the selected period</p>
                                 </div>
+                                <label class="registrar-office-filter" id="registrarOfficeField" hidden>
+                                    <span>Office</span>
+                                    <select id="registrarOfficeFilter" aria-label="Select office for registrar performance">
+                                        <option value="">All Offices</option>
+                                    </select>
+                                </label>
                             </div>
 
                             <div class="registrar-performance-list" id="registrarPerformanceList"></div>
@@ -644,6 +656,8 @@
                                 <strong id="registrarPerformanceTodayTotal">0</strong>
                             </div>
                         </article>
+
+                        <div class="admin-panel admin-panel-system-status">
 
                         <article class="admin-panel admin-panel-status">
                             <div class="panel-header admin-panel-header">
@@ -662,19 +676,6 @@
                             <p class="performance-insight" id="dashboardPerformanceInsight"></p>
                         </article>
 
-                        <article class="admin-panel admin-panel-branches">
-                            <div class="panel-header admin-panel-header">
-                                <div>
-                                    <h2>Cases by Branch</h2>
-                                    <p>Records by branch location</p>
-                                </div>
-
-                                <a href="search-cases.html">View all cases</a>
-                            </div>
-
-                            <div class="branch-list" id="branchList"></div>
-                        </article>
-
                         <article class="admin-panel admin-panel-system">
                             <div class="panel-header admin-panel-header">
                                 <div>
@@ -685,6 +686,8 @@
 
                             <div class="system-grid" id="systemOverviewGrid"></div>
                         </article>
+
+                        </div>
 
                     </div>
 
@@ -835,7 +838,7 @@
         <script src="js/offline-records.js"></script>
         <script src="js/admin-notifications.js"></script>
         <script src="js/category-colors.js"></script>
-    <script src="js/dashboard.js?v=manual-refresh-only-1"></script>
+    <script src="js/dashboard.js?v=recent-office-scope-6"></script>
 
 </body>
 

@@ -30,7 +30,7 @@
     <link rel="stylesheet" href="css/sidebar.css">
     <link rel="stylesheet" href="css/notification.css">
     <link rel="stylesheet" href="css/confirm-dialog.css">
-    <link rel="stylesheet" href="css/users.css?v=45">
+    <link rel="stylesheet" href="css/users.css?v=52">
     <link rel="stylesheet" href="css/mobile-form-controls.css">
     <link rel="stylesheet" href="css/admin-notifications.css">
 </head>
@@ -256,44 +256,29 @@
 
         <main class="main users-main">
 
-            <header class="users-topbar">
+            <section class="content">
 
-                <div class="users-topbar-copy">
+                <div class="users-page-heading">
                     <button class="sidebar-toggle page-toggle" id="sidebarToggle" type="button" title="Toggle sidebar">
                         <svg class="ui-icon toggle-icon" aria-hidden="true">
                             <use href="#icon-chevron-left"></use>
                         </svg>
                     </button>
-                    <div class="topbar-icon">
-                        <svg class="ui-icon" aria-hidden="true">
-                            <use href="#icon-users"></use>
-                        </svg>
+                    <div class="topbar-icon" aria-hidden="true">
+                        <svg class="ui-icon"><use href="#icon-users"></use></svg>
                     </div>
-
                     <div>
                         <h1>User Management</h1>
                         <p>Manage system users and their roles.</p>
                     </div>
                 </div>
 
-                <div class="users-topbar-profile">
-                    <div class="topbar-profile-chip">
-                        <div class="avatar top-avatar" id="topAvatar">A</div>
-                        <div class="topbar-profile-copy">
-                            <strong id="topUserName">Admin</strong>
-                            <span id="topUserRole">Administrator</span>
-                        </div>
-                        <svg class="ui-icon topbar-caret" aria-hidden="true">
-                            <use href="#icon-chevron-down"></use>
-                        </svg>
-                    </div>
-                </div>
+                <nav class="management-tabs" id="managementTabs" aria-label="User management sections" hidden>
+                    <button type="button" class="management-tab is-active" data-management-target="officesShell">Offices</button>
+                    <button type="button" class="management-tab" data-management-target="usersAllShell">Users</button>
+                </nav>
 
-            </header>
-
-            <section class="content">
-
-                <section class="users-shell pending-shell">
+                <section class="users-shell pending-shell" id="pendingUsersSection" hidden aria-hidden="true">
 
                     <div class="users-header">
 
@@ -319,7 +304,6 @@
                                     <th>#</th>
                                     <th>Name</th>
                                     <th>Email</th>
-                                    <th>Branch</th>
                                     <th>Role</th>
                                     <th>Registration Date</th>
                                     <th>Status</th>
@@ -328,7 +312,7 @@
                             </thead>
                             <tbody id="pendingUsersBody">
                                 <tr>
-                                    <td colspan="8" class="empty">
+                                    <td colspan="7" class="empty">
                                         Loading pending users...
                                     </td>
                                 </tr>
@@ -338,7 +322,49 @@
 
                 </section>
 
-                <section class="users-shell users-all-shell">
+                <section class="users-shell offices-shell" id="officesShell" hidden>
+                    <div class="users-header">
+                        <div class="users-all-heading-row">
+                            <div class="users-header-copy">
+                                <div class="users-header-icon">
+                                    <svg class="ui-icon" aria-hidden="true">
+                                        <use href="#icon-building"></use>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h2>Office Management</h2>
+                                    <p id="officesCount">Manage offices and their isolated workspaces.</p>
+                                </div>
+                            </div>
+                            <button class="action-button users-create-staff-button" id="createOfficeBtn" type="button">
+                                <svg class="ui-icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
+                                <span>Add Office</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper offices-table-wrapper">
+                        <table class="users-table offices-table">
+                            <thead>
+                                <tr>
+                                    <th>Office</th>
+                                    <th>Code</th>
+                                    <th>Users</th>
+                                    <th>Staffs</th>
+                                    <th>Records</th>
+                                    <th>SMS</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="officesBody">
+                                <tr><td colspan="8" class="empty">Loading offices...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="users-shell users-all-shell" id="usersAllShell">
 
                     <div class="users-header">
 
@@ -352,7 +378,7 @@
 
                                 <div>
                                     <h2>All Users</h2>
-                                    <p id="usersCount">0 users found</p>
+                                    <p id="staffQuotaSummary" class="staff-quota-summary" hidden></p>
                                 </div>
                             </div>
 
@@ -376,6 +402,24 @@
                                     autocomplete="off"
                                 >
                             </label>
+                            <select class="users-filter" id="userOfficeFilter" aria-label="Filter users by office" hidden>
+                                <option value="">All offices</option>
+                            </select>
+                            <select class="users-filter" id="userBranchFilter" aria-label="Filter users by branch">
+                                <option value="">All branches</option>
+                            </select>
+                            <select class="users-filter" id="userRoleFilter" aria-label="Filter users by role">
+                                <option value="">All roles</option>
+                                <option value="office_admin">Office Admin</option>
+                                <option value="staff">Staff</option>
+                                <option value="branch_staff">Branch Staff</option>
+                            </select>
+                            <select class="users-filter" id="userStatusFilter" aria-label="Filter users by status">
+                                <option value="">All statuses</option>
+                                <option value="approved">Approved</option>
+                                <option value="pending">Pending</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
                         </div>
 
                     </div>
@@ -387,8 +431,8 @@
                                     <th>#</th>
                                     <th>Name</th>
                                     <th>Email</th>
+                                    <th>Office</th>
                                     <th>Role</th>
-                                    <th>Branch</th>
                                     <th>Devices</th>
                                     <th>Status</th>
                                     <th>Action</th>
@@ -451,14 +495,16 @@
                     <label for="userRole">Role</label>
                     <select id="userRole" required>
                         <option value="admin">Admin</option>
+                        <option value="system_super_admin">System Super Admin</option>
+                        <option value="office_admin">Office Admin</option>
                         <option value="staff">Staff</option>
                         <option value="branch_staff">Branch Staff</option>
                     </select>
                 </div>
 
-                <div class="field">
+                <div class="field" id="userBranchField" hidden>
                     <label for="userBranch">Branch</label>
-                    <select id="userBranch" required>
+                    <select id="userBranch">
                         <option value="">Loading branches...</option>
                     </select>
                 </div>
@@ -507,17 +553,144 @@
         </div>
     </div>
 
-    <!-- Create Staff Account Modal -->
+    <div class="modal-overlay office-destructive-modal" id="officeDestructiveModal" hidden>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="officeDestructiveTitle">
+            <div class="modal-header">
+                <div>
+                    <h3 id="officeDestructiveTitle">Office Data Operation</h3>
+                    <p id="officeDestructiveDescription"></p>
+                </div>
+                <button type="button" class="icon-button" id="closeOfficeDestructiveButton" aria-label="Close confirmation" title="Close">
+                    <svg class="ui-icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+                </button>
+            </div>
+            <div class="office-destructive-body">
+                <div id="officeDestructivePreview" class="office-destructive-preview"></div>
+                <label for="officeNameConfirmation">Type the exact office name to continue</label>
+                <input id="officeNameConfirmation" type="text" autocomplete="off">
+                <label class="office-destructive-check"><input id="officeBackupVerified" type="checkbox"> I verified that a restorable backup exists.</label>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="secondary-button" id="cancelOfficeDestructiveButton">Cancel</button>
+                <button type="button" class="danger-button" id="confirmOfficeDestructiveButton" disabled>Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="officeModal" hidden>
+        <div class="modal-card office-modal-card" role="dialog" aria-modal="true" aria-labelledby="officeModalTitle">
+            <div class="modal-header">
+                <h3 id="officeModalTitle">Create Office</h3>
+                <button type="button" class="icon-button" id="closeOfficeModalButton" aria-label="Close office form" title="Close">
+                    <svg class="ui-icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+                </button>
+            </div>
+            <form id="officeForm" class="modal-form office-form">
+                <input type="hidden" id="officeId">
+                <div class="office-form-body">
+                    <div class="field"><label for="officeName">Office Name</label><input id="officeName" required maxlength="150" autocomplete="organization"></div>
+                    <div class="field"><label for="officeCode">Office Code</label><input id="officeCode" required maxlength="50" autocomplete="off"></div>
+                    <div class="field"><label for="officeDescription">Description</label><input id="officeDescription" maxlength="250"></div>
+                    <div class="field"><label for="officeAddress">Address</label><input id="officeAddress" maxlength="250"></div>
+                    <div class="field"><label for="officePhone">Phone</label><input id="officePhone" type="tel" maxlength="40"></div>
+                    <div class="field"><label for="officeEmail">Email</label><input id="officeEmail" type="email" maxlength="150"></div>
+                    <div class="field"><label for="officeDashboardTitle">Dashboard Title</label><input id="officeDashboardTitle" maxlength="150"></div>
+                    <div class="field"><label for="officeLogoUrl">Logo URL</label><input id="officeLogoUrl" type="url" maxlength="500"></div>
+                    <div class="field"><label for="officePrimaryColor">Primary Color</label><input id="officePrimaryColor" type="color" value="#5b4df5"></div>
+                    <div class="field"><label for="officeSecondaryColor">Secondary Color</label><input id="officeSecondaryColor" type="color" value="#eef0ff"></div>
+                    <div class="field"><label for="officeStaffAccountLimit">Staff Account Limit</label><input id="officeStaffAccountLimit" type="number" min="1" max="100000" step="1" value="50" required></div>
+                    <div class="field"><label for="officeStatus">Status</label><select id="officeStatus"><option value="ACTIVE">Active</option><option value="DISABLED">Disabled</option></select></div>
+                    <div class="field"><label for="officeN8nWebhookUrl">SMS Webhook URL</label><input id="officeN8nWebhookUrl" type="url" maxlength="500" placeholder="https://..."></div>
+                    <div class="field"><label for="officeN8nTimeout">SMS Timeout (ms)</label><input id="officeN8nTimeout" type="number" min="1000" max="30000" step="100" value="10000"></div>
+                    <div class="field"><label for="officeN8nWebhookSecret">SMS Webhook Secret</label><input id="officeN8nWebhookSecret" type="password" maxlength="500"></div>
+                    <div class="field"><label for="officeArkeselApiKey">Arkesel API Key</label><input id="officeArkeselApiKey" type="password" maxlength="300" placeholder="Leave blank to keep the configured key"></div>
+                    <div class="field"><label for="officeSmsSenderId">Arkesel Sender ID</label><input id="officeSmsSenderId" maxlength="50" placeholder="Required before testing SMS"></div>
+                    <div class="field"><label>SMS Status</label><span id="officeSmsStatus" class="status-pill status-inactive">Not configured</span><div class="office-sms-actions"><button type="button" class="secondary-button" id="testOfficeSmsButton">Test Connection</button><button type="button" class="secondary-button" id="disconnectOfficeSmsButton">Disconnect</button></div></div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="secondary-button" id="cancelOfficeButton">Cancel</button>
+                    <button type="submit" class="primary-button" id="saveOfficeButton">Create Office</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="branchModal" hidden>
+        <div class="modal-card branch-modal-card" role="dialog" aria-modal="true" aria-labelledby="branchModalTitle">
+            <div class="modal-header">
+                <div>
+                    <h3 id="branchModalTitle">Create Branch</h3>
+                    <p id="branchOfficeLabel">Add a branch to this office.</p>
+                </div>
+                <button type="button" class="icon-button" id="closeBranchModalButton" aria-label="Close branch form" title="Close">
+                    <svg class="ui-icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+                </button>
+            </div>
+            <form id="branchForm" class="modal-form branch-form">
+                <div class="field">
+                    <label for="branchName">Branch Name</label>
+                    <input id="branchName" required maxlength="100" autocomplete="organization">
+                </div>
+                <label class="branch-staff-toggle">
+                    <input type="checkbox" id="createBranchStaff">
+                    <span>Create a branch staff account for this branch</span>
+                </label>
+                <div class="branch-staff-fields" id="branchStaffFields" hidden>
+                    <div class="field"><label for="branchStaffName">Staff Full Name</label><input id="branchStaffName" maxlength="100"></div>
+                    <div class="field"><label for="branchStaffEmail">Staff Email</label><input id="branchStaffEmail" type="email" maxlength="150"></div>
+                    <div class="field"><label for="branchStaffPassword">Temporary Password</label><input id="branchStaffPassword" type="password" minlength="12" autocomplete="new-password" aria-describedby="branchStaffPasswordHint"></div>
+                    <small id="branchStaffPasswordHint">Use 12 or more characters with uppercase, lowercase, a number, and a special character.</small>
+                    <small>Password is hashed before storage and is never returned by the API.</small>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="secondary-button" id="cancelBranchButton">Cancel</button>
+                    <button type="submit" class="primary-button" id="saveBranchButton">Create Branch</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="branchManagementModal" hidden>
+        <div class="modal-card branch-management-card" role="dialog" aria-modal="true" aria-labelledby="branchManagementTitle">
+            <div class="modal-header">
+                <div>
+                    <h3 id="branchManagementTitle">Office Branches</h3>
+                    <p id="branchManagementSubtitle">Manage branches and assigned staff.</p>
+                </div>
+                <button type="button" class="icon-button" id="closeBranchManagementButton" aria-label="Close branch management" title="Close">
+                    <svg class="ui-icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+                </button>
+            </div>
+            <div class="branch-management-toolbar">
+                <label class="users-search" for="branchSearchInput">
+                    <svg class="ui-icon search-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+                    <input type="search" id="branchSearchInput" placeholder="Search branches..." autocomplete="off">
+                </label>
+                <button type="button" class="primary-button" id="createBranchFromManagementButton">
+                    <svg class="ui-icon" aria-hidden="true"><use href="#icon-plus"></use></svg>
+                    Create Branch
+                </button>
+                <button type="button" class="secondary-button" id="createUserFromBranchManagementButton">
+                    Create User
+                </button>
+            </div>
+            <div class="branch-management-body" id="branchManagementBody">
+                <p class="empty">Select an office to load its branches.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create User Modal -->
     <div class="modal-overlay" id="createStaffModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Create Staff Account</h2>
+                <h2>Create User</h2>
                 <button class="modal-close" type="button" aria-label="Close modal">&times;</button>
             </div>
 
             <form class="modal-form" id="createStaffForm">
                 <div class="form-group">
-                    <label for="staffName">Staff Name *</label>
+                    <label for="staffName">Full Name *</label>
                     <input
                         type="text"
                         id="staffName"
@@ -546,24 +719,37 @@
                             id="staffPassword"
                             name="staffPassword"
                             placeholder="Set a temporary password"
+                            minlength="12"
+                            autocomplete="new-password"
+                            aria-describedby="staffPasswordHint"
                             required
                         />
-                        <button type="button" class="password-toggle" id="togglePassword" title="Show/hide password">
+                        <button type="button" class="password-toggle" id="togglePassword" aria-label="Show or hide password" title="Show or hide password">
                             👁️
                         </button>
                     </div>
-                    <small>Staff member should change this on first login</small>
+                    <small id="staffPasswordHint">Use 12 or more characters with uppercase, lowercase, a number, and a special character.</small>
                 </div>
 
                 <div class="form-group">
-                    <p class="info-box">
-                        ℹ️ The staff account will be created with APPROVED status and can log in immediately.
-                    </p>
+                    <label for="staffRole">Role *</label>
+                    <select id="staffRole" name="staffRole" required>
+                        <option value="staff">Staff</option>
+                        <option value="branch_staff">Branch Staff</option>
+                        <option value="office_admin">Office Admin</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="staffOffice">Office *</label>
+                    <select id="staffOffice" name="staffOffice" required>
+                        <option value="">Loading offices...</option>
+                    </select>
                 </div>
 
                 <div class="modal-actions">
                     <button type="button" class="btn-cancel" id="cancelCreateStaffBtn">Cancel</button>
-                    <button type="submit" class="btn-create">Create Account</button>
+                    <button type="submit" class="btn-create">Create User</button>
                 </div>
             </form>
         </div>
@@ -574,7 +760,7 @@
     <script src="js/app-settings.js"></script>
     <script src="js/offline-records.js"></script>
     <script src="js/admin-notifications.js"></script>
-    <script src="js/users.js"></script>
+    <script src="js/users.js?v=office-data-actions-6"></script>
 </body>
 
 </html>

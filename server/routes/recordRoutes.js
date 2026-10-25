@@ -57,6 +57,8 @@ router.get(
     "/pending-approval",
     requireRole(
         "admin",
+        "office_admin",
+        "system_super_admin",
         "staff"
     ),
     getProcessingRecords
@@ -123,6 +125,8 @@ router.post(
     "/",
     requireRole(
         "admin",
+        "office_admin",
+        "system_super_admin",
         "staff",
         "branch_staff"
     ),
@@ -138,6 +142,8 @@ router.patch(
     "/:id",
     requireRole(
         "admin",
+        "office_admin",
+        "system_super_admin",
         "staff"
     ),
     updateRecord
@@ -178,6 +184,8 @@ router.patch(
     "/:id/status",
     requireRole(
         "admin",
+        "office_admin",
+        "system_super_admin",
         "staff"
     ),
     approveRecord
@@ -191,6 +199,8 @@ router.post(
     "/:id/approve",
     requireRole(
         "admin",
+        "office_admin",
+        "system_super_admin",
         "staff"
     ),
     approveProcessingRecord
@@ -205,6 +215,8 @@ router.delete(
     "/:id",
     requireRole(
         "admin",
+        "office_admin",
+        "system_super_admin",
         "staff"
     ),
     deleteRecord
@@ -219,6 +231,8 @@ router.post(
     "/:id/send-sms",
     requireRole(
         "admin",
+        "office_admin",
+        "system_super_admin",
         "staff",
         "branch_staff"
     ),

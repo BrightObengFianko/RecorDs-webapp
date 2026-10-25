@@ -82,6 +82,14 @@ const resetNotificationPreferencesButton = document.getElementById("resetNotific
 const mySessionsList = document.getElementById("mySessionsList");
 const sessionsSummary = document.getElementById("sessionsSummary");
 const logoutAllDevicesButton = document.getElementById("logoutAllDevicesButton");
+const activeDevicesSection = document.getElementById("sessions");
+const officeSmsSettingsSection = document.getElementById("officeSmsSettingsSection");
+const officeSmsApiKeyInput = document.getElementById("officeSmsApiKey");
+const officeSmsSenderIdInput = document.getElementById("officeSmsSenderId");
+const officeSmsSettingsStatus = document.getElementById("officeSmsSettingsStatus");
+const saveOfficeSmsSettingsButton = document.getElementById("saveOfficeSmsSettings");
+const testOfficeSmsSettingsButton = document.getElementById("testOfficeSmsSettings");
+const disconnectOfficeSmsSettingsButton = document.getElementById("disconnectOfficeSmsSettings");
 
 const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
 let toastTimer = null;
@@ -569,6 +577,55 @@ function renderSettings() {
     applyAccent(state.appearance.accent);
     applyTheme(state.appearance.theme);
     applyPageClasses();
+    const normalizedRole = String(currentUserRole || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+    const isOfficeAdmin = normalizedRole === "office_admin";
+    if (activeDevicesSection) {
+        activeDevicesSection.hidden = !isOfficeAdmin;
+        activeDevicesSection.setAttribute("aria-hidden", String(!isOfficeAdmin));
+    }
+    const canManageOfficeSms = ["admin", "office_admin"].includes(normalizedRole) && Boolean(readStoredUser()?.office_id);
+    if (officeSmsSettingsSection) {
+        officeSmsSettingsSection.hidden = !canManageOfficeSms;
+        officeSmsSettingsSection.setAttribute("aria-hidden", String(!canManageOfficeSms));
+    }
+}
+
+async function loadOfficeSmsSettings() {
+    if (!officeSmsSettingsSection || officeSmsSettingsSection.hidden) return;
+    try {
+        const data = await sessionRequest("/api/sms/office-config");
+        const configuration = data?.configuration || {};
+        officeSmsSettingsStatus.textContent = `Status: ${String(configuration.status || "NOT_CONFIGURED").replace(/_/g, " ")}${configuration.last_tested_at ? ` | Last tested: ${formatSessionDate(configuration.last_tested_at)}` : ""}`;
+        officeSmsSenderIdInput.value = configuration.sender_id || "";
+    } catch (error) {
+        officeSmsSettingsStatus.textContent = error.message || "Unable to load SMS settings.";
+    }
+}
+
+async function saveOfficeSmsConfiguration() {
+    const data = await sessionRequest("/api/sms/office-config", {
+        method: "PUT",
+        body: JSON.stringify({ api_key: officeSmsApiKeyInput.value.trim(), sender_id: officeSmsSenderIdInput.value.trim() })
+    });
+    officeSmsApiKeyInput.value = "";
+    officeSmsSettingsStatus.textContent = `Status: ${String(data?.configuration?.status || "PENDING_VERIFICATION").replace(/_/g, " ")}`;
+    showToast("Office SMS settings saved. Test the connection before sending.");
+}
+
+async function testOfficeSmsConfiguration() {
+    const data = await sessionRequest("/api/sms/office-config/test", { method: "POST", body: JSON.stringify({}) });
+    officeSmsSettingsStatus.textContent = `Status: ACTIVE${data?.balance === null || data?.balance === undefined ? "" : ` | Balance: ${data.balance}`}`;
+    showToast("Arkesel connection verified.");
+}
+
+async function disconnectOfficeSmsConfiguration() {
+    const confirmed = await window.ConfirmDialog?.show("Disconnect this office's Arkesel SMS account?", "Disconnect SMS", "Disconnect");
+    if (!confirmed) return;
+    await sessionRequest("/api/sms/office-config", { method: "DELETE", body: JSON.stringify({}) });
+    officeSmsApiKeyInput.value = "";
+    officeSmsSenderIdInput.value = "";
+    officeSmsSettingsStatus.textContent = "Status: DISCONNECTED";
+    showToast("Office SMS account disconnected.");
 }
 
 function persistUserCache() {
@@ -673,7 +730,8 @@ async function sessionRequest(url, options = {}) {
 }
 
 async function loadMySessions() {
-    if (!mySessionsList || !sessionsSummary) return;
+    const normalizedRole = String(currentUserRole || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+    if (!mySessionsList || !sessionsSummary || normalizedRole !== "office_admin") return;
     try {
         const data = await sessionRequest("/api/auth/sessions");
         if (!data) return;
@@ -855,27 +913,40 @@ function optimizeProfilePhoto(file) {
             const image = new Image();
 
             image.onload = () => {
-                const maxSize = 512;
-                const scale = Math.min(
-                    1,
-                    maxSize / Math.max(image.naturalWidth, image.naturalHeight)
-                );
-                const width = Math.max(1, Math.round(image.naturalWidth * scale));
-                const height = Math.max(1, Math.round(image.naturalHeight * scale));
-                const canvas = document.createElement("canvas");
+                // The API stores avatars in account_settings and caps the data
+                // URL at 750,000 characters. Leave headroom for future metadata
+                // and retry smaller dimensions/quality until it fits.
+                const maxDataUrlLength = 700000;
+                const sizes = [512, 448, 384, 320];
+                const qualities = [0.82, 0.7, 0.58, 0.45];
+                const sourceSize = Math.max(image.naturalWidth, image.naturalHeight);
 
-                canvas.width = width;
-                canvas.height = height;
+                for (const maxSize of sizes) {
+                    const scale = Math.min(1, maxSize / Math.max(1, sourceSize));
+                    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+                    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+                    const canvas = document.createElement("canvas");
 
-                const context = canvas.getContext("2d");
+                    canvas.width = width;
+                    canvas.height = height;
 
-                if (!context) {
-                    resolve(source);
-                    return;
+                    const context = canvas.getContext("2d");
+                    if (!context) {
+                        reject(new Error("Unable to process the selected photo."));
+                        return;
+                    }
+
+                    context.drawImage(image, 0, 0, width, height);
+                    for (const quality of qualities) {
+                        const optimized = canvas.toDataURL("image/jpeg", quality);
+                        if (optimized.length <= maxDataUrlLength) {
+                            resolve(optimized);
+                            return;
+                        }
+                    }
                 }
 
-                context.drawImage(image, 0, 0, width, height);
-                resolve(canvas.toDataURL("image/jpeg", 0.82));
+                reject(new Error("Photo is too detailed. Please choose a smaller image."));
             };
 
             image.onerror = () => reject(new Error("Unable to read the selected photo."));
@@ -969,6 +1040,18 @@ function bindEvents() {
         }
     });
     resetNotificationPreferencesButton?.addEventListener("click", resetNotificationPreferences);
+    saveOfficeSmsSettingsButton?.addEventListener("click", async () => {
+        saveOfficeSmsSettingsButton.disabled = true;
+        try { await saveOfficeSmsConfiguration(); } catch (error) { showToast(error.message || "Unable to save SMS settings."); } finally { saveOfficeSmsSettingsButton.disabled = false; }
+    });
+    testOfficeSmsSettingsButton?.addEventListener("click", async () => {
+        testOfficeSmsSettingsButton.disabled = true;
+        try { await testOfficeSmsConfiguration(); } catch (error) { showToast(error.message || "Unable to test the Arkesel connection."); } finally { testOfficeSmsSettingsButton.disabled = false; }
+    });
+    disconnectOfficeSmsSettingsButton?.addEventListener("click", async () => {
+        disconnectOfficeSmsSettingsButton.disabled = true;
+        try { await disconnectOfficeSmsConfiguration(); } catch (error) { showToast(error.message || "Unable to disconnect SMS."); } finally { disconnectOfficeSmsSettingsButton.disabled = false; }
+    });
 
     if (logoutButton) {
         logoutButton.addEventListener("click", () => {
@@ -1066,5 +1149,6 @@ if (token) {
         fillMissingProfileData(readStoredUser() || {});
         renderSettings();
         loadMySessions();
+        loadOfficeSmsSettings();
     });
 }

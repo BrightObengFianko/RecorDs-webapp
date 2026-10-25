@@ -15,12 +15,16 @@ const { boundedText } = require("../utils/inputValidation");
 const {
     NOTIFICATION_TYPES,
     NOTIFICATION_PRIORITIES,
+    notifyAdmins,
     notifyAdminsGrouped
 } = require("../utils/notifications");
 const {
     clearLoginFailures,
     recordLoginFailure
 } = require("../middleware/loginRateLimiter");
+const { isSystemSuperAdmin } = require("../utils/officeUtils");
+const { getOfficeSmsConfig } = require("../utils/officeIntegration");
+const { lockStaffAccountQuota } = require("../utils/staffQuota");
 const {
     getDeviceMetadata,
     sessionExpiresAt
@@ -54,6 +58,7 @@ async function trackLoginFailure(req, user = null) {
                 title: "Security Alert",
                 message: `${state.count} failed login attempts detected for ${email || "an unknown account"}.`,
                 priority: NOTIFICATION_PRIORITIES.CRITICAL,
+                officeId: user?.office_id || null,
                 groupingKey: `LOGIN_SECURITY:${email || req.ip || "unknown"}`,
                 groupingWindowMinutes: 15,
                 eventId: `login-failure:${email || req.ip || "unknown"}:${state.count}`,
@@ -216,7 +221,9 @@ async function fetchUserByEmail(email) {
                 u.email,
                 u.password,
                 LOWER(u.role) AS role,
+                u.office_id,
                 u.branch_id,
+                COALESCE(o.name, '') AS office,
                 COALESCE(u.is_active, TRUE) AS is_active,
                 UPPER(COALESCE(u.account_status, 'APPROVED')) AS account_status,
                 COALESCE(u.auth_token_version, 0) AS auth_token_version,
@@ -226,6 +233,8 @@ async function fetchUserByEmail(email) {
             FROM users u
             LEFT JOIN branches b
                 ON b.id = u.branch_id
+            LEFT JOIN offices o
+                ON o.id = u.office_id
             WHERE u.email = $1
             LIMIT 1
         `,
@@ -243,7 +252,9 @@ async function fetchUserById(id) {
                 u.name,
                 u.email,
                 LOWER(u.role) AS role,
+                u.office_id,
                 u.branch_id,
+                COALESCE(o.name, '') AS office,
                 COALESCE(u.is_active, TRUE) AS is_active,
                 UPPER(COALESCE(u.account_status, 'APPROVED')) AS account_status,
                 COALESCE(u.auth_token_version, 0) AS auth_token_version,
@@ -254,6 +265,8 @@ async function fetchUserById(id) {
             FROM users u
             LEFT JOIN branches b
                 ON b.id = u.branch_id
+            LEFT JOIN offices o
+                ON o.id = u.office_id
             WHERE u.id = $1
             LIMIT 1
         `,
@@ -269,7 +282,7 @@ async function fetchUserById(id) {
 
 const signup = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { name, email, password, branch_id } = req.body;
 
         if (!name || !email || !password) {
             return res.status(400).json({
@@ -308,13 +321,19 @@ const signup = async (req, res) => {
             });
         }
 
-        const branchId = await getDefaultBranchId();
+        const requestedBranchId = Number.parseInt(String(branch_id || ""), 10);
+        const branchId = Number.isInteger(requestedBranchId)
+            ? requestedBranchId
+            : req.user?.branch_id || await getDefaultBranchId();
 
         if (!branchId) {
             return res.status(500).json({
                 message: "Default branch is not available."
             });
         }
+
+        const branchOffice = await pool.query("SELECT office_id FROM branches WHERE id = $1 LIMIT 1", [branchId]);
+        const officeId = branchOffice.rows[0]?.office_id;
 
         const hashedPassword = await hashPassword(password);
 
@@ -325,10 +344,11 @@ const signup = async (req, res) => {
                     email,
                     password,
                     role,
+                    office_id,
                     branch_id,
                     account_status
                 )
-                VALUES ($1, $2, $3, $4, $5, $6)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id
             `,
             [
@@ -336,6 +356,7 @@ const signup = async (req, res) => {
                 cleanEmail,
                 hashedPassword,
                 "staff",
+                officeId,
                 branchId,
                 "PENDING"
             ]
@@ -362,9 +383,10 @@ const signup = async (req, res) => {
 // =========================
 
 const createStaffAccount = async (req, res) => {
+    let client = null;
     try {
         // Check if user is admin (middleware should have done this, but double-check)
-        if (normalizeRole(req.user?.role) !== "admin") {
+        if (!["admin", "office_admin", "system_super_admin"].includes(normalizeRole(req.user?.role))) {
             return res.status(403).json({
                 success: false,
                 message: "Only administrators can create staff accounts."
@@ -372,11 +394,29 @@ const createStaffAccount = async (req, res) => {
         }
 
         const { name, email, password } = req.body;
+        const requestedRole = normalizeRole(req.body?.role || "branch_staff");
+        const requestedOfficeId = Number.parseInt(String(req.body?.office_id || ""), 10);
+        const requestedBranchId = Number.parseInt(String(req.body?.branch_id || ""), 10);
+        const allowedRoles = new Set(["office_admin", "staff", "branch_staff"]);
 
         if (!name || !email || !password) {
             return res.status(400).json({
                 success: false,
                 message: "Please provide name, email, and temporary password."
+            });
+        }
+
+        if (!allowedRoles.has(requestedRole)) {
+            return res.status(400).json({
+                success: false,
+                message: "Choose a valid office role."
+            });
+        }
+
+        if (requestedRole === "office_admin" && !isSystemSuperAdmin(req.user)) {
+            return res.status(403).json({
+                success: false,
+                message: "Only the System Super Admin can create an Office Admin."
             });
         }
 
@@ -415,44 +455,106 @@ const createStaffAccount = async (req, res) => {
             });
         }
 
-        const branchId = await getDefaultBranchId();
+        const officeId = isSystemSuperAdmin(req.user) && Number.isInteger(requestedOfficeId)
+            ? requestedOfficeId
+            : req.user?.office_id;
 
-        if (!branchId) {
-            return res.status(500).json({
-                success: false,
-                message: "Default branch is not available."
-            });
+        if (!Number.isInteger(Number(officeId))) {
+            return res.status(400).json({ success: false, message: "Select a valid office." });
+        }
+
+        const officeResult = await pool.query(
+            "SELECT id FROM offices WHERE id = $1 AND status = 'ACTIVE' LIMIT 1",
+            [officeId]
+        );
+        if (!officeResult.rowCount) {
+            return res.status(400).json({ success: false, message: "Selected office does not exist or is inactive." });
+        }
+
+        let branchId = null;
+        if (requestedRole === "branch_staff") {
+            if (Number.isInteger(requestedBranchId)) {
+                const branchResult = await pool.query(
+                    "SELECT id FROM branches WHERE id = $1 AND office_id = $2 LIMIT 1",
+                    [requestedBranchId, officeId]
+                );
+                if (!branchResult.rowCount) {
+                    return res.status(400).json({ success: false, message: "Selected branch does not belong to the selected office." });
+                }
+                branchId = requestedBranchId;
+            }
         }
 
         const hashedPassword = await hashPassword(password);
 
         // Create staff account with APPROVED status (admin created it)
-        const result = await pool.query(
+        client = await pool.connect();
+        await client.query("BEGIN");
+        await lockStaffAccountQuota(client, officeId, requestedRole);
+
+        const result = await client.query(
             `
                 INSERT INTO users (
                     name,
                     email,
                     password,
                     role,
+                    office_id,
                     branch_id,
                     account_status,
                     is_active
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id
             `,
             [
                 cleanName,
                 cleanEmail,
                 hashedPassword,
-                "branch_staff",
+                    requestedRole,
+                    officeId,
                 branchId,
                 "APPROVED",
                 true
             ]
         );
+        await client.query("COMMIT");
+        client.release();
+        client = null;
 
         const user = await fetchUserById(result.rows[0].id);
+
+        await recordActivity({
+            request: req,
+            userId: req.user?.id,
+            name: req.user?.name,
+            email: req.user?.email,
+            role: req.user?.role,
+            activityType: ACTIVITY_TYPES.USER_CREATED,
+            affectedUserId: user.id,
+            affectedUserName: user.name,
+            branchId: user.branch_id,
+            branchName: user.branch,
+            details: "Staff account created."
+        });
+
+        try {
+            await notifyAdmins({
+                type: NOTIFICATION_TYPES.USER_CREATED,
+                title: "Staff Account Created",
+                message: `${user.name} was added to the office staff accounts.`,
+                priority: NOTIFICATION_PRIORITIES.INFO,
+                officeId: user.office_id,
+                branchId: user.branch_id,
+                metadata: {
+                    event_id: `user-created:${user.id}:${Date.now()}`,
+                    affected_user_id: user.id,
+                    role: user.role
+                }
+            });
+        } catch (notificationError) {
+            console.error("STAFF CREATION NOTIFICATION ERROR:", notificationError.message);
+        }
 
         return res.status(201).json({
             success: true,
@@ -462,6 +564,28 @@ const createStaffAccount = async (req, res) => {
             }
         });
     } catch (error) {
+        if (client) {
+            try { await client.query("ROLLBACK"); } catch (rollbackError) { console.error("CREATE STAFF ROLLBACK ERROR:", rollbackError); }
+            client.release();
+        }
+        if (error.code === "STAFF_QUOTA_EXCEEDED") {
+            try {
+                await recordActivity({
+                    request: req,
+                    userId: req.user?.id,
+                    name: req.user?.name,
+                    email: req.user?.email,
+                    role: req.user?.role,
+                    activityType: ACTIVITY_TYPES.STAFF_QUOTA_REJECTED,
+                    details: error.message,
+                    newValue: JSON.stringify({ office_id: error.officeId, used: error.used, limit: error.limit }),
+                    success: false
+                });
+            } catch (activityError) {
+                console.error("CREATE STAFF QUOTA AUDIT ERROR:", activityError);
+            }
+            return res.status(409).json({ success: false, message: error.message });
+        }
         console.error("Create staff account error:", error);
 
         return res.status(500).json({
@@ -702,6 +826,7 @@ const login = async (req, res) => {
             name: user.name,
             email: user.email,
             role: normalizeRole(user.role),
+            office_id: user.office_id,
             branch_id: user.branch_id,
             is_active: user.is_active,
             account_status: accountStatus.toUpperCase(),
@@ -737,6 +862,7 @@ const login = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: normalizeRole(user.role),
+                office_id: user.office_id,
                 branch_id: user.branch_id,
                 device_id: device.deviceId,
                 is_active: user.is_active,
@@ -839,6 +965,38 @@ const getAccountSettings = async (req, res) => {
     }
 };
 
+const getOfficeConfiguration = async (req, res) => {
+    try {
+        const requestedOfficeId = Number.parseInt(String(req.query?.office_id || ""), 10);
+        const officeId = isSystemSuperAdmin(req.user) && Number.isInteger(requestedOfficeId)
+            ? requestedOfficeId
+            : req.user.office_id;
+        const result = await pool.query(
+            `
+                SELECT id, name, code, description, address, phone, email, logo_url,
+                       primary_color, secondary_color, dashboard_title, status
+                FROM offices
+                WHERE id = $1
+                LIMIT 1
+            `,
+            [officeId]
+        );
+        if (!result.rowCount) return res.status(404).json({ success: false, message: "Office not found." });
+        const smsConfig = await getOfficeSmsConfig(officeId);
+        return res.json({
+            success: true,
+            office: {
+                ...result.rows[0],
+                n8n_configured: smsConfig.configured,
+                sms_sender_id: smsConfig.senderId
+            }
+        });
+    } catch (error) {
+        console.error("GET OFFICE CONFIGURATION ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to load office configuration." });
+    }
+};
+
 const updateAccountSettings = async (req, res) => {
     const client = await pool.connect();
 
@@ -857,6 +1015,16 @@ const updateAccountSettings = async (req, res) => {
             : {};
         const fullName = String(requestedProfile.fullName ?? existing.name).trim();
         const email = String(requestedProfile.emailAddress ?? existing.email).trim().toLowerCase();
+        const requestedAvatar = String(requestedProfile.avatar ?? "").trim();
+
+        if (requestedAvatar && (
+            !/^data:image\/(png|jpe?g|gif|webp);base64,[a-z0-9+/=]+$/i.test(requestedAvatar)
+            || requestedAvatar.length > 750000
+        )) {
+            return res.status(400).json({
+                message: "The profile photo is invalid or too large. Please choose another image."
+            });
+        }
 
         if (!fullName || boundedText(fullName, 100) === null) {
             return res.status(400).json({ message: "Full name is required and must be 100 characters or fewer." });
@@ -879,7 +1047,7 @@ const updateAccountSettings = async (req, res) => {
 
         // Notification preferences are an Admin-only settings area. Preserve
         // the stored values for other roles even if they call this endpoint directly.
-        if (normalizeRole(req.user?.role) !== "admin") {
+        if (!["admin", "office_admin", "system_super_admin"].includes(normalizeRole(req.user?.role))) {
             merged.notificationPreferences = existing.accountSettings.notificationPreferences;
         }
 
@@ -938,6 +1106,7 @@ module.exports = {
     logout,
     getMe,
     getAccountSettings,
+    getOfficeConfiguration,
     updateAccountSettings,
     createStaffAccount
 };

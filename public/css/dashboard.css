@@ -645,6 +645,28 @@ th {
     grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
 }
 
+.admin-panel-system-status {
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+}
+
+.admin-panel-system-status > .admin-panel {
+    min-width: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.admin-panel-system-status > .admin-panel + .admin-panel {
+    padding-top: 18px;
+    border-top: 1px solid var(--app-border);
+}
+
 .admin-panel {
     padding: 20px;
 }
@@ -657,6 +679,29 @@ th {
 
 .admin-panel-header p {
     margin-top: 6px;
+}
+
+.registrar-office-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 150px;
+    color: var(--app-muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.registrar-office-filter select {
+    min-height: 34px;
+    min-width: 150px;
+    padding: 0 28px 0 10px;
+    border: 1px solid var(--app-border);
+    border-radius: 8px;
+    background: var(--app-surface-2);
+    color: var(--app-text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
 }
 
 .branch-staff-dashboard-panel {
@@ -1422,6 +1467,12 @@ th {
         margin-bottom: 14px;
     }
 
+    .registrar-office-filter,
+    .registrar-office-filter select {
+        width: 100%;
+        min-width: 0;
+    }
+
     .admin-panel {
         min-width: 0;
         padding: 15px;
@@ -1435,6 +1486,13 @@ th {
 
     .admin-dashboard-grid,
     .admin-dashboard-grid-bottom {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+    }
+
+    .admin-panel-system-status {
+        grid-column: auto;
+        grid-row: auto;
         grid-template-columns: minmax(0, 1fr);
         gap: 14px;
     }

@@ -1,6 +1,8 @@
-function getN8NConfigStatus() {
-    const webhookUrl = String(process.env.N8N_WEBHOOK_URL || "").trim();
-    const webhookSecret = String(process.env.N8N_WEBHOOK_SECRET || "").trim();
+const { getOfficeSmsConfig, sendOfficeSms } = require("../utils/officeIntegration");
+
+async function getN8NConfigStatus(officeId) {
+    const config = await getOfficeSmsConfig(officeId);
+    const webhookUrl = config.webhookUrl;
 
     let hostname = null;
     try {
@@ -10,19 +12,35 @@ function getN8NConfigStatus() {
     }
 
     return {
-        n8nConfigured: Boolean(webhookUrl && webhookSecret),
+        n8nConfigured: config.configured,
         webhookUrlConfigured: Boolean(webhookUrl),
-        webhookSecretConfigured: Boolean(webhookSecret),
-        webhookHost: hostname
+        webhookSecretConfigured: Boolean(config.webhookSecret),
+        webhookHost: hostname,
+        senderId: config.senderId
     };
 }
 
-const sendToN8N = async (data) => {
-    const webhookUrl = String(process.env.N8N_WEBHOOK_URL || "").trim();
-    const webhookSecret = String(process.env.N8N_WEBHOOK_SECRET || "").trim();
+const sendToN8N = async (data, officeId) => {
+    const config = await getOfficeSmsConfig(officeId);
 
-    if (!webhookUrl || !webhookSecret) {
-        const error = new Error("SMS service is not configured. Please contact the administrator.");
+    // New offices send through their own encrypted Arkesel configuration.
+    // The n8n path below remains available for existing legacy deployments.
+    if (config.provider === "ARKESEL") {
+        const message = data.message || `Hello ${data.name || "customer"}, your case is ready. Please visit the office. Thank you.`;
+        return sendOfficeSms({
+            officeId,
+            recordId: data.recordId,
+            senderId: data.senderId,
+            message,
+            recipients: data.recipients || (data.phoneNumber ? [data.phoneNumber] : [])
+        });
+    }
+
+    const webhookUrl = config.webhookUrl;
+    const webhookSecret = config.webhookSecret;
+
+    if (!config.configured) {
+        const error = new Error("SMS service is not configured for this office. Please contact the administrator.");
         error.code = "N8N_NOT_CONFIGURED";
         throw error;
     }
@@ -54,7 +72,7 @@ const sendToN8N = async (data) => {
     }
 
     const timeoutMs = Math.min(
-        Math.max(Number.parseInt(process.env.N8N_WEBHOOK_TIMEOUT_MS || "10000", 10), 1000),
+        config.timeoutMs,
         30000
     );
 
@@ -66,7 +84,10 @@ const sendToN8N = async (data) => {
                 "Content-Type": "application/json",
                 "X-N8N-Webhook-Secret": webhookSecret
             },
-            body: JSON.stringify(data),
+            body: JSON.stringify({
+                ...data,
+                ...(config.senderId ? { senderId: config.senderId } : {})
+            }),
             signal: AbortSignal.timeout(timeoutMs)
         });
     } catch (error) {

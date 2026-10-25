@@ -70,6 +70,15 @@ app.use(cors(
 
 app.use(express.json({ limit: "1mb" }));
 
+// Dashboard and office-scoped API responses must always come from the
+// authenticated server request, never from a browser or intermediary cache.
+app.use("/api", (req, res, next) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    next();
+});
+
 
 // =========================================
 // API ROUTES
@@ -174,19 +183,26 @@ app.use(
         {
             etag: true,
             lastModified: true,
-            maxAge: "1h",
+            maxAge: 0,
             setHeaders(res, filePath) {
-                if (path.extname(filePath).toLowerCase() === ".html") {
+                const extension = path.extname(filePath).toLowerCase();
+
+                if ([".html", ".js", ".css", ".json"].includes(extension)) {
                     res.setHeader(
                         "Cache-Control",
-                        "no-cache, must-revalidate"
+                        "no-cache, no-store, must-revalidate"
                     );
+                    res.setHeader("Pragma", "no-cache");
+                    res.setHeader("Expires", "0");
                 }
+
                 if (path.basename(filePath).toLowerCase() === "service-worker.js") {
                     res.setHeader(
                         "Cache-Control",
                         "no-cache, no-store, must-revalidate"
                     );
+                    res.setHeader("Pragma", "no-cache");
+                    res.setHeader("Expires", "0");
                 }
             }
         }

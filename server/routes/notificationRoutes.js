@@ -14,7 +14,7 @@ const {
 
 const router = express.Router();
 
-router.use(authMiddleware, requireRole("admin"));
+router.use(authMiddleware, requireRole("admin", "office_admin", "system_super_admin", "staff"));
 router.param("id", validateIdParam);
 router.get("/", listNotifications);
 router.get("/unread-count", getUnreadCount);

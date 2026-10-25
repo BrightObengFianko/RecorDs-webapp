@@ -69,7 +69,7 @@
         }
 
         if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/service-worker.js?v=56", {
+        navigator.serviceWorker.register("/service-worker.js?v=104", {
                 updateViaCache: "none"
             }).then(registration => {
                 // Do not make offline startup wait on a service-worker update check.
@@ -285,7 +285,7 @@
     function formatRoleLabel(role) {
         const normalized = normalizeRole(role);
 
-        if (normalized === "admin") {
+        if (["admin", "office_admin", "system_super_admin"].includes(normalized)) {
             return "Administrator";
         }
 
@@ -306,10 +306,51 @@
         return file.toLowerCase();
     }
 
+    function applyOfficeConfiguration(office) {
+        if (!office || !document.documentElement) return;
+        const root = document.documentElement;
+        const primary = office.primary_color ? normalizeHex(office.primary_color) : "";
+        const secondary = office.secondary_color ? normalizeHex(office.secondary_color) : "";
+        if (primary) {
+            const [red, green, blue] = hexToRgb(primary);
+            const luminance = (red * 299 + green * 587 + blue * 114) / 1000;
+            const foreground = luminance >= 190 ? "#0f172a" : "#ffffff";
+            const ink = luminance >= 190 ? "#0f172a" : primary;
+            root.style.setProperty("--office-primary", primary);
+            root.style.setProperty("--accent", primary);
+            root.style.setProperty("--accent-strong", darken(primary, 0.82));
+            root.style.setProperty("--accent-foreground", foreground);
+            root.style.setProperty("--accent-ink", ink);
+        }
+        if (secondary) {
+            root.style.setProperty("--office-secondary", secondary);
+            root.style.setProperty("--accent-soft", secondary);
+            root.style.setProperty("--app-sidebar-hover-bg", secondary);
+        }
+        if (office.name) root.dataset.officeName = office.name;
+        if (office.dashboard_title && getCurrentPageName() === "dashboard.html") {
+            document.title = office.dashboard_title;
+        }
+        try { localStorage.setItem("office", JSON.stringify(office)); } catch (_) {}
+    }
+
+    function refreshOfficeConfiguration(authToken) {
+        if (!authToken || navigator.onLine === false) return;
+        fetch("/api/auth/office", {
+            headers: { Authorization: `Bearer ${authToken}` }
+        }).then(response => response.ok ? response.json() : null)
+            .then(data => applyOfficeConfiguration(data?.office))
+            .catch(() => {});
+    }
+
+    window.addEventListener("office-configuration-updated", event => {
+        applyOfficeConfiguration(event.detail);
+    });
+
     function getAllowedPages(role) {
         const normalized = normalizeRole(role);
 
-        if (normalized === "admin") {
+        if (["admin", "office_admin", "system_super_admin"].includes(normalized)) {
             return new Set([
                 "dashboard.html",
                 "create-record.html",
@@ -659,6 +700,7 @@
                 document.body.dataset.connectionState = navigator.onLine === false ? "offline" : "online";
 
                 if (navigator.onLine !== false) {
+                    refreshOfficeConfiguration(token);
                     void fetch("/api/auth/me", {
                         method: "GET",
                         headers: {
@@ -690,8 +732,14 @@
                             username: user.username || "",
                             bio: user.bio || "",
                             branch: user.branch || "",
-                            branch_id: user.branch_id || ""
+                            branch_id: user.branch_id || "",
+                            office_id: user.office_id || "",
+                            office: user.office || ""
                         }));
+                        if (user.accountSettings) {
+                            cacheSettings(mergeSettings(readSettings(), user.accountSettings));
+                        }
+                        refreshOfficeConfiguration(token);
                     }).catch(() => {
                         document.body.dataset.connectionState = "offline";
                     });
@@ -752,8 +800,11 @@
                 username: user.username || "",
                 bio: user.bio || "",
                 branch: user.branch || "",
-                branch_id: user.branch_id || ""
+                branch_id: user.branch_id || "",
+                office_id: user.office_id || "",
+                office: user.office || ""
             }));
+            refreshOfficeConfiguration(token);
 
             if (user.accountSettings) {
                 cacheSettings(mergeSettings(readSettings(), user.accountSettings));
@@ -848,7 +899,18 @@
         });
 
         document.querySelectorAll(".nav-item-admin-only").forEach(item => {
-            if (currentRole !== "admin") {
+            if (!["admin", "office_admin", "system_super_admin"].includes(currentRole)) {
+                item.remove();
+                return;
+            }
+
+            item.hidden = false;
+            item.removeAttribute("aria-hidden");
+            item.removeAttribute("tabindex");
+        });
+
+        document.querySelectorAll(".nav-item-system-admin-only").forEach(item => {
+            if (!["admin", "system_super_admin"].includes(currentRole)) {
                 item.remove();
                 return;
             }
@@ -961,6 +1023,11 @@
         root.style.setProperty("--accent-ink", accentInk);
         root.dataset.theme = theme;
         applyThemeTokens(theme);
+
+        try {
+            const office = JSON.parse(localStorage.getItem("office") || "null");
+            applyOfficeConfiguration(office);
+        } catch (_) {}
 
         if (body) {
             body.classList.toggle("compact-mode", Boolean(nextSettings.appearance.compactMode));
@@ -1097,6 +1164,10 @@
         addCopyrightFooter();
 
         const state = applySettings(readSettings());
+        try {
+            const cachedOffice = JSON.parse(localStorage.getItem("office") || "null");
+            applyOfficeConfiguration(cachedOffice);
+        } catch (_) {}
         const profileState = applyProfile(readProfile());
         initAdminHeaderLogout();
         playPageLogoTransition();
@@ -1163,7 +1234,7 @@
         const originalNextSibling = logoutButton.nextSibling;
         const mobileQuery = window.matchMedia("(max-width: 1100px)");
         const desktopParent = document.querySelector(
-            ".users-topbar-profile, .page-top-right, .reports-topbar, " +
+            ".users-topbar-profile, .users-page-heading, .page-top-right, .reports-topbar, " +
             ".account-heading, .pending-sync-heading, .page-heading, .settings-main .hero"
         );
 

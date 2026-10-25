@@ -1,5 +1,6 @@
 .admin-notification-button {
     position: relative;
+    z-index: 1101;
     display: inline-grid;
     place-items: center;
     width: 42px;
@@ -11,13 +12,23 @@
     color: var(--app-text, #172033);
     font-size: 19px;
     cursor: pointer;
+    pointer-events: auto;
+    transition: background-color 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
-.admin-notification-button:hover { background: var(--app-surface-2, #f3f4f8); }
+.admin-notification-button:hover {
+    background: var(--accent-soft, #f1efff);
+    color: var(--accent-ink, #5735e8);
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(87, 53, 232, .16);
+}
+.admin-notification-button:active { transform: translateY(0); }
+.admin-notification-bell { width: 21px; height: 21px; }
 .admin-notification-button:focus-visible,
 .admin-notification-mark-all:focus-visible,
 .admin-notification-clear-all:focus-visible,
 .admin-notification-item:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent, #5735e8) 35%, transparent); outline-offset: 2px; }
 .page-heading,
+.users-page-heading,
 .settings-main .hero { position: relative; }
 .reports-topbar > .admin-notification-button,
 .account-heading > .admin-notification-button,
@@ -33,10 +44,24 @@
         z-index: 1100;
         margin-left: 0;
     }
+
+    /* User Management keeps notification and logout together in its header. */
+    .users-page-heading > .admin-notification-button {
+        position: relative;
+        top: auto;
+        right: auto;
+        z-index: auto;
+        margin-left: auto;
+    }
+
+    .users-page-heading > .logout-button {
+        margin-left: 0;
+    }
 }
 
 @media (max-width: 1100px) {
     .page-heading > .admin-notification-button,
+    .users-page-heading > .admin-notification-button,
     .settings-main .hero > .admin-notification-button {
         position: absolute;
         top: 0;
@@ -107,14 +132,16 @@
     .page-top-right,
     .reports-topbar,
     .account-heading,
-    .pending-sync-heading {
+    .pending-sync-heading,
+    .users-page-heading {
         min-width: 0;
     }
 
     .page-top-right > .admin-notification-button,
     .reports-topbar > .admin-notification-button,
     .account-heading > .admin-notification-button,
-    .pending-sync-heading > .admin-notification-button {
+    .pending-sync-heading > .admin-notification-button,
+    .users-page-heading > .admin-notification-button {
         flex: 0 0 46px;
         align-self: flex-start;
     }

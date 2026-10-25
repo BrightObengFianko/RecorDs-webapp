@@ -27,11 +27,15 @@ const overviewBestPeriod = document.getElementById("overviewBestPeriod");
 const overviewGrowth = document.getElementById("overviewGrowth");
 const overviewGrowthCaption = document.getElementById("overviewGrowthCaption");
 const overviewRegistrarFilter = document.getElementById("overviewRegistrarFilter");
+const overviewOfficeField = document.getElementById("overviewOfficeField");
+const overviewOfficeFilter = document.getElementById("overviewOfficeFilter");
 const overviewCategoryFilter = document.getElementById("overviewCategoryFilter");
 const overviewYearFilter = document.getElementById("overviewYearFilter");
 const registrarPerformanceList = document.getElementById("registrarPerformanceList");
 const registrarPerformanceInsight = document.getElementById("registrarPerformanceInsight");
 const registrarPerformanceTodayTotal = document.getElementById("registrarPerformanceTodayTotal");
+const registrarOfficeField = document.getElementById("registrarOfficeField");
+const registrarOfficeFilter = document.getElementById("registrarOfficeFilter");
 const statusSmsGrid = document.getElementById("statusSmsGrid");
 const buySmsBundleButton = document.getElementById("buySmsBundleButton");
 const dashboardSmsBalance = document.getElementById("dashboardSmsBalance");
@@ -39,6 +43,7 @@ const dashboardPerformanceInsight = document.getElementById("dashboardPerformanc
 const branchStaffDashboardPanel = document.getElementById("branchStaffDashboardPanel");
 const branchStaffMetrics = document.getElementById("branchStaffMetrics");
 const branchStaffMonthly = document.getElementById("branchStaffMonthly");
+const adminDashboardGridBottom = document.querySelector(".admin-dashboard-grid-bottom");
 
 const overviewControls = document.querySelector(
     ".admin-panel-chart .overview-controls"
@@ -55,6 +60,8 @@ const overviewState = {
     period: "daily",
     range: "30d",
     registrar: "",
+    overviewOfficeId: "",
+    registrarOfficeId: "",
     category: "",
     year: ""
 };
@@ -66,14 +73,6 @@ const smsAccountState = {
     buyUrl: null,
     error: ""
 };
-
-const validDashboardRegistrars = [
-    "ADMIN",
-    "OFFICE",
-    "NEW OFFICE",
-    "NEW MARKET",
-    "POLYCLINIC"
-];
 
 const overviewCategories = new Set();
 
@@ -110,9 +109,33 @@ function getCurrentUserRole() {
         .toLowerCase();
 }
 
+function isSystemWideDashboardUser() {
+    const role = getCurrentUserRole().replace(/[\s-]+/g, "_");
+    return role === "system_super_admin";
+}
+
+function getDashboardOfficeContextId() {
+    if (!isSystemWideDashboardUser()) return "";
+    return new URLSearchParams(window.location.search).get("office_id") || "";
+}
+
 function isBranchStaffDashboardUser() {
     return getCurrentUserRole()
         .replace(/[\s-]+/g, "_") === "branch_staff";
+}
+
+function isRecordVisibleToDashboardUser(record) {
+    const user = readStoredUser();
+    const role = String(user.role || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, "_");
+
+    if (role === "system_super_admin") {
+        return true;
+    }
+
+    return Boolean(user.office_id) && String(record?.office_id) === String(user.office_id);
 }
 
 function getDashboardProfile(apiUser) {
@@ -522,17 +545,22 @@ function renderRegistrarPerformance(summary) {
         return;
     }
 
-    const counts = new Map(
-        (summary?.registrarPerformance || []).map(item => [
-            String(item.label || "").toUpperCase(),
-            Number(item.count || 0)
-        ])
-    );
+    const rows = (summary?.registrarPerformance || [])
+        .map(item => {
+            const registrar = String(item.label || "").trim();
+            const branch = String(item.branch_name || "").trim();
+            const office = String(item.office_name || "").trim();
+            const context = [
+                office,
+                branch && branch !== "Office-level" ? branch : ""
+            ].filter(Boolean).join(" / ");
 
-    const rows = validDashboardRegistrars.map(label => ({
-        label,
-        count: counts.get(label) || 0
-    }));
+            return {
+                label: context ? `${context} / ${registrar}` : registrar,
+                count: Number(item.count || 0)
+            };
+        })
+        .filter(row => row.label);
 
     const highest = rows.reduce(
         (current, row) => row.count > (current?.count || 0)
@@ -780,9 +808,11 @@ async function loadOverviewRegistrars() {
 
     try {
         const response = await fetch("/api/records/registrars", {
+            cache: "no-store",
             headers: {
                 "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Cache-Control": "no-cache"
             }
         });
 
@@ -804,6 +834,51 @@ async function loadOverviewRegistrars() {
         overviewRegistrarFilter.value = overviewState.registrar;
     } catch (error) {
         console.error("OVERVIEW REGISTRARS ERROR:", error);
+    }
+}
+
+async function loadRegistrarPerformanceOffices() {
+    if (!registrarOfficeField || !registrarOfficeFilter || !overviewOfficeField || !overviewOfficeFilter) return;
+
+    if (!isSystemWideDashboardUser()) {
+        registrarOfficeField.hidden = true;
+        overviewOfficeField.hidden = true;
+        return;
+    }
+
+    try {
+        const response = await fetch("/api/admin/offices", {
+            cache: "no-store",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json",
+                "Cache-Control": "no-cache"
+            }
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || "Unable to load offices.");
+
+        registrarOfficeFilter.innerHTML = '<option value="">All Offices</option>';
+        (data.offices || []).forEach(office => {
+            const label = office.code ? `${office.name} (${office.code})` : office.name;
+            const performanceOption = document.createElement("option");
+            performanceOption.value = String(office.id);
+            performanceOption.textContent = label;
+            registrarOfficeFilter.appendChild(performanceOption);
+
+            const overviewOption = document.createElement("option");
+            overviewOption.value = String(office.id);
+            overviewOption.textContent = label;
+            overviewOfficeFilter.appendChild(overviewOption);
+        });
+        registrarOfficeFilter.value = overviewState.registrarOfficeId;
+        overviewOfficeFilter.value = overviewState.overviewOfficeId;
+        registrarOfficeField.hidden = false;
+        overviewOfficeField.hidden = false;
+    } catch (error) {
+        console.error("REGISTRAR PERFORMANCE OFFICES ERROR:", error);
+        registrarOfficeField.hidden = true;
+        overviewOfficeField.hidden = true;
     }
 }
 
@@ -1020,9 +1095,9 @@ function renderBranchBreakdown(branches) {
 }
 
 function renderSystemOverview(summary) {
-    if (!systemOverviewGrid || getCurrentUserRole() !== "admin") {
+    if (!systemOverviewGrid || !isSystemWideDashboardUser()) {
         if (adminDashboardExtras) {
-            adminDashboardExtras.hidden = getCurrentUserRole() !== "admin";
+            adminDashboardExtras.hidden = true;
         }
         return;
     }
@@ -1034,6 +1109,18 @@ function renderSystemOverview(summary) {
     }
 
     systemOverviewGrid.innerHTML = `
+        <div class="system-item">
+            <div class="system-icon accent">
+                <svg class="ui-icon" aria-hidden="true">
+                    <use href="#icon-building"></use>
+                </svg>
+            </div>
+            <div class="system-copy">
+                <span>Offices</span>
+                <strong>${formatNumber(systemOverview.offices || 0)}</strong>
+                <small>${formatNumber(systemOverview.activeOffices || 0)} active, ${formatNumber(systemOverview.inactiveOffices || 0)} inactive</small>
+            </div>
+        </div>
         <div class="system-item">
             <div class="system-icon accent">
                 <svg class="ui-icon" aria-hidden="true">
@@ -1056,6 +1143,18 @@ function renderSystemOverview(summary) {
                 <span>Branches</span>
                 <strong>${formatNumber(systemOverview.branches || 0)}</strong>
                 <small>Active branches</small>
+            </div>
+        </div>
+        <div class="system-item">
+            <div class="system-icon warning">
+                <svg class="ui-icon" aria-hidden="true">
+                    <use href="#icon-list"></use>
+                </svg>
+            </div>
+            <div class="system-copy">
+                <span>Awaiting Approval</span>
+                <strong>${formatNumber(systemOverview.awaitingApproval || 0)}</strong>
+                <small>Processing and pending cases</small>
             </div>
         </div>
         <div class="system-item">
@@ -1101,8 +1200,7 @@ function renderAdminOverview(summary) {
     renderCategoryBreakdown(summary?.categoryBreakdown || []);
     renderBranchBreakdown(summary?.branchBreakdown || []);
 
-    const isAdmin =
-        getCurrentUserRole() === "admin";
+    const isAdmin = isSystemWideDashboardUser();
 
     const systemPanel =
         systemOverviewGrid?.closest(
@@ -1139,6 +1237,11 @@ function renderAdminOverview(summary) {
             ".admin-panel-status"
         );
 
+    const systemStatusPanel =
+        systemOverviewGrid?.closest(
+            ".admin-panel-system-status"
+        );
+
     const isBranchStaff =
         getCurrentUserRole() === "branch_staff";
 
@@ -1162,12 +1265,20 @@ function renderAdminOverview(summary) {
         statusSmsPanel.hidden = isBranchStaff;
     }
 
+    if (systemStatusPanel) {
+        systemStatusPanel.hidden = isBranchStaff;
+    }
+
     if (branchPanel) {
         branchPanel.hidden = !isAdmin || isBranchStaff;
     }
 
     if (systemPanel) {
         systemPanel.hidden = !isAdmin || isBranchStaff;
+    }
+
+    if (adminDashboardGridBottom) {
+        adminDashboardGridBottom.hidden = isBranchStaff;
     }
 
     if (isAdmin) {
@@ -1271,7 +1382,18 @@ function renderRecentRecords(records, pagination, metadata = {}) {
             : "No registrations available";
     }
 
-    if (!Array.isArray(records) || !records.length) {
+    // Server responses have already passed the authenticated office scope
+    // check. Re-filtering them with localStorage can hide valid records when
+    // the cached user profile belongs to the previous session. Offline queue
+    // entries still require the local scope check because they come from the
+    // browser and have not been authorized by the API.
+    const visibleRecords = Array.isArray(records)
+        ? metadata.serverAuthorized
+            ? records
+            : records.filter(isRecordVisibleToDashboardUser)
+        : [];
+
+    if (!visibleRecords.length) {
         recentRecordsBody.innerHTML = `
             <tr>
                 <td
@@ -1292,7 +1414,7 @@ function renderRecentRecords(records, pagination, metadata = {}) {
 
     const page = Number(pagination?.page || 1);
 
-    records.forEach((record, index) => {
+    visibleRecords.forEach((record, index) => {
         const row = document.createElement("tr");
         const status = formatStatusLabel(record.status);
         const statusClass = getStatusClass(record.status);
@@ -1384,8 +1506,15 @@ async function loadRecentRecordsPage(page) {
             return;
         }
 
+        const recentParams = new URLSearchParams({ page: String(page) });
+        const officeContextId = getDashboardOfficeContextId() ||
+            (isSystemWideDashboardUser() ? overviewState.registrarOfficeId : "");
+        if (officeContextId) {
+            recentParams.set("office_id", officeContextId);
+        }
+
         const response = await fetch(
-            `/api/records/recent-today?page=${encodeURIComponent(page)}`,
+            `/api/records/recent-today?${recentParams.toString()}`,
             {
                 headers: {
                     "Authorization": `Bearer ${token}`,
@@ -1414,7 +1543,8 @@ async function loadRecentRecordsPage(page) {
             pagination,
             {
                 selectedDate: data.selectedDate,
-                isToday: data.isToday
+                isToday: data.isToday,
+                serverAuthorized: true
             }
         );
         offlineRecentRecords = null;
@@ -1445,6 +1575,25 @@ async function loadDashboardSummary() {
             recentPage: String(recentRecordsState.page)
         });
 
+        const officeContextId = getDashboardOfficeContextId();
+        if (officeContextId) {
+            params.set("office_id", officeContextId);
+        }
+
+        if (isSystemWideDashboardUser() && overviewState.registrarOfficeId) {
+            params.set("registrar_office_id", overviewState.registrarOfficeId);
+        }
+
+        if (isSystemWideDashboardUser() && overviewState.overviewOfficeId) {
+            params.set("overview_office_id", overviewState.overviewOfficeId);
+        }
+
+        const recentOfficeContextId = officeContextId ||
+            (isSystemWideDashboardUser() ? overviewState.registrarOfficeId : "");
+        if (recentOfficeContextId) {
+            params.set("recent_office_id", recentOfficeContextId);
+        }
+
         if (overviewState.registrar) {
             params.set("registrar", overviewState.registrar);
         }
@@ -1458,9 +1607,11 @@ async function loadDashboardSummary() {
         }
 
         const response = await fetch(`/api/records/summary?${params.toString()}`, {
+            cache: "no-store",
             headers: {
                 "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Cache-Control": "no-cache"
             }
         });
 
@@ -1512,7 +1663,8 @@ async function loadDashboardSummary() {
                 recentPagination,
                 {
                     selectedDate: summary.recentRecordsDate,
-                    isToday: summary.recentRecordsIsToday
+                    isToday: summary.recentRecordsIsToday,
+                    serverAuthorized: true
                 }
             );
         }
@@ -1528,7 +1680,10 @@ async function loadDashboardSummary() {
             try {
                 const pendingRecords = await window.RecordOfflineQueue.getPendingRecords();
                 const localRecords = pendingRecords
-                    .filter(entry => isBranchStaffDashboardUser() || ["pending", "ready", "not ready"].includes(normalizeStatus(entry.payload?.status)))
+                    .filter(entry =>
+                        isRecordVisibleToDashboardUser(entry.payload) &&
+                        (isBranchStaffDashboardUser() || ["pending", "ready", "not ready"].includes(normalizeStatus(entry.payload?.status)))
+                    )
                     .map(entry => ({
                         ...entry.payload,
                         id: `offline_${entry.uuid}`,
@@ -1601,6 +1756,16 @@ document.querySelectorAll("[data-overview-range]").forEach(button => {
 
 overviewRegistrarFilter?.addEventListener("change", () => {
     overviewState.registrar = overviewRegistrarFilter.value;
+    loadDashboardSummary();
+});
+
+registrarOfficeFilter?.addEventListener("change", () => {
+    overviewState.registrarOfficeId = registrarOfficeFilter.value;
+    loadDashboardSummary();
+});
+
+overviewOfficeFilter?.addEventListener("change", () => {
+    overviewState.overviewOfficeId = overviewOfficeFilter.value;
     loadDashboardSummary();
 });
 
@@ -1705,3 +1870,4 @@ document
 
 loadDashboard();
 loadOverviewRegistrars();
+loadRegistrarPerformanceOffices();

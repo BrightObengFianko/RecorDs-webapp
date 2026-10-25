@@ -38,7 +38,11 @@ async function loadUserById(userId) {
                 u.name,
                 u.email,
                 LOWER(u.role) AS role,
+                u.office_id,
                 u.branch_id,
+                COALESCE(o.name, '') AS office_name,
+                COALESCE(o.code, '') AS office_code,
+                COALESCE(o.status, 'ACTIVE') AS office_status,
                 COALESCE(u.is_active, TRUE) AS is_active,
                 UPPER(COALESCE(u.account_status, 'APPROVED')) AS account_status,
                 COALESCE(u.auth_token_version, 0) AS auth_token_version,
@@ -48,6 +52,8 @@ async function loadUserById(userId) {
             FROM users u
             LEFT JOIN branches b
                 ON b.id = u.branch_id
+            LEFT JOIN offices o
+                ON o.id = u.office_id
             WHERE u.id = $1
             LIMIT 1
         `,
@@ -172,11 +178,21 @@ function requireAuth(req, res, next) {
                     });
                 }
 
+                if (String(user.office_status).toUpperCase() !== "ACTIVE") {
+                    return res.status(403).json({
+                        success: false,
+                        message: "This office is currently disabled."
+                    });
+                }
+
                 req.user = {
                     id: user.id,
                     name: user.name,
                     email: user.email,
                     role: normalizeRole(user.role),
+                    office_id: user.office_id,
+                    office: user.office_name,
+                    office_code: user.office_code,
                     branch_id: user.branch_id,
                     is_active: user.is_active,
                     account_status: user.account_status,

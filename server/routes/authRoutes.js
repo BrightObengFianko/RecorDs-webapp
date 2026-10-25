@@ -8,6 +8,7 @@ const {
     logout,
     getMe,
     getAccountSettings,
+    getOfficeConfiguration,
     updateAccountSettings,
     createStaffAccount
 } = require("../controllers/authController");
@@ -44,8 +45,9 @@ router.post("/logout", authenticateToken, auditMutatingRequest, logout);
 // Protected endpoints - auth required
 router.get("/me", authenticateToken, getMe);
 router.get("/settings", authenticateToken, getAccountSettings);
+router.get("/office", authenticateToken, getOfficeConfiguration);
 router.patch("/settings", authenticateToken, updateAccountSettings);
-router.get("/account-access", authenticateToken, requireRole("admin", "staff", "branch_staff"), (req, res) => {
+router.get("/account-access", authenticateToken, requireRole("admin", "office_admin", "system_super_admin", "staff", "branch_staff"), (req, res) => {
     res.json({
         success: true,
         allowed: true,
@@ -57,8 +59,8 @@ router.post("/sessions/:sessionId/revoke", authenticateToken, revokeMySession);
 router.post("/sessions/revoke-all", authenticateToken, revokeAllMySessions);
 
 // Admin-only endpoints (authenticateToken first, then requireRole)
-router.post("/signup", authenticateToken, requireRole("admin"), signup);
-router.post("/staff/create", authenticateToken, requireRole("admin"), createStaffAccount);
+router.post("/signup", authenticateToken, requireRole("admin", "office_admin", "system_super_admin"), signup);
+router.post("/staff/create", authenticateToken, requireRole("admin", "office_admin", "system_super_admin"), createStaffAccount);
 
 
 module.exports = router;

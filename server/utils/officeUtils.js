@@ -8,10 +8,7 @@ function normalizeRole(role) {
 
 function isSystemSuperAdmin(user) {
     const role = normalizeRole(user?.role);
-
-    // Legacy admin accounts without an office remain global. Once an admin
-    // is assigned to an office, that office becomes the access boundary.
-    return role === "system_super_admin" || (role === "admin" && !user?.office_id);
+    return role === "system_super_admin";
 }
 
 function isOfficeSystemSuperAdmin(user) {

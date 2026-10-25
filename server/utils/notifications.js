@@ -104,6 +104,7 @@ async function createNotification({
     userId,
     recordId = null,
     branchId = null,
+    officeId = null,
     metadata = {}
 }) {
     const normalizedType = String(type || "").trim().toUpperCase();
@@ -124,25 +125,28 @@ async function createNotification({
     const cleanTitle = validateNotificationText(title, "Notification title", 200);
     const cleanMessage = validateNotificationText(message, "Notification message", 2000);
 
-    const userResult = await pool.query("SELECT id FROM users WHERE id = $1 LIMIT 1", [normalizedUserId]);
+    const userResult = await pool.query("SELECT id, office_id FROM users WHERE id = $1 LIMIT 1", [normalizedUserId]);
     if (!userResult.rowCount) throw new Error("User not found.");
+    const normalizedOfficeId = normalizeId(officeId || userResult.rows[0].office_id, "Office ID", false);
 
     if (normalizedRecordId !== null) {
-        const result = await pool.query("SELECT id FROM records WHERE id = $1 LIMIT 1", [normalizedRecordId]);
+        const result = await pool.query("SELECT id, office_id FROM records WHERE id = $1 LIMIT 1", [normalizedRecordId]);
         if (!result.rowCount) throw new Error("Record not found.");
+        if (String(result.rows[0].office_id) !== String(normalizedOfficeId)) throw new Error("Record belongs to another office.");
     }
 
     if (normalizedBranchId !== null) {
-        const result = await pool.query("SELECT id FROM branches WHERE id = $1 LIMIT 1", [normalizedBranchId]);
+        const result = await pool.query("SELECT id, office_id FROM branches WHERE id = $1 LIMIT 1", [normalizedBranchId]);
         if (!result.rowCount) throw new Error("Branch not found.");
+        if (String(result.rows[0].office_id) !== String(normalizedOfficeId)) throw new Error("Branch belongs to another office.");
     }
 
     const result = await pool.query(
         `
             INSERT INTO notifications (
-                type, title, message, priority, user_id, record_id, branch_id, metadata
+                type, title, message, priority, user_id, record_id, branch_id, office_id, metadata
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
             ON CONFLICT DO NOTHING
             RETURNING *
         `,
@@ -154,6 +158,7 @@ async function createNotification({
             normalizedUserId,
             normalizedRecordId,
             normalizedBranchId,
+            normalizedOfficeId,
             JSON.stringify(normalizedMetadata)
         ]
     );
@@ -180,6 +185,84 @@ async function createNotification({
     throw new Error("Unable to create notification.");
 }
 
+async function notifyUser({
+    userId,
+    type,
+    title,
+    message,
+    priority = NOTIFICATION_PRIORITIES.INFO,
+    recordId = null,
+    branchId = null,
+    officeId = null,
+    metadata = {}
+}) {
+    const normalizedUserId = normalizeId(userId, "User ID", false);
+    const userResult = await pool.query(
+        `SELECT id, office_id, account_settings, is_active, account_status
+         FROM users
+         WHERE id = $1
+         LIMIT 1`,
+        [normalizedUserId]
+    );
+    const user = userResult.rows[0];
+    if (!user || user.is_active === false || String(user.account_status || "APPROVED").toUpperCase() !== "APPROVED") {
+        return null;
+    }
+    if (!isNotificationEnabled(user, type)) return null;
+
+    return createNotification({
+        type,
+        title,
+        message,
+        priority,
+        userId: normalizedUserId,
+        recordId,
+        branchId,
+        officeId: officeId || user.office_id,
+        metadata
+    });
+}
+
+async function notifyRecordOwner({
+    recordId,
+    excludeUserId = null,
+    type,
+    title,
+    message,
+    priority = NOTIFICATION_PRIORITIES.INFO,
+    branchId = null,
+    metadata = {}
+}) {
+    const result = await pool.query(
+        `
+            SELECT r.id, r.office_id, r.branch_id, r.created_by, u.role
+            FROM records r
+            JOIN users u ON u.id = r.created_by
+            WHERE r.id = $1
+              AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(u.role, '')), '_', ' '), '-', ' '))
+                  = 'staff'
+            LIMIT 1
+        `,
+        [normalizeId(recordId, "Record ID", false)]
+    );
+    const owner = result.rows[0];
+    if (!owner || (excludeUserId !== null && String(owner.created_by) === String(excludeUserId))) {
+        return null;
+    }
+
+    return notifyUser({
+        userId: owner.created_by,
+        type,
+        title,
+        message,
+        priority,
+        recordId: owner.id,
+        branchId: branchId || owner.branch_id,
+        officeId: owner.office_id,
+        metadata
+    });
+}
+
 async function notifyAdmins({
     type,
     title,
@@ -187,16 +270,28 @@ async function notifyAdmins({
     priority = NOTIFICATION_PRIORITIES.INFO,
     recordId = null,
     branchId = null,
+    officeId = null,
     metadata = {}
 }) {
+    let targetOfficeId = officeId;
+    if (!targetOfficeId && recordId) {
+        const recordResult = await pool.query("SELECT office_id FROM records WHERE id = $1 LIMIT 1", [recordId]);
+        targetOfficeId = recordResult.rows[0]?.office_id || null;
+    }
     const adminResult = await pool.query(
         `
             SELECT id, account_settings
             FROM users
-            WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) = 'admin'
+            WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) IN ('admin', 'office admin', 'system super admin', 'staff')
               AND COALESCE(is_active, TRUE) = TRUE
               AND UPPER(COALESCE(account_status, 'APPROVED')) = 'APPROVED'
+              AND (
+                  $1::int IS NULL
+                  OR LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) IN ('admin', 'system super admin')
+                  OR office_id = $1
+              )
         `
+        , [targetOfficeId || null]
     );
 
     const notifications = [];
@@ -211,6 +306,7 @@ async function notifyAdmins({
                 userId: admin.id,
                 recordId,
                 branchId,
+                officeId: targetOfficeId,
                 metadata
             }));
         } catch (error) {
@@ -260,6 +356,7 @@ async function notifyAdminsGrouped({
     eventId,
     recordId = null,
     branchId = null,
+    officeId = null,
     metadata = {},
     render,
     groupingWindowMinutes = 15
@@ -268,14 +365,25 @@ async function notifyAdminsGrouped({
         throw new Error("Grouped notification requires a grouping key and renderer.");
     }
 
+    let targetOfficeId = officeId;
+    if (!targetOfficeId && recordId) {
+        const recordResult = await pool.query("SELECT office_id FROM records WHERE id = $1 LIMIT 1", [recordId]);
+        targetOfficeId = recordResult.rows[0]?.office_id || null;
+    }
     const adminResult = await pool.query(
         `
             SELECT id, account_settings
             FROM users
-            WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) = 'admin'
+            WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) IN ('admin', 'office admin', 'system super admin', 'staff')
               AND COALESCE(is_active, TRUE) = TRUE
               AND UPPER(COALESCE(account_status, 'APPROVED')) = 'APPROVED'
+              AND (
+                  $1::int IS NULL
+                  OR LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) IN ('admin', 'system super admin')
+                  OR office_id = $1
+              )
         `
+        , [targetOfficeId || null]
     );
     const results = [];
 
@@ -362,10 +470,10 @@ async function notifyAdminsGrouped({
             `
                 INSERT INTO notifications (
                     type, title, message, priority, user_id, record_id,
-                    branch_id, grouping_key, group_count, last_event_at,
+                    branch_id, office_id, grouping_key, group_count, last_event_at,
                     is_active, group_window_minutes, metadata
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP, TRUE, $11, $10::jsonb)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, TRUE, $12, $11::jsonb)
                 ON CONFLICT DO NOTHING
                 RETURNING *
             `,
@@ -377,6 +485,7 @@ async function notifyAdminsGrouped({
                 admin.id,
                 recordId,
                 branchId,
+                targetOfficeId,
                 groupingKey,
                 nextCount,
                 JSON.stringify(nextMetadata),
@@ -431,15 +540,33 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
         const recordIds = (countResult.rows[0]?.record_ids || []).slice(0, 50);
         const adminResult = await pool.query(
         `
-            SELECT id, account_settings
+            SELECT id, role, office_id, account_settings,
+                   COALESCE(office_id, (SELECT MIN(id) FROM offices)) AS notification_office_id
             FROM users
-            WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) = 'admin'
+            WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) IN ('admin', 'office admin', 'system super admin', 'staff')
               AND COALESCE(is_active, TRUE) = TRUE
               AND UPPER(COALESCE(account_status, 'APPROVED')) = 'APPROVED'
         `
         );
 
         for (const admin of adminResult.rows) {
+        try {
+        let adminCount = count;
+        let adminRecordIds = recordIds;
+        if (String(admin.role || '').toLowerCase().replace(/_/g, ' ') !== 'admin' && String(admin.role || '').toLowerCase().replace(/_/g, ' ') !== 'system super admin') {
+            const officeCount = await pool.query(
+                `
+                    SELECT COUNT(*)::int AS count,
+                           ARRAY_AGG(id ORDER BY registration_date DESC, id DESC) FILTER (WHERE id IS NOT NULL) AS record_ids
+                    FROM records
+                    WHERE office_id = $1
+                      AND LOWER(REPLACE(REPLACE(COALESCE(status, ''), '_', ' '), '-', ' ')) = 'processing'
+                `,
+                [admin.office_id]
+            );
+            adminCount = Number(officeCount.rows[0]?.count || 0);
+            adminRecordIds = (officeCount.rows[0]?.record_ids || []).slice(0, 50);
+        }
         if (!isNotificationEnabled(admin, NOTIFICATION_TYPES.PENDING_APPROVAL)) continue;
         const currentResult = await pool.query(
             `
@@ -453,11 +580,11 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
             [admin.id, NOTIFICATION_TYPES.PENDING_APPROVAL, NOTIFICATION_PRIORITIES.IMPORTANT, "ALL_BRANCHES"]
         );
         const current = currentResult.rows[0];
-        if (!current && count === 0) continue;
+        if (!current && adminCount === 0) continue;
 
         const metadata = {
             ...(current?.metadata || {}),
-            record_ids: recordIds,
+            record_ids: adminRecordIds,
             current_state: true
         };
 
@@ -465,27 +592,28 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
             await pool.query(
                 `
                     INSERT INTO notifications (
-                        type, title, message, priority, user_id, grouping_key,
+                        type, title, message, priority, user_id, office_id, grouping_key,
                         group_count, last_event_at, is_active, group_window_minutes, metadata
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, TRUE, 15, $8::jsonb)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, TRUE, 15, $9::jsonb)
                     ON CONFLICT DO NOTHING
                 `,
                 [
                     NOTIFICATION_TYPES.PENDING_APPROVAL,
-                    `${count} Records Awaiting Approval`,
-                    `${count} records are waiting for approval.`,
+                    `${adminCount} Records Awaiting Approval`,
+                    `${adminCount} records are waiting for approval.`,
                     NOTIFICATION_PRIORITIES.IMPORTANT,
                     admin.id,
+                    admin.notification_office_id,
                     "ALL_BRANCHES",
-                    count,
+                    adminCount,
                     JSON.stringify(metadata)
                 ]
             );
             continue;
         }
 
-        const becameUnread = markNewAsUnread && count > Number(current.group_count || 0);
+        const becameUnread = markNewAsUnread && adminCount > Number(current.group_count || 0);
         await pool.query(
             `
                 UPDATE notifications
@@ -502,16 +630,21 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
                 WHERE id = $7
             `,
             [
-                count ? `${count} Records Awaiting Approval` : "Approval Queue Clear",
-                count ? `${count} records are waiting for approval.` : "No records are currently waiting for approval.",
-                count,
+                adminCount ? `${adminCount} Records Awaiting Approval` : "Approval Queue Clear",
+                adminCount ? `${adminCount} records are waiting for approval.` : "No records are currently waiting for approval.",
+                adminCount,
                 JSON.stringify(metadata),
-                count === 0,
+                adminCount === 0,
                 becameUnread,
                 current.id,
-                count > 0
+                adminCount > 0
             ]
         );
+        } catch (error) {
+            // One malformed user or office must not prevent other authorized
+            // recipients from receiving the pending-approval notification.
+            console.error(`PENDING APPROVAL NOTIFICATION USER ${admin.id} ERROR:`, error.message);
+        }
         }
     } catch (error) {
         // Notification refresh is a post-save side effect and must not fail record creation.
@@ -523,6 +656,8 @@ module.exports = {
     NOTIFICATION_TYPES,
     NOTIFICATION_PRIORITIES,
     createNotification,
+    notifyUser,
+    notifyRecordOwner,
     notifyAdmins,
     notifyAdminsGrouped,
     resolveRecordNotifications,

@@ -56,7 +56,7 @@
             <header class="reports-topbar">
                 <div class="reports-heading">
                     <button class="sidebar-toggle page-toggle" id="sidebarToggle" type="button" title="Toggle sidebar"><svg class="ui-icon toggle-icon"><use href="#icon-chevron-left"></use></svg></button>
-                    <div><h1>Reports</h1><p>Track user authentication activity.</p></div>
+                    <div><h1>Reports</h1><p id="activityScopeLabel">Track user authentication activity.</p></div>
                 </div>
             </header>
 
@@ -66,9 +66,11 @@
                     <label>To<input id="toDateFilter" type="date"></label>
                     <label>User<input id="userFilter" type="search" placeholder="Name or email"></label>
                     <label>Search logs<input id="searchFilter" type="search" placeholder="Activity, case, details"></label>
+                    <label id="officeFilterField" hidden>Office<select id="officeFilter"><option value="">All offices</option></select></label>
                     <label>Branch<select id="branchFilter"><option value="">All branches</option></select></label>
                     <label>Role<select id="roleFilter"><option value="">All roles</option><option value="admin">Admin</option><option value="staff">Staff</option><option value="branch_staff">Branch Staff</option></select></label>
-                    <label>Activity<select id="activityFilter"><option value="">All activity</option><option value="LOGIN_SUCCESS">Successful login</option><option value="LOGOUT_SUCCESS">Successful logout</option><option value="LOGIN_FAILURE">Failed login</option><option value="RECORD_CREATED">Record created</option><option value="RECORD_EDITED">Record edited</option><option value="RECORD_APPROVED">Record approved</option><option value="RECORD_DELETED">Record deleted</option><option value="SMS_ACTIVITY">SMS activity</option><option value="USER_CREATED">User created</option><option value="USER_DISABLED">User disabled</option><option value="USER_ENABLED">User enabled</option><option value="SETTINGS_CHANGED">Settings changed</option><option value="BRANCH_ASSIGNMENT_CHANGED">Branch assignment changed</option></select></label>
+                    <label>Activity<select id="activityFilter"><option value="">All activity</option><option value="LOGIN_SUCCESS">Successful login</option><option value="LOGOUT_SUCCESS">Successful logout</option><option value="LOGIN_FAILURE">Failed login</option><option value="RECORD_CREATED">Record created</option><option value="RECORD_EDITED">Record edited</option><option value="RECORD_APPROVED">Record approved</option><option value="RECORD_DELETED">Record deleted</option><option value="RECORD_RESTORED">Record restored</option><option value="SMS_ACTIVITY">SMS activity</option><option value="USER_CREATED">User created</option><option value="USER_DELETED">User deleted</option><option value="USER_DISABLED">User disabled</option><option value="USER_ENABLED">User enabled</option><option value="BRANCH_CREATED">Branch created</option><option value="BRANCH_ASSIGNMENT_CHANGED">Branch assignment changed</option><option value="SETTINGS_CHANGED">Settings changed</option><option value="PASSWORD_RESET_REQUESTED">Password reset requested</option><option value="PASSWORD_RESET_COMPLETED">Password reset completed</option><option value="PASSWORD_RESET_FAILED">Password reset failed</option><option value="DEVICE_SESSION_CREATED">Device session created</option><option value="DEVICE_SESSION_REVOKED">Device session revoked</option><option value="STAFF_QUOTA_CHANGED">Staff quota changed</option><option value="STAFF_QUOTA_REJECTED">Staff quota rejected</option></select></label>
+                    <label>Result<select id="resultFilter"><option value="">All results</option><option value="success">Successful</option><option value="failed">Failed</option></select></label>
                     <label>Sort<select id="sortFilter"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
                     <button class="reports-primary" id="filterButton" type="button"><svg class="ui-icon"><use href="#icon-filter"></use></svg>Filter</button>
                     <button class="reports-secondary" id="resetButton" type="button">Reset</button>
@@ -78,8 +80,8 @@
                     <div class="activity-heading"><div><h2>Activity Logs</h2><p id="activitySummary">Loading activity...</p></div><div class="activity-heading-actions"><button class="recycle-bin-button" id="deletedCasesButton" type="button" aria-label="Open recycle bin" title="Recycle bin">🗑️</button><button class="reports-refresh reports-icon-button" id="refreshButton" type="button" aria-label="Refresh activity logs" title="Refresh activity logs"><svg class="ui-icon" aria-hidden="true"><use href="#icon-refresh"></use></svg></button><button class="reports-danger" id="clearLogsButton" type="button">Clear Logs</button></div></div>
                     <div class="activity-table-wrap">
                         <table>
-                            <thead><tr><th>User</th><th>Role</th><th>Activity</th><th>Branch</th><th>Case</th><th>Details</th><th>Date</th><th>Time</th><th>Actions</th></tr></thead>
-                            <tbody id="activityBody"><tr><td colspan="9" class="reports-empty">Loading activity...</td></tr></tbody>
+                            <thead><tr><th>User</th><th>Role</th><th>Activity</th><th class="activity-office-column" hidden>Office</th><th>Branch</th><th>Case</th><th>Details</th><th>Date</th><th>Time</th><th>Actions</th></tr></thead>
+                            <tbody id="activityBody"><tr><td colspan="10" class="reports-empty">Loading activity...</td></tr></tbody>
                         </table>
                     </div>
                     <div class="activity-pagination">
@@ -99,6 +101,7 @@
                         <button type="button" data-notification-filter="read">Read</button>
                         <label class="notification-history-search"><span class="sr-only">Search notifications</span><input id="notificationSearchInput" type="search" placeholder="Search notifications..." autocomplete="off"></label>
                         <select id="notificationTypeFilter" aria-label="Notification type"><option value="">All types</option><option value="RECORD_CREATED,RECORD_UPDATED,RECORD_APPROVED,RECORD_DELETED,RECORD_RESTORED,DUPLICATE_DETECTED">Record activity</option><option value="PENDING_APPROVAL">Approval</option><option value="SMS_ACTIVITY,SMS_FAILED">SMS</option><option value="SYNC_SUCCEEDED,SYNC_FAILED,OFFLINE_RECORDS_PENDING">Synchronization</option><option value="USER_CREATED,USER_ENABLED,USER_DISABLED,BRANCH_ASSIGNMENT_CHANGED,SETTINGS_CHANGED">Admin activity</option></select>
+                        <label id="notificationOfficeField" hidden>Office<select id="notificationOfficeFilter" aria-label="Notification office"><option value="">All offices</option></select></label>
                         <select id="notificationDateFilter" aria-label="Notification date"><option value="">Any date</option><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="custom">Custom range</option></select>
                         <input id="notificationDateFrom" type="date" aria-label="Notification start date" hidden>
                         <input id="notificationDateTo" type="date" aria-label="Notification end date" hidden>

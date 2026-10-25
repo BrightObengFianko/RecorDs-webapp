@@ -1,6 +1,12 @@
 const pool = require("./database");
 
 const DEFAULT_BRANCH_NAME = "Main Office";
+// Existing offices receive this non-destructive default on first migration.
+const DEFAULT_STAFF_ACCOUNT_LIMIT = 50;
+const DEFAULT_OFFICE = {
+    name: "Kasoa",
+    code: "KASOA"
+};
 
 async function constraintExists(tableName, constraintName) {
     const result = await pool.query(
@@ -23,6 +29,119 @@ async function constraintExists(tableName, constraintName) {
 async function ensureDatabaseSchema() {
     await pool.query(
         `
+            CREATE TABLE IF NOT EXISTS offices (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(150) NOT NULL,
+                code VARCHAR(50) NOT NULL,
+                description TEXT,
+                address VARCHAR(255),
+                phone VARCHAR(40),
+                email VARCHAR(150),
+                logo_url VARCHAR(500),
+                primary_color VARCHAR(30),
+                secondary_color VARCHAR(30),
+                dashboard_title VARCHAR(150),
+                n8n_webhook_url VARCHAR(500),
+                n8n_webhook_secret TEXT,
+                n8n_timeout_ms INTEGER DEFAULT 10000,
+                sms_sender_id VARCHAR(50),
+                status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT offices_status_check CHECK (status IN ('ACTIVE', 'DISABLED'))
+            )
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE UNIQUE INDEX IF NOT EXISTS offices_code_unique_idx
+            ON offices (LOWER(code))
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE UNIQUE INDEX IF NOT EXISTS offices_name_unique_idx
+            ON offices (LOWER(name))
+        `
+    );
+
+    await pool.query(`
+        ALTER TABLE offices
+            ADD COLUMN IF NOT EXISTS n8n_webhook_url VARCHAR(500),
+            ADD COLUMN IF NOT EXISTS n8n_webhook_secret TEXT,
+            ADD COLUMN IF NOT EXISTS n8n_timeout_ms INTEGER DEFAULT 10000,
+            ADD COLUMN IF NOT EXISTS sms_sender_id VARCHAR(50)
+    `);
+
+    await pool.query(
+        `
+            CREATE TABLE IF NOT EXISTS office_sms_configurations (
+                id SERIAL PRIMARY KEY,
+                office_id INTEGER NOT NULL UNIQUE,
+                provider VARCHAR(30) NOT NULL DEFAULT 'ARKESEL',
+                api_key_encrypted TEXT,
+                sender_id VARCHAR(50),
+                status VARCHAR(30) NOT NULL DEFAULT 'NOT_CONFIGURED',
+                last_tested_at TIMESTAMP,
+                last_error_code VARCHAR(80),
+                last_error_message TEXT,
+                last_balance TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT office_sms_configurations_provider_check CHECK (provider IN ('ARKESEL')),
+                CONSTRAINT office_sms_configurations_status_check CHECK (status IN ('NOT_CONFIGURED', 'PENDING_VERIFICATION', 'ACTIVE', 'ERROR', 'DISCONNECTED')),
+                CONSTRAINT office_sms_configurations_office_id_fkey FOREIGN KEY (office_id)
+                    REFERENCES offices(id) ON UPDATE CASCADE ON DELETE CASCADE
+            )
+        `
+    );
+
+    await pool.query(
+        `
+            CREATE TABLE IF NOT EXISTS office_sms_usage (
+                id BIGSERIAL PRIMARY KEY,
+                office_id INTEGER NOT NULL,
+                record_id INTEGER,
+                provider VARCHAR(30) NOT NULL DEFAULT 'ARKESEL',
+                provider_message_id VARCHAR(200),
+                occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                status VARCHAR(40) NOT NULL,
+                segments INTEGER,
+                error_code VARCHAR(80),
+                error_message TEXT,
+                CONSTRAINT office_sms_usage_office_id_fkey FOREIGN KEY (office_id)
+                    REFERENCES offices(id) ON UPDATE CASCADE ON DELETE CASCADE
+            )
+        `
+    );
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_office_sms_usage_office_time ON office_sms_usage(office_id, occurred_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_office_sms_usage_record ON office_sms_usage(record_id)`);
+
+    await pool.query(
+        `ALTER TABLE offices
+         ADD COLUMN IF NOT EXISTS staff_account_limit INTEGER NOT NULL DEFAULT ${DEFAULT_STAFF_ACCOUNT_LIMIT}`
+    );
+    await pool.query(
+        `ALTER TABLE offices
+         ADD CONSTRAINT offices_staff_account_limit_check
+         CHECK (staff_account_limit > 0)`
+    ).catch(error => {
+        if (error.code !== "42710") throw error;
+    });
+
+    await pool.query(
+        `
+            INSERT INTO offices (name, code, dashboard_title)
+            VALUES ($1, $2, $1)
+            ON CONFLICT DO NOTHING
+        `,
+        [DEFAULT_OFFICE.name, DEFAULT_OFFICE.code]
+    );
+
+    await pool.query(
+        `
             CREATE TABLE IF NOT EXISTS branches (
                 id SERIAL PRIMARY KEY,
                 name VARCHAR(100) UNIQUE NOT NULL,
@@ -33,12 +152,52 @@ async function ensureDatabaseSchema() {
 
     await pool.query(
         `
-            INSERT INTO branches (name)
-            VALUES ($1)
-            ON CONFLICT (name) DO NOTHING
-        `,
-        [DEFAULT_BRANCH_NAME]
+            ALTER TABLE branches
+            ADD COLUMN IF NOT EXISTS office_id INTEGER
+        `
     );
+
+    const defaultOffice = await pool.query(
+        `SELECT id FROM offices WHERE LOWER(code) = LOWER($1) LIMIT 1`,
+        [DEFAULT_OFFICE.code]
+    );
+    const defaultOfficeId = defaultOffice.rows[0]?.id;
+    if (!defaultOfficeId) {
+        throw new Error("Unable to create default office.");
+    }
+
+    await pool.query(
+        `
+            INSERT INTO branches (name, office_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+        `,
+        [DEFAULT_BRANCH_NAME, defaultOfficeId]
+    );
+
+    await pool.query(
+        `UPDATE branches SET office_id = $1 WHERE office_id IS NULL`,
+        [defaultOfficeId]
+    );
+    await pool.query(`ALTER TABLE branches ALTER COLUMN office_id SET NOT NULL`);
+    await pool.query(`ALTER TABLE branches DROP CONSTRAINT IF EXISTS branches_name_key`);
+    await pool.query(
+        `
+            CREATE UNIQUE INDEX IF NOT EXISTS branches_office_name_unique_idx
+            ON branches (office_id, LOWER(name))
+        `
+    );
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS branches_id_office_unique_idx ON branches(id, office_id)`);
+    if (!(await constraintExists("branches", "branches_office_id_fkey"))) {
+        await pool.query(
+            `
+                ALTER TABLE branches
+                ADD CONSTRAINT branches_office_id_fkey
+                FOREIGN KEY (office_id) REFERENCES offices(id)
+                ON UPDATE CASCADE ON DELETE RESTRICT
+            `
+        );
+    }
 
     // Bootstrap the legacy tables when deploying against a new empty database.
     // Existing tables and records are preserved by IF NOT EXISTS.
@@ -82,6 +241,13 @@ async function ensureDatabaseSchema() {
         `
             ALTER TABLE users
             ADD COLUMN IF NOT EXISTS branch_id INTEGER
+        `
+    );
+
+    await pool.query(
+        `
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS office_id INTEGER
         `
     );
 
@@ -250,6 +416,13 @@ async function ensureDatabaseSchema() {
     await pool.query(
         `
             ALTER TABLE records
+            ADD COLUMN IF NOT EXISTS office_id INTEGER
+        `
+    );
+
+    await pool.query(
+        `
+            ALTER TABLE records
             ADD COLUMN IF NOT EXISTS created_by INTEGER
         `
     );
@@ -343,11 +516,36 @@ async function ensureDatabaseSchema() {
 
     await pool.query(
         `
+            UPDATE users u
+            SET branch_id = (
+                SELECT b.id
+                FROM branches b
+                WHERE b.office_id = u.office_id
+                ORDER BY b.id ASC
+                LIMIT 1
+            )
+            WHERE u.branch_id IS NULL
+              AND LOWER(REPLACE(REPLACE(COALESCE(u.role, ''), '_', ' '), '-', ' ')) = 'branch staff'
+        `
+    );
+
+    await pool.query(
+        `
+            UPDATE users u
+            SET office_id = b.office_id
+            FROM branches b
+            WHERE b.id = u.branch_id
+              AND u.office_id IS NULL
+        `
+    );
+
+    await pool.query(
+        `
             UPDATE users
-            SET branch_id = $1
-            WHERE branch_id IS NULL
+            SET office_id = $1
+            WHERE office_id IS NULL
         `,
-        [defaultBranchId]
+        [defaultOfficeId]
     );
 
     await pool.query(
@@ -360,19 +558,54 @@ async function ensureDatabaseSchema() {
 
     await pool.query(
         `
+            UPDATE records r
+            SET office_id = b.office_id
+            FROM branches b
+            WHERE b.id = r.branch_id
+              AND r.office_id IS NULL
+        `
+    );
+
+    await pool.query(
+        `
             UPDATE records
-            SET branch_id = $1
-            WHERE branch_id IS NULL
+            SET office_id = $1
+            WHERE office_id IS NULL
         `,
-        [defaultBranchId]
+        [defaultOfficeId]
+    );
+
+    // Repair legacy records using a branch from the record's own office.
+    // The old global default could create invalid pairs such as branch 1
+    // from Kasoa with an Ofankor office_id.
+    await pool.query(
+        `
+            UPDATE records r
+            SET branch_id = (
+                SELECT b.id
+                FROM branches b
+                WHERE b.office_id = r.office_id
+                ORDER BY b.id ASC
+                LIMIT 1
+            )
+            WHERE r.branch_id IS NULL
+               OR NOT EXISTS (
+                    SELECT 1
+                    FROM branches matching_branch
+                    WHERE matching_branch.id = r.branch_id
+                      AND matching_branch.office_id = r.office_id
+               )
+        `
     );
 
     await pool.query(
         `
             ALTER TABLE users
-            ALTER COLUMN branch_id SET NOT NULL
+            ALTER COLUMN branch_id DROP NOT NULL
         `
     );
+
+    await pool.query(`ALTER TABLE users ALTER COLUMN office_id SET NOT NULL`);
 
     await pool.query(
         `
@@ -395,12 +628,16 @@ async function ensureDatabaseSchema() {
         `
     );
 
+    // Office-level Staff/Admin accounts may create records without a branch.
+    // Branch Staff records remain branch-scoped in the controller.
     await pool.query(
         `
             ALTER TABLE records
-            ALTER COLUMN branch_id SET NOT NULL
+            ALTER COLUMN branch_id DROP NOT NULL
         `
     );
+
+    await pool.query(`ALTER TABLE records ALTER COLUMN office_id SET NOT NULL`);
 
     if (!(await constraintExists("users", "users_role_check"))) {
         await pool.query(
@@ -408,10 +645,18 @@ async function ensureDatabaseSchema() {
                 ALTER TABLE users
                 ADD CONSTRAINT users_role_check
                 CHECK (
-                    LOWER(role) IN ('admin', 'staff', 'branch_staff')
+                    LOWER(role) IN ('admin', 'office_admin', 'system_super_admin', 'staff', 'branch_staff')
                 )
             `
         );
+    }
+
+    const roleConstraint = await pool.query(
+        `SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conrelid = 'users'::regclass AND conname = 'users_role_check' LIMIT 1`
+    );
+    if (roleConstraint.rowCount && !roleConstraint.rows[0].definition.toLowerCase().includes("office_admin")) {
+        await pool.query(`ALTER TABLE users DROP CONSTRAINT users_role_check`);
+        await pool.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (LOWER(role) IN ('admin', 'office_admin', 'system_super_admin', 'staff', 'branch_staff'))`);
     }
 
     if (!(await constraintExists("users", "users_account_status_check"))) {
@@ -464,6 +709,34 @@ async function ensureDatabaseSchema() {
                 ON DELETE RESTRICT
             `
         );
+    }
+
+    if (!(await constraintExists("users", "users_office_id_fkey"))) {
+        await pool.query(
+            `
+                ALTER TABLE users
+                ADD CONSTRAINT users_office_id_fkey
+                FOREIGN KEY (office_id) REFERENCES offices(id)
+                ON UPDATE CASCADE ON DELETE RESTRICT
+            `
+        );
+    }
+
+    if (!(await constraintExists("records", "records_office_id_fkey"))) {
+        await pool.query(
+            `
+                ALTER TABLE records
+                ADD CONSTRAINT records_office_id_fkey
+                FOREIGN KEY (office_id) REFERENCES offices(id)
+                ON UPDATE CASCADE ON DELETE RESTRICT
+            `
+        );
+    }
+    if (!(await constraintExists("users", "users_branch_office_fkey"))) {
+        await pool.query(`ALTER TABLE users ADD CONSTRAINT users_branch_office_fkey FOREIGN KEY (branch_id, office_id) REFERENCES branches(id, office_id) ON UPDATE CASCADE ON DELETE RESTRICT`);
+    }
+    if (!(await constraintExists("records", "records_branch_office_fkey"))) {
+        await pool.query(`ALTER TABLE records ADD CONSTRAINT records_branch_office_fkey FOREIGN KEY (branch_id, office_id) REFERENCES branches(id, office_id) ON UPDATE CASCADE ON DELETE RESTRICT`);
     }
 
     await pool.query(
@@ -520,8 +793,38 @@ async function ensureDatabaseSchema() {
             ADD COLUMN IF NOT EXISTS record_snapshot JSONB,
             ADD COLUMN IF NOT EXISTS change_set JSONB,
             ADD COLUMN IF NOT EXISTS success BOOLEAN NOT NULL DEFAULT TRUE
+            ,ADD COLUMN IF NOT EXISTS office_id INTEGER
         `
     );
+
+    await pool.query(
+        `
+            UPDATE auth_activity_logs l
+            SET office_id = COALESCE(
+                (SELECT u.office_id FROM users u WHERE u.id = l.user_id),
+                (SELECT b.office_id FROM branches b WHERE b.id = l.branch_id),
+                $1
+            )
+            WHERE l.office_id IS NULL
+        `,
+        [defaultOfficeId]
+    );
+    await pool.query(
+        `UPDATE auth_activity_logs SET office_id = $1 WHERE office_id IS NULL`,
+        [defaultOfficeId]
+    );
+    await pool.query(`ALTER TABLE auth_activity_logs ALTER COLUMN office_id SET NOT NULL`);
+    // Deleted offices retain their audit history without a live office FK.
+    await pool.query(`ALTER TABLE auth_activity_logs ADD COLUMN IF NOT EXISTS office_name_snapshot VARCHAR(150)`);
+    await pool.query(
+        `UPDATE auth_activity_logs
+         SET office_name_snapshot = 'Deleted office (legacy audit)'
+         WHERE office_id IS NULL
+           AND NULLIF(TRIM(COALESCE(office_name_snapshot, '')), '') IS NULL`
+    );
+    await pool.query(`ALTER TABLE auth_activity_logs ALTER COLUMN office_id DROP NOT NULL`);
+    await pool.query(`ALTER TABLE auth_activity_logs DROP CONSTRAINT IF EXISTS auth_activity_logs_office_id_fkey`);
+    await pool.query(`ALTER TABLE auth_activity_logs ADD CONSTRAINT auth_activity_logs_office_id_fkey FOREIGN KEY (office_id) REFERENCES offices(id) ON UPDATE CASCADE ON DELETE SET NULL`);
 
     await pool.query(
         `
@@ -616,6 +919,7 @@ async function ensureDatabaseSchema() {
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
                 resolved_at TIMESTAMP,
                 group_window_minutes INTEGER,
+                office_id INTEGER NOT NULL,
                 CONSTRAINT notifications_priority_check
                     CHECK (priority IN ('CRITICAL', 'IMPORTANT', 'INFO')),
                 CONSTRAINT notifications_user_id_fkey
@@ -639,9 +943,32 @@ async function ensureDatabaseSchema() {
                 ADD COLUMN IF NOT EXISTS last_event_at TIMESTAMP,
                 ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
                 ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP,
-                ADD COLUMN IF NOT EXISTS group_window_minutes INTEGER
+            ADD COLUMN IF NOT EXISTS group_window_minutes INTEGER
+                ,ADD COLUMN IF NOT EXISTS office_id INTEGER
         `
     );
+
+    await pool.query(
+        `
+            UPDATE notifications n
+            SET office_id = COALESCE(
+                (SELECT u.office_id FROM users u WHERE u.id = n.user_id),
+                (SELECT r.office_id FROM records r WHERE r.id = n.record_id),
+                (SELECT b.office_id FROM branches b WHERE b.id = n.branch_id),
+                $1
+            )
+            WHERE n.office_id IS NULL
+        `,
+        [defaultOfficeId]
+    );
+    await pool.query(`UPDATE notifications SET office_id = $1 WHERE office_id IS NULL`, [defaultOfficeId]);
+    await pool.query(`ALTER TABLE notifications ALTER COLUMN office_id SET NOT NULL`);
+    if (!(await constraintExists("auth_activity_logs", "auth_activity_logs_office_id_fkey"))) {
+        await pool.query(`ALTER TABLE auth_activity_logs ADD CONSTRAINT auth_activity_logs_office_id_fkey FOREIGN KEY (office_id) REFERENCES offices(id) ON UPDATE CASCADE ON DELETE RESTRICT`);
+    }
+    if (!(await constraintExists("notifications", "notifications_office_id_fkey"))) {
+        await pool.query(`ALTER TABLE notifications ADD CONSTRAINT notifications_office_id_fkey FOREIGN KEY (office_id) REFERENCES offices(id) ON UPDATE CASCADE ON DELETE RESTRICT`);
+    }
 
     await pool.query(
         `
@@ -780,6 +1107,14 @@ async function ensureDatabaseSchema() {
             ON users(branch_id)
         `
     );
+
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_office_id ON users(office_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_branches_office_id ON branches(office_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_records_office_id ON records(office_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_records_office_branch ON records(office_id, branch_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_records_office_registration_date ON records(office_id, registration_date)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_auth_activity_logs_office_id ON auth_activity_logs(office_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_notifications_office_id ON notifications(office_id)`);
 
     await pool.query(
         `

@@ -1,5 +1,4 @@
 const pool = require("../config/database");
-const { getDefaultBranchId } = require("../utils/branchUtils");
 const {
     hashPassword,
     validatePassword
@@ -7,9 +6,19 @@ const {
 const { boundedText, isIsoDate } = require("../utils/inputValidation");
 const { ACTIVITY_TYPES, recordActivity, makeRecordSnapshot } = require("../utils/authActivity");
 const { NOTIFICATION_TYPES, notifyAdmins } = require("../utils/notifications");
+const { isSystemSuperAdmin, isOfficeSystemSuperAdmin } = require("../utils/officeUtils");
+const {
+    DEFAULT_STAFF_ACCOUNT_LIMIT,
+    countsTowardStaffLimit,
+    lockStaffAccountQuota
+} = require("../utils/staffQuota");
+const {
+    encryptOfficeSecret,
+    validateOfficeWebhookUrl
+} = require("../utils/officeIntegration");
 
-function logAdminActivity(req, activityType, data = {}) {
-    return recordActivity({
+async function logAdminActivity(req, activityType, data = {}) {
+    const activity = await recordActivity({
         request: req,
         userId: req.user?.id,
         name: req.user?.name,
@@ -18,10 +27,49 @@ function logAdminActivity(req, activityType, data = {}) {
         activityType,
         ...data
     });
+
+    const notificationTypeByActivity = {
+        [ACTIVITY_TYPES.USER_CREATED]: NOTIFICATION_TYPES.USER_CREATED,
+        [ACTIVITY_TYPES.USER_ENABLED]: NOTIFICATION_TYPES.USER_ENABLED,
+        [ACTIVITY_TYPES.USER_DISABLED]: NOTIFICATION_TYPES.USER_DISABLED,
+        [ACTIVITY_TYPES.BRANCH_ASSIGNMENT_CHANGED]: NOTIFICATION_TYPES.BRANCH_ASSIGNMENT_CHANGED,
+        [ACTIVITY_TYPES.STAFF_QUOTA_CHANGED]: NOTIFICATION_TYPES.SYSTEM_ALERT,
+        [ACTIVITY_TYPES.STAFF_QUOTA_REJECTED]: NOTIFICATION_TYPES.SYSTEM_ALERT,
+        [ACTIVITY_TYPES.BRANCH_CREATED]: NOTIFICATION_TYPES.SYSTEM_ALERT
+    };
+    const notificationType = notificationTypeByActivity[activityType];
+    if (notificationType) {
+        try {
+            const officeId = data.officeId || req.user?.office_id || null;
+            await notifyAdmins({
+                type: notificationType,
+                title: activityType === ACTIVITY_TYPES.STAFF_QUOTA_REJECTED
+                    ? "Staff Quota Rejected"
+                    : "Administration Activity",
+                message: String(data.details || `${activityType} completed.`).slice(0, 2000),
+                priority: activityType === ACTIVITY_TYPES.STAFF_QUOTA_REJECTED
+                    ? "IMPORTANT"
+                    : "INFO",
+                officeId,
+                branchId: data.branchId || null,
+                metadata: {
+                    event_id: `admin-activity:${activity?.id || Date.now()}`,
+                    activity_type: activityType,
+                    affected_user_id: data.affectedUserId || null
+                }
+            });
+        } catch (notificationError) {
+            console.error("ADMIN ACTIVITY NOTIFICATION ERROR:", notificationError.message);
+        }
+    }
+
+    return activity;
 }
 
 const VALID_ROLES = new Set([
     "admin",
+    "office_admin",
+    "system_super_admin",
     "staff",
     "branch_staff"
 ]);
@@ -80,6 +128,20 @@ function normalizeAccountStatus(status, fallback = "APPROVED") {
     return normalized;
 }
 
+function canAssignRole(actor, targetRole) {
+    const normalizedTargetRole = normalizeRole(targetRole);
+
+    if (!VALID_ROLES.has(normalizedTargetRole)) {
+        return false;
+    }
+
+    if (["admin", "office_admin", "system_super_admin"].includes(normalizedTargetRole)) {
+        return isOfficeSystemSuperAdmin(actor);
+    }
+
+    return true;
+}
+
 async function fetchUserById(userId) {
     const result = await pool.query(
         `
@@ -88,6 +150,7 @@ async function fetchUserById(userId) {
                 u.name,
                 u.email,
                 LOWER(u.role) AS role,
+                u.office_id,
                 u.branch_id,
                 COALESCE(u.is_active, TRUE) AS is_active,
                 UPPER(COALESCE(u.account_status, 'APPROVED')) AS account_status,
@@ -105,10 +168,13 @@ async function fetchUserById(userId) {
                       AND us.expires_at > CURRENT_TIMESTAMP
                 ) AS active_devices,
                 COALESCE(b.name, '') AS branch,
+                COALESCE(o.name, '') AS office,
                 u.created_at
             FROM users u
             LEFT JOIN branches b
                 ON b.id = u.branch_id
+            LEFT JOIN offices o
+                ON o.id = u.office_id
             WHERE u.id = $1
             LIMIT 1
         `,
@@ -121,7 +187,7 @@ async function fetchUserById(userId) {
 async function fetchBranchById(branchId) {
     const result = await pool.query(
         `
-            SELECT id, name, created_at
+            SELECT id, name, office_id, created_at
             FROM branches
             WHERE id = $1
             LIMIT 1
@@ -130,6 +196,14 @@ async function fetchBranchById(branchId) {
     );
 
     return result.rows[0] || null;
+}
+
+async function recordQuotaRejection(req, officeId, error) {
+    await logAdminActivity(req, ACTIVITY_TYPES.STAFF_QUOTA_REJECTED, {
+        details: error.message,
+        newValue: JSON.stringify({ office_id: officeId, used: error.used, limit: error.limit }),
+        success: false
+    });
 }
 
 // =========================================
@@ -145,6 +219,7 @@ async function listUsers(req, res) {
                     u.name,
                     u.email,
                     LOWER(u.role) AS role,
+                    u.office_id,
                     u.branch_id,
                     COALESCE(u.is_active, TRUE) AS is_active,
                     UPPER(COALESCE(u.account_status, 'APPROVED')) AS account_status,
@@ -162,12 +237,30 @@ async function listUsers(req, res) {
                           AND us.expires_at > CURRENT_TIMESTAMP
                     ) AS active_devices,
                     COALESCE(b.name, '') AS branch,
+                    COALESCE(o.name, '') AS office,
+                    o.staff_account_limit,
+                    (SELECT COUNT(*)::int FROM users quota_user
+                     WHERE quota_user.office_id = u.office_id
+                       AND LOWER(REPLACE(REPLACE(COALESCE(quota_user.role, ''), '-', '_'), ' ', '_'))
+                           NOT IN ('system_super_admin', 'super_admin')) AS staff_account_count,
                     u.created_at
                 FROM users u
                 LEFT JOIN branches b
                     ON b.id = u.branch_id
+                LEFT JOIN offices o
+                    ON o.id = u.office_id
+                WHERE ($1::int IS NULL OR u.office_id = $1)
+                  AND (
+                      $2::boolean = TRUE
+                      OR LOWER(REPLACE(REPLACE(COALESCE(u.role, ''), '-', '_'), ' ', '_'))
+                         NOT IN ('system_super_admin', 'super_admin')
+                  )
                 ORDER BY u.id ASC
-            `
+            `,
+            [
+                isSystemSuperAdmin(req.user) ? null : req.user.office_id,
+                isOfficeSystemSuperAdmin(req.user)
+            ]
         );
 
         return res.json({
@@ -184,6 +277,48 @@ async function listUsers(req, res) {
     }
 }
 
+async function getStaffQuota(req, res) {
+    try {
+        const requestedOfficeId = Number.parseInt(String(req.query?.office_id || ""), 10);
+        const officeId = isSystemSuperAdmin(req.user) && Number.isInteger(requestedOfficeId)
+            ? requestedOfficeId
+            : req.user.office_id;
+
+        if (!Number.isInteger(Number(officeId))) {
+            return res.status(400).json({ success: false, message: "No office is assigned to this account." });
+        }
+
+        const result = await pool.query(
+            `
+                SELECT o.id, o.name, o.staff_account_limit,
+                       (SELECT COUNT(*)::int FROM users u
+                        WHERE u.office_id = o.id
+                          AND LOWER(REPLACE(REPLACE(COALESCE(u.role, ''), '-', '_'), ' ', '_'))
+                              NOT IN ('system_super_admin', 'super_admin')) AS staff_account_count
+                FROM offices o
+                WHERE o.id = $1
+                LIMIT 1
+            `,
+            [officeId]
+        );
+        if (!result.rowCount) return res.status(404).json({ success: false, message: "Office not found." });
+        const office = result.rows[0];
+        return res.json({
+            success: true,
+            quota: {
+                office_id: office.id,
+                office_name: office.name,
+                used: Number(office.staff_account_count || 0),
+                limit: Number(office.staff_account_limit || DEFAULT_STAFF_ACCOUNT_LIMIT),
+                remaining: Math.max(0, Number(office.staff_account_limit || DEFAULT_STAFF_ACCOUNT_LIMIT) - Number(office.staff_account_count || 0))
+            }
+        });
+    } catch (error) {
+        console.error("GET STAFF QUOTA ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to load staff account usage." });
+    }
+}
+
 async function listAuthActivity(req, res) {
     try {
         const {
@@ -194,6 +329,8 @@ async function listAuthActivity(req, res) {
             role,
             activity_type: activityType,
             branch,
+            office_id: officeId,
+            result: resultFilter,
             search,
             sort
         } = req.query;
@@ -210,6 +347,27 @@ async function listAuthActivity(req, res) {
         const conditions = [];
         const values = [];
 
+        if (!isSystemSuperAdmin(req.user)) {
+            values.push(req.user.office_id);
+            conditions.push(`auth_activity_logs.office_id = $${values.length}`);
+        } else if (officeId) {
+            const requestedOfficeId = Number.parseInt(String(officeId), 10);
+            if (!Number.isInteger(requestedOfficeId) || requestedOfficeId <= 0) {
+                return res.status(400).json({ success: false, message: "Invalid office filter." });
+            }
+            values.push(requestedOfficeId);
+            conditions.push(`auth_activity_logs.office_id = $${values.length}`);
+        }
+
+        if (resultFilter) {
+            const normalizedResult = String(resultFilter).trim().toLowerCase();
+            if (!["success", "failed"].includes(normalizedResult)) {
+                return res.status(400).json({ success: false, message: "Invalid activity result filter." });
+            }
+            values.push(normalizedResult === "success");
+            conditions.push(`auth_activity_logs.success = $${values.length}`);
+        }
+
         const startDate = fromDate || date;
         const endDate = toDate || date || fromDate;
 
@@ -222,7 +380,7 @@ async function listAuthActivity(req, res) {
             }
 
             values.push(startDate);
-            conditions.push(`occurred_at >= $${values.length}::date`);
+            conditions.push(`auth_activity_logs.occurred_at >= $${values.length}::date`);
         }
 
         if (endDate) {
@@ -234,7 +392,7 @@ async function listAuthActivity(req, res) {
             }
 
             values.push(endDate);
-            conditions.push(`occurred_at < ($${values.length}::date + INTERVAL '1 day')`);
+            conditions.push(`auth_activity_logs.occurred_at < ($${values.length}::date + INTERVAL '1 day')`);
         }
 
         if (user) {
@@ -248,7 +406,7 @@ async function listAuthActivity(req, res) {
             }
 
             values.push(`%${userFilter}%`);
-            conditions.push(`(user_name ILIKE $${values.length} OR user_email ILIKE $${values.length})`);
+            conditions.push(`(auth_activity_logs.user_name ILIKE $${values.length} OR auth_activity_logs.user_email ILIKE $${values.length})`);
         }
 
         if (role) {
@@ -262,7 +420,7 @@ async function listAuthActivity(req, res) {
             }
 
             values.push(normalizedRole);
-            conditions.push(`LOWER(COALESCE(user_role, '')) = $${values.length}`);
+            conditions.push(`LOWER(COALESCE(auth_activity_logs.user_role, '')) = $${values.length}`);
         }
 
         if (activityType) {
@@ -277,7 +435,7 @@ async function listAuthActivity(req, res) {
             }
 
             values.push(normalizedActivity);
-            conditions.push(`activity_type = $${values.length}`);
+            conditions.push(`auth_activity_logs.activity_type = $${values.length}`);
         }
 
         if (branch) {
@@ -286,7 +444,7 @@ async function listAuthActivity(req, res) {
                 return res.status(400).json({ success: false, message: "Invalid branch filter." });
             }
             values.push(branchFilter);
-            conditions.push(`(CAST(branch_id AS TEXT) = $${values.length} OR branch_name ILIKE $${values.length} OR EXISTS (SELECT 1 FROM branches fb WHERE fb.id = auth_activity_logs.branch_id AND fb.name ILIKE $${values.length}))`);
+            conditions.push(`(CAST(auth_activity_logs.branch_id AS TEXT) = $${values.length} OR auth_activity_logs.branch_name ILIKE $${values.length} OR EXISTS (SELECT 1 FROM branches fb WHERE fb.id = auth_activity_logs.branch_id AND fb.name ILIKE $${values.length}))`);
         }
 
         if (search) {
@@ -295,7 +453,7 @@ async function listAuthActivity(req, res) {
                 return res.status(400).json({ success: false, message: "Invalid activity search." });
             }
             values.push(`%${searchFilter}%`);
-            conditions.push(`(user_name ILIKE $${values.length} OR user_email ILIKE $${values.length} OR activity_type ILIKE $${values.length} OR details ILIKE $${values.length} OR affected_user_name ILIKE $${values.length} OR CAST(record_id AS TEXT) ILIKE $${values.length})`);
+            conditions.push(`(auth_activity_logs.user_name ILIKE $${values.length} OR auth_activity_logs.user_email ILIKE $${values.length} OR auth_activity_logs.activity_type ILIKE $${values.length} OR auth_activity_logs.details ILIKE $${values.length} OR auth_activity_logs.affected_user_name ILIKE $${values.length} OR CAST(auth_activity_logs.record_id AS TEXT) ILIKE $${values.length})`);
         }
 
         const whereClause = conditions.length
@@ -333,8 +491,11 @@ async function listAuthActivity(req, res) {
                     auth_activity_logs.success,
                     auth_activity_logs.ip_address,
                     auth_activity_logs.user_agent
+                    ,auth_activity_logs.office_id
+                    ,COALESCE(auth_activity_logs.office_name_snapshot, o.name, '') AS office_name
                 FROM auth_activity_logs
                 LEFT JOIN branches b ON b.id = auth_activity_logs.branch_id
+                LEFT JOIN offices o ON o.id = auth_activity_logs.office_id
                 ${whereClause}
                 ORDER BY auth_activity_logs.occurred_at ${String(sort).toLowerCase() === "oldest" ? "ASC" : "DESC"}, auth_activity_logs.id ${String(sort).toLowerCase() === "oldest" ? "ASC" : "DESC"}
                 LIMIT $${queryValues.length - 1}
@@ -365,7 +526,10 @@ async function listAuthActivity(req, res) {
 
 async function clearAuthActivity(req, res) {
     try {
-        await pool.query("DELETE FROM auth_activity_logs");
+        await pool.query(
+            `DELETE FROM auth_activity_logs WHERE ($1::int IS NULL OR office_id = $1)`,
+            [isSystemSuperAdmin(req.user) ? null : req.user.office_id]
+        );
         return res.json({ success: true, message: "Activity logs cleared successfully." });
     } catch (error) {
         console.error("CLEAR AUTH ACTIVITY ERROR:", error);
@@ -387,6 +551,7 @@ async function getAuthActivityDetails(req, res) {
                     l.occurred_at,
                     l.branch_id,
                     COALESCE(l.branch_name, b.name) AS branch_name,
+                    COALESCE(l.office_name_snapshot, o.name, '') AS office_name,
                     l.record_id,
                     l.affected_user_id,
                     l.affected_user_name,
@@ -417,11 +582,13 @@ async function getAuthActivityDetails(req, res) {
                     r.branch_id AS current_branch_id
                 FROM auth_activity_logs l
                 LEFT JOIN branches b ON b.id = l.branch_id
+                LEFT JOIN offices o ON o.id = l.office_id
                 LEFT JOIN records r ON r.id = l.record_id
                 WHERE l.id = $1
+                  AND ($2::int IS NULL OR l.office_id = $2)
                 LIMIT 1
             `,
-            [req.params.id]
+            [req.params.id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         if (!result.rows.length) {
@@ -495,13 +662,14 @@ async function restoreDeletedCase(req, res) {
     try {
         const deletedLog = await client.query(
             `
-                SELECT id, record_id, branch_id, branch_name, record_snapshot
+                SELECT id, record_id, branch_id, branch_name, office_id, record_snapshot
                 FROM auth_activity_logs
                 WHERE id = $1
                   AND activity_type = $2
+                  AND ($3::int IS NULL OR office_id = $3)
                 LIMIT 1
             `,
-            [req.params.id, ACTIVITY_TYPES.RECORD_DELETED]
+            [req.params.id, ACTIVITY_TYPES.RECORD_DELETED, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         const log = deletedLog.rows[0];
@@ -517,8 +685,8 @@ async function restoreDeletedCase(req, res) {
         await client.query("BEGIN");
 
         const existing = await client.query(
-            "SELECT id FROM records WHERE id = $1 LIMIT 1",
-            [snapshot.id]
+            "SELECT id FROM records WHERE id = $1 AND ($2::int IS NULL OR office_id = $2) LIMIT 1",
+            [snapshot.id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         if (existing.rows.length) {
@@ -533,10 +701,10 @@ async function restoreDeletedCase(req, res) {
             `
                 INSERT INTO records (
                     id, name, phone_number, category, date_of_birth, date_of_death,
-                    registration_date, registrar, branch_id, status, sms_sent,
+                    registration_date, registrar, branch_id, office_id, status, sms_sent,
                     sms_status, sms_date, sms_error, notes, created_by
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
                 RETURNING *
             `,
             [
@@ -549,6 +717,7 @@ async function restoreDeletedCase(req, res) {
                 snapshot.registration_date || null,
                 snapshot.registrar || null,
                 snapshot.branch_id ?? log.branch_id ?? null,
+                snapshot.office_id ?? log.office_id ?? req.user.office_id,
                 snapshot.status || "Pending",
                 snapshot.sms_sent || null,
                 snapshot.sms_status || null,
@@ -574,6 +743,7 @@ async function restoreDeletedCase(req, res) {
             recordId: restored.rows[0].id,
             branchId: restored.rows[0].branch_id,
             branchName: log.branch_name,
+            officeId: restored.rows[0].office_id,
             details: "Deleted case restored.",
             recordSnapshot: makeRecordSnapshot(restored.rows[0])
         });
@@ -627,6 +797,7 @@ async function listPendingUsers(req, res) {
                     u.name,
                     u.email,
                     LOWER(u.role) AS role,
+                    u.office_id,
                     u.branch_id,
                     UPPER(COALESCE(u.account_status, 'APPROVED')) AS account_status,
                     COALESCE(u.is_active, TRUE) AS is_active,
@@ -636,8 +807,18 @@ async function listPendingUsers(req, res) {
                 LEFT JOIN branches b
                     ON b.id = u.branch_id
                 WHERE UPPER(COALESCE(u.account_status, 'APPROVED')) = 'PENDING'
+                  AND ($1::int IS NULL OR u.office_id = $1)
+                  AND (
+                      $2::boolean = TRUE
+                      OR LOWER(REPLACE(REPLACE(COALESCE(u.role, ''), '-', '_'), ' ', '_'))
+                         NOT IN ('system_super_admin', 'super_admin')
+                  )
                 ORDER BY u.created_at ASC, u.id ASC
-            `
+            `,
+            [
+                isSystemSuperAdmin(req.user) ? null : req.user.office_id,
+                isOfficeSystemSuperAdmin(req.user)
+            ]
         );
 
         return res.json({
@@ -665,6 +846,14 @@ async function changeAccountStatus(req, res, nextStatus) {
                 success: false,
                 message: "User not found."
             });
+        }
+
+        if (normalizeRole(existing.role) === "system_super_admin" && !isOfficeSystemSuperAdmin(req.user)) {
+            return res.status(403).json({ success: false, message: "Only the System Super Admin can change this account." });
+        }
+
+        if (!isSystemSuperAdmin(req.user) && String(existing.office_id) !== String(req.user.office_id)) {
+            return res.status(404).json({ success: false, message: "User not found." });
         }
 
         const currentStatus = normalizeAccountStatus(existing.account_status);
@@ -723,8 +912,19 @@ async function declineUser(req, res) {
 }
 
 async function createUser(req, res) {
+    let client = null;
     try {
-        const { name, email, password, role, branch_id, is_active, status, max_devices } = req.body;
+        const {
+            name,
+            email,
+            password,
+            role,
+            office_id: requestedOfficeId,
+            branch_id,
+            is_active,
+            status,
+            max_devices
+        } = req.body;
 
         if (!name || !email || !password) {
             return res.status(400).json({
@@ -767,6 +967,10 @@ async function createUser(req, res) {
             });
         }
 
+        if (!canAssignRole(req.user, cleanRole)) {
+            return res.status(403).json({ success: false, message: "Only a system administrator can assign this role." });
+        }
+
         const duplicate = await pool.query(
             "SELECT id FROM users WHERE email = $1",
             [cleanEmail]
@@ -779,6 +983,30 @@ async function createUser(req, res) {
             });
         }
 
+        const parsedOfficeId = Number.parseInt(String(requestedOfficeId || ""), 10);
+        const officeId = isSystemSuperAdmin(req.user) && Number.isInteger(parsedOfficeId)
+            ? parsedOfficeId
+            : req.user?.office_id;
+
+        if (!Number.isInteger(Number(officeId))) {
+            return res.status(400).json({
+                success: false,
+                message: "Select a valid office."
+            });
+        }
+
+        const office = await pool.query(
+            "SELECT id FROM offices WHERE id = $1 AND status = 'ACTIVE' LIMIT 1",
+            [officeId]
+        );
+
+        if (!office.rowCount) {
+            return res.status(400).json({
+                success: false,
+                message: "Selected office does not exist or is inactive."
+            });
+        }
+
         let resolvedBranchId = branch_id;
 
         if (
@@ -786,7 +1014,7 @@ async function createUser(req, res) {
             resolvedBranchId === null ||
             resolvedBranchId === ""
         ) {
-            resolvedBranchId = await getDefaultBranchId();
+            resolvedBranchId = null;
         } else {
             resolvedBranchId = Number.parseInt(
                 resolvedBranchId,
@@ -801,20 +1029,23 @@ async function createUser(req, res) {
             }
         }
 
-        if (!resolvedBranchId) {
-            return res.status(500).json({
-                success: false,
-                message: "Unable to determine the user branch."
-            });
-        }
+        let branch = null;
+        if (resolvedBranchId !== null) {
+            branch = await fetchBranchById(resolvedBranchId);
 
-        const branch = await fetchBranchById(resolvedBranchId);
+            if (!branch) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Branch not found."
+                });
+            }
 
-        if (!branch) {
-            return res.status(404).json({
-                success: false,
-                message: "Branch not found."
-            });
+            if (String(branch.office_id) !== String(officeId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Selected branch does not belong to the selected office."
+                });
+            }
         }
 
         const hashedPassword = await hashPassword(password);
@@ -830,11 +1061,15 @@ async function createUser(req, res) {
             });
         }
 
-        const created = await pool.query(
+        client = await pool.connect();
+        await client.query("BEGIN");
+        await lockStaffAccountQuota(client, officeId, cleanRole);
+
+        const created = await client.query(
             `
                 INSERT INTO users
-                (name, email, password, role, branch_id, is_active, account_status, max_devices)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                (name, email, password, role, office_id, branch_id, is_active, account_status, max_devices)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING id
             `,
             [
@@ -842,12 +1077,16 @@ async function createUser(req, res) {
                 cleanEmail,
                 hashedPassword,
                 cleanRole,
-                branch.id,
+                officeId,
+                resolvedBranchId,
                 cleanIsActive,
                 "APPROVED",
                 nextMaxDevices
             ]
         );
+        await client.query("COMMIT");
+        client.release();
+        client = null;
 
         const user = await fetchUserById(created.rows[0].id);
 
@@ -865,6 +1104,14 @@ async function createUser(req, res) {
             user
         });
     } catch (error) {
+        if (client) {
+            try { await client.query("ROLLBACK"); } catch (rollbackError) { console.error("CREATE USER ROLLBACK ERROR:", rollbackError); }
+            client.release();
+        }
+        if (error.code === "STAFF_QUOTA_EXCEEDED") {
+            try { await recordQuotaRejection(req, error.officeId, error); } catch (activityError) { console.error("CREATE USER QUOTA AUDIT ERROR:", activityError); }
+            return res.status(409).json({ success: false, message: error.message });
+        }
         console.error("CREATE USER ERROR:", error);
 
         return res.status(500).json({
@@ -875,9 +1122,10 @@ async function createUser(req, res) {
 }
 
 async function updateUser(req, res) {
+    let client = null;
     try {
         const { id } = req.params;
-        const { name, email, password, role, branch_id, is_active, status, max_devices } = req.body;
+        const { name, email, password, role, office_id: requestedOfficeId, branch_id, is_active, status, max_devices } = req.body;
 
         const existing = await fetchUserById(id);
 
@@ -886,6 +1134,35 @@ async function updateUser(req, res) {
                 success: false,
                 message: "User not found."
             });
+        }
+
+        if (normalizeRole(existing.role) === "system_super_admin" && !isOfficeSystemSuperAdmin(req.user)) {
+            return res.status(403).json({
+                success: false,
+                message: "Only the System Super Admin can edit a System Super Admin account."
+            });
+        }
+
+        if (!isSystemSuperAdmin(req.user) && String(existing.office_id) !== String(req.user.office_id)) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        let nextOfficeId = existing.office_id;
+        if (requestedOfficeId !== undefined) {
+            if (!isSystemSuperAdmin(req.user)) {
+                return res.status(403).json({ success: false, message: "Only the System Super Admin can transfer users between offices." });
+            }
+            nextOfficeId = Number.parseInt(String(requestedOfficeId), 10);
+            if (!Number.isInteger(nextOfficeId)) {
+                return res.status(400).json({ success: false, message: "Invalid office." });
+            }
+            const officeResult = await pool.query(
+                "SELECT id FROM offices WHERE id = $1 AND status = 'ACTIVE' LIMIT 1",
+                [nextOfficeId]
+            );
+            if (!officeResult.rowCount) {
+                return res.status(400).json({ success: false, message: "Selected office does not exist or is inactive." });
+            }
         }
 
         const nextName = name !== undefined ? String(name).trim() : existing.name;
@@ -938,6 +1215,27 @@ async function updateUser(req, res) {
             });
         }
 
+        if (!canAssignRole(req.user, nextRole)) {
+            return res.status(403).json({ success: false, message: "Only a system administrator can assign this role." });
+        }
+
+        if (
+            String(req.user.id) === String(id) &&
+            nextRole !== normalizeRole(existing.role)
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: "You cannot change your own role. Ask a System Super Admin to do this."
+            });
+        }
+
+        if (nextBranchId !== null && ["admin", "office_admin", "system_super_admin"].includes(nextRole)) {
+            return res.status(403).json({
+                success: false,
+                message: "Privileged office roles cannot be assigned to a branch user."
+            });
+        }
+
         if (
             String(req.user.id) === String(id) &&
             nextIsActive === false
@@ -949,28 +1247,38 @@ async function updateUser(req, res) {
         }
 
         if (branch_id !== undefined) {
-            nextBranchId = Number.parseInt(
-                branch_id,
-                10
-            );
+            if (branch_id === null || String(branch_id).trim() === "") {
+                nextBranchId = null;
+            } else {
+                nextBranchId = Number.parseInt(branch_id, 10);
 
-            if (Number.isNaN(nextBranchId)) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid branch."
-                });
+                if (Number.isNaN(nextBranchId)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Invalid branch."
+                    });
+                }
+
+                const branch = await fetchBranchById(nextBranchId);
+
+                if (!branch) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "Branch not found."
+                    });
+                }
+
+                if (String(branch.office_id) !== String(nextOfficeId)) {
+                    return res.status(403).json({ success: false, message: "Selected branch does not belong to the user's office." });
+                }
+
+                nextBranchId = branch.id;
             }
-
-            const branch = await fetchBranchById(nextBranchId);
-
-            if (!branch) {
-                return res.status(404).json({
-                    success: false,
-                    message: "Branch not found."
-                });
-            }
-
-            nextBranchId = branch.id;
+        } else if (String(nextOfficeId) !== String(existing.office_id) && existing.branch_id !== null) {
+            return res.status(400).json({
+                success: false,
+                message: "Clear the existing branch or select a branch in the target office before transferring this user."
+            });
         }
 
         const duplicate = await pool.query(
@@ -1038,19 +1346,41 @@ async function updateUser(req, res) {
                 is_active = $${isActiveIndex},
                 auth_token_version = COALESCE(auth_token_version, 0) + 1`;
 
+        const officeIndex = updateValues.length + 1;
+        updateValues.push(nextOfficeId);
+
         const branchIndex = updateValues.length + 1;
 
         updateValues.push(nextBranchId);
 
         query += `,
+                office_id = $${officeIndex},
                 branch_id = $${branchIndex}
-            WHERE id = $${branchIndex + 1}
-            RETURNING id
+                WHERE id = $${branchIndex + 1}
+                  AND office_id = $${branchIndex + 2}
+                RETURNING id
         `;
 
         updateValues.push(id);
+        updateValues.push(isSystemSuperAdmin(req.user) ? existing.office_id : req.user.office_id);
 
-        const result = await pool.query(query, updateValues);
+        client = await pool.connect();
+        await client.query("BEGIN");
+        await lockStaffAccountQuota(
+            client,
+            nextOfficeId,
+            nextRole,
+            {
+                existingCountsInOffice:
+                    String(nextOfficeId) === String(existing.office_id) &&
+                    countsTowardStaffLimit(existing.role) &&
+                    countsTowardStaffLimit(nextRole)
+            }
+        );
+        const result = await client.query(query, updateValues);
+        await client.query("COMMIT");
+        client.release();
+        client = null;
 
         if (!result.rowCount) {
             return res.status(404).json({
@@ -1116,6 +1446,14 @@ async function updateUser(req, res) {
             user
         });
     } catch (error) {
+        if (client) {
+            try { await client.query("ROLLBACK"); } catch (rollbackError) { console.error("UPDATE USER ROLLBACK ERROR:", rollbackError); }
+            client.release();
+        }
+        if (error.code === "STAFF_QUOTA_EXCEEDED") {
+            try { await recordQuotaRejection(req, error.officeId, error); } catch (activityError) { console.error("UPDATE USER QUOTA AUDIT ERROR:", activityError); }
+            return res.status(409).json({ success: false, message: error.message });
+        }
         console.error("UPDATE USER ERROR:", error);
 
         return res.status(500).json({
@@ -1136,13 +1474,19 @@ async function deleteUser(req, res) {
             });
         }
 
+        const existing = await fetchUserById(id);
+        if (existing && normalizeRole(existing.role) === "system_super_admin" && !isOfficeSystemSuperAdmin(req.user)) {
+            return res.status(403).json({ success: false, message: "Only the System Super Admin can delete this account." });
+        }
+
         const result = await pool.query(
             `
                 DELETE FROM users
                 WHERE id = $1
+                  AND ($2::int IS NULL OR office_id = $2)
                 RETURNING id
             `,
-            [id]
+            [id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         if (!result.rowCount) {
@@ -1151,6 +1495,14 @@ async function deleteUser(req, res) {
                 message: "User not found."
             });
         }
+
+        await logAdminActivity(req, ACTIVITY_TYPES.USER_DELETED, {
+            affectedUserId: existing?.id,
+            affectedUserName: existing?.name,
+            branchId: existing?.branch_id,
+            branchName: existing?.branch,
+            details: "User account permanently deleted; quota slot released."
+        });
 
         return res.json({
             success: true,
@@ -1167,17 +1519,406 @@ async function deleteUser(req, res) {
 }
 
 // =========================================
+// OFFICES
+// =========================================
+
+async function listOffices(req, res) {
+    try {
+        if (!isOfficeSystemSuperAdmin(req.user)) {
+            return res.status(403).json({ success: false, message: "Only the System Super Admin can manage offices." });
+        }
+        const result = await pool.query(`
+            SELECT o.id, o.name, o.code, o.description, o.address, o.phone, o.email,
+                   o.logo_url, o.primary_color, o.secondary_color, o.dashboard_title,
+                   o.n8n_webhook_url, o.n8n_timeout_ms, COALESCE(sc.sender_id, o.sms_sender_id) AS sms_sender_id,
+                   COALESCE(sc.status, 'NOT_CONFIGURED') AS sms_config_status,
+                   sc.last_tested_at AS sms_last_tested_at,
+                   sc.last_error_message AS sms_last_error_message,
+                   o.staff_account_limit,
+                   (o.n8n_webhook_url IS NOT NULL AND o.n8n_webhook_secret IS NOT NULL) AS n8n_configured,
+                   o.status, o.created_at, o.updated_at,
+                   (SELECT COUNT(*)::int FROM users u
+                    WHERE u.office_id = o.id
+                      AND LOWER(REPLACE(REPLACE(COALESCE(u.role, ''), '-', '_'), ' ', '_'))
+                          NOT IN ('system_super_admin', 'super_admin')) AS staff_account_count,
+                   (SELECT COUNT(*)::int FROM users u WHERE u.office_id = o.id) AS user_count,
+                   (SELECT COUNT(*)::int FROM branches b WHERE b.office_id = o.id) AS branch_count,
+                   (SELECT COUNT(*)::int FROM records r WHERE r.office_id = o.id) AS record_count
+            FROM offices o
+            LEFT JOIN office_sms_configurations sc ON sc.office_id = o.id
+            ORDER BY o.name ASC
+        `);
+        return res.json({ success: true, offices: result.rows });
+    } catch (error) {
+        console.error("LIST OFFICES ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to load offices." });
+    }
+}
+
+async function createOffice(req, res) {
+    try {
+        if (!isOfficeSystemSuperAdmin(req.user)) {
+            return res.status(403).json({ success: false, message: "Only the System Super Admin can create offices." });
+        }
+        const name = String(req.body?.name || "").trim();
+        const code = String(req.body?.code || "").trim().toUpperCase();
+        if (!name || !code || boundedText(name, 150) === null || boundedText(code, 50) === null) {
+            return res.status(400).json({ success: false, message: "Office name and code are required." });
+        }
+        const webhookUrl = validateOfficeWebhookUrl(req.body?.n8n_webhook_url);
+        const webhookSecret = encryptOfficeSecret(req.body?.n8n_webhook_secret);
+        const timeoutMs = Number.parseInt(String(req.body?.n8n_timeout_ms || "10000"), 10);
+        if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 30000) {
+            return res.status(400).json({ success: false, message: "SMS timeout must be between 1000 and 30000 milliseconds." });
+        }
+        const staffAccountLimit = Number.parseInt(String(req.body?.staff_account_limit || DEFAULT_STAFF_ACCOUNT_LIMIT), 10);
+        if (!Number.isInteger(staffAccountLimit) || staffAccountLimit < 1 || staffAccountLimit > 100000) {
+            return res.status(400).json({ success: false, message: "Staff account limit must be a positive whole number." });
+        }
+        const result = await pool.query(
+            `INSERT INTO offices (name, code, description, address, phone, email, logo_url, primary_color, secondary_color, dashboard_title, n8n_webhook_url, n8n_webhook_secret, n8n_timeout_ms, sms_sender_id, staff_account_limit)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+             RETURNING id, name, code, description, address, phone, email, logo_url,
+                       primary_color, secondary_color, dashboard_title, n8n_webhook_url,
+                       n8n_timeout_ms, sms_sender_id, staff_account_limit, status,
+                       created_at, updated_at`,
+            [name, code, req.body.description || null, req.body.address || null, req.body.phone || null,
+                req.body.email || null, req.body.logo_url || null, req.body.primary_color || null,
+                req.body.secondary_color || null, req.body.dashboard_title || name, webhookUrl,
+                webhookSecret, timeoutMs, String(req.body?.sms_sender_id || "").trim() || null, staffAccountLimit]
+        );
+        await logAdminActivity(req, ACTIVITY_TYPES.STAFF_QUOTA_CHANGED, {
+            details: `Staff account limit configured for office ${result.rows[0].name}.`,
+            newValue: String(staffAccountLimit),
+            officeId: result.rows[0].id
+        });
+        return res.status(201).json({ success: true, office: result.rows[0] });
+    } catch (error) {
+        if (error.code === "23505") return res.status(409).json({ success: false, message: "An office with that name or code already exists." });
+        console.error("CREATE OFFICE ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to create office." });
+    }
+}
+
+async function updateOffice(req, res) {
+    try {
+        if (!isOfficeSystemSuperAdmin(req.user)) {
+            return res.status(403).json({ success: false, message: "Only the System Super Admin can update offices." });
+        }
+        const id = Number.parseInt(req.params.id, 10);
+        const existingOfficeResult = await pool.query(
+            "SELECT name, staff_account_limit FROM offices WHERE id = $1 LIMIT 1",
+            [id]
+        );
+        const existingOffice = existingOfficeResult.rows[0];
+        const fields = ["name", "description", "address", "phone", "email", "logo_url", "primary_color", "secondary_color", "dashboard_title", "status"];
+        const updates = [];
+        const values = [];
+        for (const field of fields) {
+            if (req.body?.[field] !== undefined) {
+                values.push(field === "name" ? String(req.body[field]).trim() : req.body[field]);
+                updates.push(`${field} = $${values.length}`);
+            }
+        }
+        if (req.body?.n8n_webhook_url !== undefined) {
+            values.push(validateOfficeWebhookUrl(req.body.n8n_webhook_url));
+            updates.push(`n8n_webhook_url = $${values.length}`);
+        }
+        if (req.body?.n8n_webhook_secret) {
+            values.push(encryptOfficeSecret(req.body.n8n_webhook_secret));
+            updates.push(`n8n_webhook_secret = $${values.length}`);
+        }
+        if (req.body?.n8n_timeout_ms !== undefined) {
+            const timeoutMs = Number.parseInt(String(req.body.n8n_timeout_ms), 10);
+            if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 30000) {
+                return res.status(400).json({ success: false, message: "SMS timeout must be between 1000 and 30000 milliseconds." });
+            }
+            values.push(timeoutMs);
+            updates.push(`n8n_timeout_ms = $${values.length}`);
+        }
+        if (req.body?.sms_sender_id !== undefined) {
+            values.push(String(req.body.sms_sender_id || "").trim() || null);
+            updates.push(`sms_sender_id = $${values.length}`);
+        }
+        if (req.body?.staff_account_limit !== undefined) {
+            const staffAccountLimit = Number.parseInt(String(req.body.staff_account_limit), 10);
+            if (!Number.isInteger(staffAccountLimit) || staffAccountLimit < 1 || staffAccountLimit > 100000) {
+                return res.status(400).json({ success: false, message: "Staff account limit must be a positive whole number." });
+            }
+            values.push(staffAccountLimit);
+            updates.push(`staff_account_limit = $${values.length}`);
+        }
+        if (!updates.length) return res.status(400).json({ success: false, message: "No office changes were provided." });
+        values.push(id);
+        const result = await pool.query(
+            `UPDATE offices
+             SET ${updates.join(", ")}, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $${values.length}
+             RETURNING id, name, code, description, address, phone, email, logo_url,
+                       primary_color, secondary_color, dashboard_title, n8n_webhook_url,
+                       n8n_timeout_ms, sms_sender_id, staff_account_limit, status,
+                       created_at, updated_at`,
+            values
+        );
+        if (!result.rowCount) return res.status(404).json({ success: false, message: "Office not found." });
+        if (
+            req.body?.staff_account_limit !== undefined &&
+            Number(existingOffice?.staff_account_limit) !== Number(result.rows[0].staff_account_limit)
+        ) {
+            await logAdminActivity(req, ACTIVITY_TYPES.STAFF_QUOTA_CHANGED, {
+                details: `Staff account limit changed for office ${result.rows[0].name}.`,
+                previousValue: String(existingOffice?.staff_account_limit || ""),
+                newValue: String(result.rows[0].staff_account_limit),
+                officeId: result.rows[0].id
+            });
+        }
+        return res.json({ success: true, office: result.rows[0] });
+    } catch (error) {
+        if (error.code === "23505") return res.status(409).json({ success: false, message: "An office with that name or code already exists." });
+        console.error("UPDATE OFFICE ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to update office." });
+    }
+}
+
+async function getOfficeOperationPreview(req, res) {
+    if (!isOfficeSystemSuperAdmin(req.user)) {
+        return res.status(403).json({ success: false, message: "Only the System Super Admin can manage office data." });
+    }
+
+    const officeId = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(officeId)) {
+        return res.status(400).json({ success: false, message: "Invalid office." });
+    }
+
+    try {
+        const result = await pool.query(
+            `
+                SELECT o.id, o.name, o.code, o.status, o.staff_account_limit,
+                       (SELECT COUNT(*)::int FROM users u WHERE u.office_id = o.id) AS users,
+                       (SELECT COUNT(*)::int FROM branches b WHERE b.office_id = o.id) AS branches,
+                       (SELECT COUNT(*)::int FROM records r WHERE r.office_id = o.id) AS records,
+                       (SELECT COUNT(*)::int FROM notifications n WHERE n.office_id = o.id) AS notifications,
+                       (SELECT COUNT(*)::int FROM auth_activity_logs l WHERE l.office_id = o.id) AS activity_logs,
+                       (SELECT COUNT(*)::int FROM security_audit_logs s
+                        JOIN users su ON su.id = s.user_id
+                        WHERE su.office_id = o.id) AS security_audit_logs
+                FROM offices o
+                WHERE o.id = $1
+                LIMIT 1
+            `,
+            [officeId]
+        );
+        if (!result.rowCount) return res.status(404).json({ success: false, message: "Office not found." });
+        const office = result.rows[0];
+        return res.json({
+            success: true,
+            backupVerified: process.env.OFFICE_DESTRUCTIVE_BACKUP_VERIFIED === "true",
+            office,
+            clearData: {
+                removes: { records: office.records, notifications: office.notifications },
+                retains: { office: 1, users: office.users, branches: office.branches, settings: 1, quota: office.staff_account_limit, audit_logs: office.activity_logs }
+            },
+            deleteOffice: {
+                blockedBy: {
+                    users: office.users,
+                    branches: office.branches,
+                    records: office.records,
+                    notifications: office.notifications,
+                    activity_logs: office.activity_logs
+                },
+                securityAuditLogsRetained: office.security_audit_logs
+            }
+        });
+    } catch (error) {
+        console.error("OFFICE OPERATION PREVIEW ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to preview office data." });
+    }
+}
+
+function requireDestructiveOfficeConfirmation(req, office) {
+    if (process.env.OFFICE_DESTRUCTIVE_BACKUP_VERIFIED !== "true") {
+        return "A verified restorable backup is required before this operation. Set OFFICE_DESTRUCTIVE_BACKUP_VERIFIED=true after verification.";
+    }
+    if (req.body?.backup_verified !== true) {
+        return "Backup verification is required before this operation.";
+    }
+    if (req.body?.final_confirm !== true) {
+        return "Final confirmation is required before this operation.";
+    }
+    if (String(req.body?.office_name_confirmation || "").trim() !== String(office.name || "").trim()) {
+        return "The office name confirmation does not match.";
+    }
+    return null;
+}
+
+async function clearOfficeData(req, res) {
+    if (!isOfficeSystemSuperAdmin(req.user)) {
+        return res.status(403).json({ success: false, message: "Only the System Super Admin can clear office data." });
+    }
+
+    const officeId = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(officeId)) return res.status(400).json({ success: false, message: "Invalid office." });
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        const officeResult = await client.query("SELECT id, name FROM offices WHERE id = $1 FOR UPDATE", [officeId]);
+        if (!officeResult.rowCount) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ success: false, message: "Office not found." });
+        }
+        const office = officeResult.rows[0];
+        const confirmationError = requireDestructiveOfficeConfirmation(req, office);
+        if (confirmationError) {
+            await client.query("ROLLBACK");
+            return res.status(428).json({ success: false, message: confirmationError });
+        }
+
+        const counts = await client.query(
+            `SELECT
+                (SELECT COUNT(*)::int FROM records WHERE office_id = $1) AS records,
+                (SELECT COUNT(*)::int FROM notifications WHERE office_id = $1) AS notifications`,
+            [officeId]
+        );
+        await client.query("DELETE FROM notifications WHERE office_id = $1", [officeId]);
+        await client.query("DELETE FROM records WHERE office_id = $1", [officeId]);
+        await client.query("COMMIT");
+
+        try {
+            await recordActivity({
+                request: req,
+                userId: req.user?.id,
+                name: req.user?.name,
+                email: req.user?.email,
+                role: req.user?.role,
+                activityType: ACTIVITY_TYPES.SETTINGS_CHANGED,
+                officeId,
+                details: `Operational data cleared for office ${office.name}.`,
+                newValue: JSON.stringify({ records: counts.rows[0].records, notifications: counts.rows[0].notifications })
+            });
+        } catch (activityError) {
+            console.error("CLEAR OFFICE DATA AUDIT ERROR:", activityError.message);
+        }
+        return res.json({ success: true, message: `Operational data cleared for ${office.name}.`, removed: counts.rows[0] });
+    } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
+        console.error("CLEAR OFFICE DATA ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to clear office data. No changes were committed." });
+    } finally {
+        client.release();
+    }
+}
+
+async function deleteOffice(req, res) {
+    if (!isOfficeSystemSuperAdmin(req.user)) {
+        return res.status(403).json({ success: false, message: "Only the System Super Admin can delete offices." });
+    }
+
+    const officeId = Number.parseInt(req.params.id, 10);
+    if (!Number.isInteger(officeId)) {
+        return res.status(400).json({ success: false, message: "Invalid office." });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        const office = await client.query("SELECT id, name FROM offices WHERE id = $1 FOR UPDATE", [officeId]);
+        if (!office.rowCount) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ success: false, message: "Office not found." });
+        }
+
+        const confirmationError = requireDestructiveOfficeConfirmation(req, office.rows[0]);
+        if (confirmationError) {
+            await client.query("ROLLBACK");
+            return res.status(428).json({ success: false, message: confirmationError });
+        }
+
+        const dependencies = await client.query(
+            `SELECT
+                (SELECT COUNT(*)::int FROM users WHERE office_id = $1) AS users,
+                (SELECT COUNT(*)::int FROM branches WHERE office_id = $1) AS branches,
+                (SELECT COUNT(*)::int FROM records WHERE office_id = $1) AS records,
+                (SELECT COUNT(*)::int FROM auth_activity_logs WHERE office_id = $1) AS activity_logs,
+                (SELECT COUNT(*)::int FROM notifications WHERE office_id = $1) AS notifications`,
+            [officeId]
+        );
+        const counts = dependencies.rows[0];
+        // Keep the audit trail, but remove its live office foreign-key reference.
+        // The snapshot lets System Super Admins identify the deleted office later.
+        await client.query(
+            `UPDATE auth_activity_logs
+             SET office_name_snapshot = COALESCE(office_name_snapshot, $2), office_id = NULL
+             WHERE office_id = $1`,
+            [officeId, office.rows[0].name]
+        );
+        await client.query("DELETE FROM notifications WHERE office_id = $1", [officeId]);
+        await client.query("DELETE FROM records WHERE office_id = $1", [officeId]);
+        await client.query("DELETE FROM branches WHERE office_id = $1", [officeId]);
+        await client.query("DELETE FROM users WHERE office_id = $1", [officeId]);
+        await client.query("DELETE FROM offices WHERE id = $1", [officeId]);
+        await client.query("COMMIT");
+        return res.json({
+            success: true,
+            message: `${office.rows[0].name} and its office-owned dependencies were deleted successfully.`,
+            deleted: counts
+        });
+    } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
+        if (error.code === "23503") {
+            return res.status(409).json({ success: false, message: "This office still has assigned data and cannot be deleted." });
+        }
+        console.error("DELETE OFFICE ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to delete office." });
+    } finally {
+        client.release();
+    }
+}
+
+// =========================================
 // BRANCHES
 // =========================================
 
 async function listBranches(req, res) {
     try {
+        const requestedOfficeId = Number.parseInt(String(req.query?.office_id || ""), 10);
+        const canViewAllOffices = isOfficeSystemSuperAdmin(req.user);
+        const officeId = canViewAllOffices && Number.isInteger(requestedOfficeId)
+            ? requestedOfficeId
+            : (canViewAllOffices ? null : req.user.office_id);
         const result = await pool.query(
             `
-                SELECT id, name, created_at
-                FROM branches
-                ORDER BY name ASC
-            `
+                SELECT
+                    b.id,
+                    b.name,
+                    b.office_id,
+                    o.name AS office_name,
+                    o.code AS office_code,
+                    b.created_at,
+                    COUNT(u.id)::int AS staff_count,
+                    COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'id', u.id,
+                                'name', u.name,
+                                'email', u.email,
+                                'role', u.role,
+                                'account_status', u.account_status,
+                                'is_active', u.is_active,
+                                'office_id', u.office_id,
+                                'branch_id', u.branch_id
+                            ) ORDER BY u.name ASC
+                        ) FILTER (WHERE u.id IS NOT NULL),
+                        '[]'::json
+                    ) AS staff
+                FROM branches b
+                JOIN offices o ON o.id = b.office_id
+                LEFT JOIN users u ON u.branch_id = b.id AND u.office_id = b.office_id
+                WHERE ($1::int IS NULL OR b.office_id = $1)
+                GROUP BY b.id, o.id
+                ORDER BY o.name ASC, b.name ASC
+            `,
+            [officeId]
         );
 
         return res.json({
@@ -1195,8 +1936,13 @@ async function listBranches(req, res) {
 }
 
 async function createBranch(req, res) {
+    const client = await pool.connect();
     try {
-        const { name } = req.body;
+        const { name, create_staff: createStaff } = req.body;
+        const requestedOfficeId = Number.parseInt(String(req.body?.office_id || ""), 10);
+        const officeId = isOfficeSystemSuperAdmin(req.user) && Number.isInteger(requestedOfficeId)
+            ? requestedOfficeId
+            : req.user.office_id;
 
         if (!name || !String(name).trim()) {
             return res.status(400).json({
@@ -1214,39 +1960,110 @@ async function createBranch(req, res) {
             });
         }
 
-        const duplicate = await pool.query(
-            "SELECT id FROM branches WHERE LOWER(name) = LOWER($1) LIMIT 1",
-            [cleanName]
+        const shouldCreateStaff = createStaff === true || String(createStaff).toLowerCase() === "true";
+        const staffName = String(req.body?.staff_name || "").trim();
+        const staffEmail = String(req.body?.staff_email || "").trim().toLowerCase();
+        const staffPassword = String(req.body?.staff_password || "");
+
+        if (shouldCreateStaff && (!staffName || !staffEmail || !staffPassword)) {
+            return res.status(400).json({ success: false, message: "Staff name, email, and password are required when staff creation is enabled." });
+        }
+        if (shouldCreateStaff) {
+            const passwordError = validatePassword(staffPassword);
+            if (passwordError) return res.status(400).json({ success: false, message: passwordError });
+            if (boundedText(staffName, 100) === null || boundedText(staffEmail, 150) === null) {
+                return res.status(400).json({ success: false, message: "Staff name or email is too long." });
+            }
+        }
+
+        await client.query("BEGIN");
+
+        const office = await client.query(
+            "SELECT id FROM offices WHERE id = $1 AND status = 'ACTIVE' LIMIT 1",
+            [officeId]
+        );
+        if (!office.rowCount) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({ success: false, message: "A valid active office is required." });
+        }
+
+        const duplicate = await client.query(
+            "SELECT id FROM branches WHERE office_id = $2 AND LOWER(name) = LOWER($1) LIMIT 1",
+            [cleanName, officeId]
         );
 
         if (duplicate.rowCount) {
+            await client.query("ROLLBACK");
             return res.status(409).json({
                 success: false,
                 message: "A branch with this name already exists."
             });
         }
 
-        const result = await pool.query(
+        const result = await client.query(
             `
-                INSERT INTO branches (name)
-                VALUES ($1)
-                RETURNING id, name, created_at
+                INSERT INTO branches (name, office_id)
+                VALUES ($1, $2)
+                RETURNING id, name, office_id, created_at
             `,
-            [cleanName]
+            [cleanName, officeId]
         );
+
+        let createdStaff = null;
+        if (shouldCreateStaff) {
+            const emailDuplicate = await client.query("SELECT id FROM users WHERE email = $1 LIMIT 1", [staffEmail]);
+            if (emailDuplicate.rowCount) {
+                await client.query("ROLLBACK");
+                return res.status(409).json({ success: false, message: "An account with this email already exists." });
+            }
+
+            const hashedPassword = await hashPassword(staffPassword);
+            const staffResult = await client.query(
+                `INSERT INTO users
+                    (name, email, password, role, office_id, branch_id, account_status, is_active)
+                 VALUES ($1, $2, $3, 'branch_staff', $4, $5, 'APPROVED', TRUE)
+                 RETURNING id, name, email, role, office_id, branch_id, account_status, is_active`,
+                [staffName, staffEmail, hashedPassword, officeId, result.rows[0].id]
+            );
+            createdStaff = staffResult.rows[0];
+        }
+
+        await client.query("COMMIT");
+
+        try {
+            await logAdminActivity(req, ACTIVITY_TYPES.BRANCH_CREATED, {
+                branchId: result.rows[0].id,
+                branchName: result.rows[0].name,
+                officeId,
+                details: shouldCreateStaff
+                    ? `Branch created with branch staff account ${createdStaff.email}.`
+                    : "Branch created."
+            });
+        } catch (activityError) {
+            console.error("BRANCH ACTIVITY LOG ERROR:", activityError.message);
+        }
 
         return res.status(201).json({
             success: true,
-            message: "Branch created successfully.",
-            branch: result.rows[0]
+            message: shouldCreateStaff
+                ? "Branch and branch staff account created successfully."
+                : "Branch created successfully.",
+            branch: result.rows[0],
+            staff: createdStaff
         });
     } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
+        if (error.code === "23505") {
+            return res.status(409).json({ success: false, message: "The branch or staff email already exists." });
+        }
         console.error("CREATE BRANCH ERROR:", error);
 
         return res.status(500).json({
             success: false,
             message: "Unable to create branch."
         });
+    } finally {
+        client.release();
     }
 }
 
@@ -1271,15 +2088,28 @@ async function updateBranch(req, res) {
             });
         }
 
+        const existingBranch = await pool.query(
+            "SELECT id, office_id FROM branches WHERE id = $1 LIMIT 1",
+            [id]
+        );
+        if (!existingBranch.rowCount) {
+            return res.status(404).json({ success: false, message: "Branch not found." });
+        }
+        const branchOfficeId = existingBranch.rows[0].office_id;
+        if (!isSystemSuperAdmin(req.user) && String(branchOfficeId) !== String(req.user.office_id)) {
+            return res.status(403).json({ success: false, message: "You can only edit branches in your office." });
+        }
+
         const duplicate = await pool.query(
             `
                 SELECT id
                 FROM branches
-                WHERE LOWER(name) = LOWER($1)
+                WHERE office_id = $3
+                  AND LOWER(name) = LOWER($1)
                   AND id <> $2
                 LIMIT 1
             `,
-            [cleanName, id]
+            [cleanName, id, branchOfficeId]
         );
 
         if (duplicate.rowCount) {
@@ -1294,9 +2124,10 @@ async function updateBranch(req, res) {
                 UPDATE branches
                 SET name = $1
                 WHERE id = $2
-                RETURNING id, name, created_at
+                  AND ($3::int IS NULL OR office_id = $3)
+                RETURNING id, name, office_id, created_at
             `,
-            [cleanName, id]
+            [cleanName, id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         if (!result.rowCount) {
@@ -1326,13 +2157,13 @@ async function deleteBranch(req, res) {
         const { id } = req.params;
 
         const userCount = await pool.query(
-            "SELECT COUNT(*)::int AS count FROM users WHERE branch_id = $1",
-            [id]
+            "SELECT COUNT(*)::int AS count FROM users WHERE branch_id = $1 AND ($2::int IS NULL OR office_id = $2)",
+            [id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         const recordCount = await pool.query(
-            "SELECT COUNT(*)::int AS count FROM records WHERE branch_id = $1",
-            [id]
+            "SELECT COUNT(*)::int AS count FROM records WHERE branch_id = $1 AND ($2::int IS NULL OR office_id = $2)",
+            [id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         if (
@@ -1349,9 +2180,10 @@ async function deleteBranch(req, res) {
             `
                 DELETE FROM branches
                 WHERE id = $1
+                  AND ($2::int IS NULL OR office_id = $2)
                 RETURNING id
             `,
-            [id]
+            [id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         if (!result.rowCount) {
@@ -1381,14 +2213,22 @@ module.exports = {
     restoreDeletedCase,
     clearAuthActivity,
     listUsers,
+    getStaffQuota,
     listPendingUsers,
     approveUser,
     declineUser,
     createUser,
     updateUser,
     deleteUser,
+    canAssignRole,
     listBranches,
     createBranch,
     updateBranch,
-    deleteBranch
+    deleteBranch,
+    listOffices,
+    createOffice,
+    updateOffice,
+    deleteOffice
+    ,getOfficeOperationPreview
+    ,clearOfficeData
 };

@@ -8,7 +8,6 @@ const DASHBOARD_REGISTRARS = [
     "POLYCLINIC"
 ];
 const { sendToN8N } = require("../services/n8nService");
-const { getDefaultBranchId } = require("../utils/branchUtils");
 const { formatPhoneNumber, isValidPhoneNumber } = require("../utils/phoneUtils");
 const { boundedText, isIsoDate } = require("../utils/inputValidation");
 const {
@@ -26,6 +25,7 @@ const {
     NOTIFICATION_PRIORITIES,
     notifyAdmins,
     notifyAdminsGrouped,
+    notifyRecordOwner,
     resolveRecordNotifications,
     refreshPendingApprovalNotifications
 } = require("../utils/notifications");
@@ -321,6 +321,20 @@ async function notifyRecordAdmins(request, {
                 actor_user_id: request.user?.id || null
             }
         });
+        await notifyRecordOwner({
+            type,
+            title,
+            message,
+            priority,
+            recordId,
+            branchId,
+            excludeUserId: request.user?.id,
+            metadata: {
+                ...metadata,
+                event_id: eventId,
+                actor_user_id: request.user?.id || null
+            }
+        });
     } catch (error) {
         // Notification delivery must not turn a successful record operation into a failure.
         console.error("RECORD ADMIN NOTIFICATION ERROR:", error.message);
@@ -381,6 +395,23 @@ async function notifySmsAdmins(request, record, {
                 metadata
             })
         });
+        await notifyRecordOwner({
+            type: success ? NOTIFICATION_TYPES.SMS_ACTIVITY : NOTIFICATION_TYPES.SMS_FAILED,
+            title: success
+                ? `SMS Sent - ${record.name || `Case #${record.id}`}`
+                : `SMS Error - ${record.name || `Case #${record.id}`}`,
+            message: success
+                ? `SMS sent successfully for Case #${record.id}.`
+                : `SMS failed for Case #${record.id}: ${errorMessage || "SMS workflow failed."}.`,
+            priority: success ? NOTIFICATION_PRIORITIES.INFO : NOTIFICATION_PRIORITIES.IMPORTANT,
+            recordId: record.id,
+            branchId: record.branch_id,
+            metadata: {
+                event_id: stableEventId,
+                sms_status: status,
+                error: errorMessage || null
+            }
+        });
     } catch (error) {
         console.error("SMS ADMIN NOTIFICATION ERROR:", error.message);
     }
@@ -422,7 +453,7 @@ function duplicateLockKey(category, name, dateOfBirth, dateOfDeath) {
  * - Normal cases: same Category + normalized Name + Date of Birth
  * - Death cases: same Category + normalized Name + Date of Death
  */
-async function checkDuplicateRecord(pool, category, name, dateOfBirth, dateOfDeath) {
+async function checkDuplicateRecord(pool, category, name, dateOfBirth, dateOfDeath, officeId) {
     const isDeathCategory =
         category &&
         String(category).toLowerCase().trim() === "death";
@@ -445,12 +476,13 @@ async function checkDuplicateRecord(pool, category, name, dateOfBirth, dateOfDea
         query = `
             SELECT id, name, category, date_of_death
             FROM records
-            WHERE LOWER(TRIM(category)) = LOWER(TRIM($1))
+            WHERE office_id = $4
+              AND LOWER(TRIM(category)) = LOWER(TRIM($1))
               AND LOWER(TRIM(name)) = LOWER(TRIM($2))
               AND date_of_death = $3
             LIMIT 1
         `;
-        params = [category, name, dateOfDeath];
+        params = [category, name, dateOfDeath, officeId];
     } else {
         if (!dateOfBirth) return null;
 
@@ -458,12 +490,13 @@ async function checkDuplicateRecord(pool, category, name, dateOfBirth, dateOfDea
         query = `
             SELECT id, name, category, date_of_birth
             FROM records
-            WHERE LOWER(TRIM(category)) = LOWER(TRIM($1))
+            WHERE office_id = $4
+              AND LOWER(TRIM(category)) = LOWER(TRIM($1))
               AND LOWER(TRIM(name)) = LOWER(TRIM($2))
               AND date_of_birth = $3
             LIMIT 1
         `;
-        params = [category, name, dateOfBirth];
+        params = [category, name, dateOfBirth, officeId];
     }
 
     const result = await pool.query(query, params);
@@ -481,8 +514,15 @@ function recordSelectSql() {
     `;
 }
 
-function dashboardBranchClause(user) {
-    if (!isBranchStaff(user)) {
+function dashboardBranchClause(user, officeContextId = null) {
+    if (isSystemSuperAdmin(user) && Number.isInteger(officeContextId)) {
+        return {
+            clause: "WHERE r.office_id = $1",
+            values: [officeContextId]
+        };
+    }
+
+    if (isSystemSuperAdmin(user)) {
         return {
             clause: "",
             values: []
@@ -490,22 +530,37 @@ function dashboardBranchClause(user) {
     }
 
     return {
-        clause: `
-            WHERE r.branch_id = $1
-              AND r.created_by = $2
-              AND COALESCE(r.registration_date, r.created_at) >= date_trunc(
-                  'year',
-                  (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date
-              )::date
-              AND COALESCE(r.registration_date, r.created_at) < (
-                  date_trunc(
-                      'year',
-                      (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')::date
-                  ) + INTERVAL '1 year'
-              )::date
-        `,
-        values: [user.branch_id, user.id]
+        clause: "WHERE r.office_id = $1",
+        values: [user.office_id]
     };
+}
+
+async function resolveDashboardOfficeContext(req, queryKey = "office_id") {
+    if (!isSystemSuperAdmin(req.user)) {
+        return null;
+    }
+
+    const rawOfficeId = String(req.query?.[queryKey] || "").trim();
+    if (!rawOfficeId) {
+        return null;
+    }
+
+    const officeId = Number.parseInt(rawOfficeId, 10);
+    if (!Number.isInteger(officeId) || officeId <= 0) {
+        return false;
+    }
+
+    const result = await pool.query(
+        `SELECT id, name, code, status FROM offices WHERE id = $1 LIMIT 1`,
+        [officeId]
+    );
+
+    if (!result.rowCount) {
+        return false;
+    }
+
+    req.dashboardOfficeContext = result.rows[0];
+    return officeId;
 }
 
 const RECENT_RECORDS_PAGE_SIZE = 10;
@@ -530,11 +585,11 @@ function sqlDateText(value) {
     return match ? match[1] : null;
 }
 
-async function queryRecentTodayRecords(user, requestedPage) {
+async function queryRecentTodayRecords(user, requestedPage, officeContextId = null) {
     const {
         clause,
         values
-    } = dashboardBranchClause(user);
+    } = dashboardBranchClause(user, officeContextId);
 
     // registration_date is a PostgreSQL TIMESTAMP without time zone. The
     // application stores it as Ghana-local time, so compare against the
@@ -632,9 +687,14 @@ async function queryRecentTodayRecords(user, requestedPage) {
 
 const getRecentTodayRecords = async (req, res) => {
     try {
+        const officeContextId = await resolveDashboardOfficeContext(req);
+        if (officeContextId === false) {
+            return res.status(404).json({ success: false, message: "Office not found." });
+        }
         const result = await queryRecentTodayRecords(
             req.user,
-            req.query?.page
+            req.query?.page,
+            officeContextId
         );
 
         return res.json({
@@ -655,15 +715,9 @@ const getRecentTodayRecords = async (req, res) => {
 };
 
 function assertBranchAccess(user, record) {
-    if (
-        !isBranchStaff(user) ||
-        !record
-    ) {
-        return true;
-    }
-
-    return String(record.branch_id) === String(user.branch_id) &&
-        String(record.created_by) === String(user.id);
+    // Branch columns are legacy compatibility data. Office authorization is
+    // enforced by the record query and applies to every office role.
+    return true;
 }
 
 // =========================================
@@ -744,16 +798,9 @@ const createRecord = async (req, res) => {
             });
         }
 
-        const branchId =
-            req.user?.branch_id ||
-            (await getDefaultBranchId());
-
-        if (!branchId) {
-            return res.status(500).json({
-                success: false,
-                message: "Unable to determine record branch."
-            });
-        }
+        // Branch is retained only as legacy data. New records are scoped by
+        // office and do not require or inherit a branch assignment.
+        const branchId = null;
 
         const requestedRegistrar =
             isBranchStaff(req.user)
@@ -800,9 +847,10 @@ const createRecord = async (req, res) => {
                         SELECT *
                         FROM records
                         WHERE client_uuid = $1
+                          AND office_id = $2
                         LIMIT 1
                     `,
-                    [clientUuid]
+                    [clientUuid, req.user.office_id]
                 );
 
             if (existingRecordResult.rows[0]) {
@@ -829,7 +877,8 @@ const createRecord = async (req, res) => {
             category,
             name,
             date_of_birth,
-            date_of_death
+            date_of_death,
+            req.user.office_id
         );
 
         if (duplicateRecord) {
@@ -864,6 +913,7 @@ const createRecord = async (req, res) => {
         const branchParameter = branchStaffRecord ? "$9" : "$10";
         const createdByParameter = branchStaffRecord ? "$10" : "$11";
         const clientUuidParameter = branchStaffRecord ? "$11" : "$12";
+        const officeParameter = branchStaffRecord ? "$12" : "$13";
 
         const result = await transactionClient.query(
             `
@@ -880,10 +930,11 @@ const createRecord = async (req, res) => {
                     notes,
                     branch_id,
                     created_by,
-                    client_uuid
+                    client_uuid,
+                    office_id
                 )
                 VALUES
-                ($1,$2,$3,$4,$5,$6,${registrationDateSql},${statusParameter},${notesParameter},${branchParameter},${createdByParameter},${clientUuidParameter})
+                ($1,$2,$3,$4,$5,$6,${registrationDateSql},${statusParameter},${notesParameter},${branchParameter},${createdByParameter},${clientUuidParameter},${officeParameter})
                 RETURNING *
             `,
             branchStaffRecord
@@ -898,7 +949,8 @@ const createRecord = async (req, res) => {
                 notes || null,
                 branchId,
                 req.user.id,
-                clientUuid
+                clientUuid,
+                req.user.office_id
             ]
                 : [
                 category || null,
@@ -912,7 +964,8 @@ const createRecord = async (req, res) => {
                 notes || null,
                 branchId,
                 req.user.id,
-                clientUuid
+                clientUuid,
+                req.user.office_id
             ]
         );
 
@@ -1019,9 +1072,10 @@ const createRecord = async (req, res) => {
                     SELECT *
                     FROM records
                     WHERE client_uuid = $1
+                      AND office_id = $2
                     LIMIT 1
                 `,
-                [clientUuid]
+                [clientUuid, req.user.office_id]
             );
 
             if (existingRecordResult.rows[0]) {
@@ -1051,11 +1105,9 @@ const getRecords = async (req, res) => {
         let query = recordSelectSql();
         const values = [];
 
-        if (isBranchStaff(req.user)) {
-            query += `
-                WHERE r.branch_id = $1
-            `;
-            values.push(req.user.branch_id);
+        if (!isSystemSuperAdmin(req.user)) {
+            query += ` WHERE r.office_id = $1`;
+            values.push(req.user.office_id);
         }
 
         query += `
@@ -1114,6 +1166,12 @@ const getProcessingRecords = async (req, res) => {
         const values = [];
         let parameter = 1;
 
+        if (!isSystemSuperAdmin(req.user)) {
+            query += ` AND r.office_id = $${parameter}`;
+            values.push(req.user.office_id);
+            parameter++;
+        }
+
         if (name) {
             query += ` AND r.name ILIKE $${parameter}`;
             values.push(`%${name}%`);
@@ -1158,11 +1216,23 @@ const getDashboardSummary = async (req, res) => {
     try {
         const role = normalizeRole(req.user?.role);
         const branchStaff = isBranchStaff(req.user);
+        const officeContextId = await resolveDashboardOfficeContext(req);
+        if (officeContextId === false) {
+            return res.status(404).json({ success: false, message: "Office not found." });
+        }
+
+        const requestedRecentOfficeContextId = isSystemSuperAdmin(req.user)
+            ? await resolveDashboardOfficeContext(req, "recent_office_id")
+            : officeContextId;
+        if (requestedRecentOfficeContextId === false) {
+            return res.status(404).json({ success: false, message: "Office not found." });
+        }
+        const recentOfficeContextId = requestedRecentOfficeContextId ?? officeContextId;
 
         const {
             clause,
             values
-        } = dashboardBranchClause(req.user);
+        } = dashboardBranchClause(req.user, officeContextId);
 
         const requestedPeriod =
             String(req.query?.period || "daily")
@@ -1251,12 +1321,7 @@ const getDashboardSummary = async (req, res) => {
                 10
             );
 
-        if (requestedRegistrar &&
-            !DASHBOARD_REGISTRARS.includes(requestedRegistrar)) {
-            summaryClause += summaryClause
-                ? " AND FALSE"
-                : " WHERE FALSE";
-        } else if (requestedRegistrar) {
+        if (requestedRegistrar) {
             addSummaryFilter(
                 `${normalizedRegistrarSql("r")} = $${parameter}`,
                 requestedRegistrar
@@ -1288,6 +1353,30 @@ const getDashboardSummary = async (req, res) => {
             periodConfig.previous = `(make_date($${yearParameter}::int, 1, 1) - INTERVAL '1 year')`;
         }
 
+        let overviewSummaryClause = summaryClause;
+        const overviewSummaryValues = [...summaryValues];
+        const requestedOverviewOfficeId = String(req.query?.overview_office_id || "").trim();
+
+        if (isSystemSuperAdmin(req.user) && requestedOverviewOfficeId) {
+            const overviewOfficeId = Number.parseInt(requestedOverviewOfficeId, 10);
+            if (!Number.isInteger(overviewOfficeId) || overviewOfficeId <= 0) {
+                return res.status(400).json({ success: false, message: "Select a valid office for Cases Overview." });
+            }
+
+            const officeResult = await pool.query(
+                "SELECT id FROM offices WHERE id = $1 LIMIT 1",
+                [overviewOfficeId]
+            );
+            if (!officeResult.rowCount) {
+                return res.status(404).json({ success: false, message: "Office not found." });
+            }
+
+            overviewSummaryClause += overviewSummaryClause
+                ? ` AND r.office_id = $${overviewSummaryValues.length + 1}`
+                : `WHERE r.office_id = $${overviewSummaryValues.length + 1}`;
+            overviewSummaryValues.push(overviewOfficeId);
+        }
+
         const categoryOptionsClause = clause
             ? `${clause} AND NULLIF(BTRIM(r.category), '') IS NOT NULL`
             : "WHERE NULLIF(BTRIM(r.category), '') IS NOT NULL";
@@ -1297,17 +1386,9 @@ const getDashboardSummary = async (req, res) => {
             r.created_at::date
         ) >= ${periodConfig.start}::date`;
 
-        const overviewDateClause = summaryClause
-            ? `${summaryClause} AND ${overviewDateCondition}`
+        const overviewDateClause = overviewSummaryClause
+            ? `${overviewSummaryClause} AND ${overviewDateCondition}`
             : `WHERE ${overviewDateCondition}`;
-
-        const validRegistrarCondition = `${normalizedRegistrarSql("r")} IN (
-            'ADMIN',
-            'OFFICE',
-            'NEW OFFICE',
-            'NEW MARKET',
-            'POLYCLINIC'
-        )`;
 
         const registrarPerformanceDateCondition = period === "daily"
             ? `COALESCE(
@@ -1317,8 +1398,52 @@ const getDashboardSummary = async (req, res) => {
             : overviewDateCondition;
 
         const registrarPerformanceClause = summaryClause
-            ? `${summaryClause} AND ${registrarPerformanceDateCondition} AND ${validRegistrarCondition}`
-            : `WHERE ${registrarPerformanceDateCondition} AND ${validRegistrarCondition}`;
+            ? `${summaryClause} AND ${registrarPerformanceDateCondition}`
+            : `WHERE ${registrarPerformanceDateCondition}`;
+
+        const registrarPerformanceValues = [...summaryValues];
+        const requestedRegistrarOfficeId = String(req.query?.registrar_office_id || "").trim();
+        let registrarOfficeClause = "";
+        let registrarOfficeId = null;
+
+        if (isSystemSuperAdmin(req.user) && requestedRegistrarOfficeId) {
+            registrarOfficeId = Number.parseInt(requestedRegistrarOfficeId, 10);
+            if (!Number.isInteger(registrarOfficeId) || registrarOfficeId <= 0) {
+                return res.status(400).json({ success: false, message: "Select a valid office for Registrar Performance." });
+            }
+
+            const officeResult = await pool.query(
+                "SELECT id FROM offices WHERE id = $1 LIMIT 1",
+                [registrarOfficeId]
+            );
+            if (!officeResult.rowCount) {
+                return res.status(404).json({ success: false, message: "Office not found." });
+            }
+
+            registrarOfficeClause = ` AND r.office_id = $${registrarPerformanceValues.length + 1}`;
+            registrarPerformanceValues.push(registrarOfficeId);
+        }
+
+        const registrarStaffOfficeClause = isSystemSuperAdmin(req.user) && registrarOfficeId === null
+            ? ""
+            : `AND u.office_id = $${registrarPerformanceValues.length + 1}`;
+
+        if (isSystemSuperAdmin(req.user)) {
+            if (registrarOfficeId !== null) {
+                registrarPerformanceValues.push(registrarOfficeId);
+            }
+        } else {
+            registrarPerformanceValues.push(req.user.office_id);
+        }
+
+        const activeCreatorPerformanceClause =
+            `${registrarPerformanceClause}${registrarOfficeClause}
+             AND creator.id IS NOT NULL
+             AND creator.is_active = TRUE
+             AND LOWER(REPLACE(REPLACE(COALESCE(r.status, ''), '_', ' '), '-', ' ')) NOT IN (
+                 'processing',
+                 'waiting for approval'
+             )`;
 
         const todayCasesDateCondition = `COALESCE(
             r.registration_date::date,
@@ -1328,15 +1453,50 @@ const getDashboardSummary = async (req, res) => {
             'processing',
             'waiting for approval'
         )`;
+        const overviewReportSummaryClause = overviewSummaryClause
+            ? `${overviewSummaryClause} AND ${todayCasesStatusCondition}`
+            : `WHERE ${todayCasesStatusCondition}`;
+        const overviewReportOverviewDateClause = `${overviewReportSummaryClause} AND ${overviewDateCondition}`;
+        const dashboardVisibleClause = clause
+            ? `${clause} AND ${todayCasesStatusCondition}`
+            : `WHERE ${todayCasesStatusCondition}`;
+        const reportSummaryClause = summaryClause
+            ? `${summaryClause} AND ${todayCasesStatusCondition}`
+            : `WHERE ${todayCasesStatusCondition}`;
+        const reportOverviewDateClause = `${reportSummaryClause} AND ${overviewDateCondition}`;
         const todayCasesClause = clause
             ? `${clause} AND ${todayCasesDateCondition} AND ${todayCasesStatusCondition}`
             : `WHERE ${todayCasesDateCondition} AND ${todayCasesStatusCondition}`;
+
+        const dashboardStatsValues = [...values];
+        let dashboardStatsClause = dashboardVisibleClause;
+        if (isSystemSuperAdmin(req.user) && registrarOfficeId !== null) {
+            dashboardStatsClause += ` AND r.office_id = $${dashboardStatsValues.length + 1}`;
+            dashboardStatsValues.push(registrarOfficeId);
+        }
+        const dashboardTodayCasesValues = [...values];
+        let dashboardTodayCasesClause = todayCasesClause;
+        if (isSystemSuperAdmin(req.user) && registrarOfficeId !== null) {
+            dashboardTodayCasesClause += ` AND r.office_id = $${dashboardTodayCasesValues.length + 1}`;
+            dashboardTodayCasesValues.push(registrarOfficeId);
+        }
+
+        // Branch Staff dashboard metrics are personal metrics. Keep the
+        // existing office scope, then restrict only this role's metrics to
+        // records created by the authenticated user.
+        const branchStaffMetricClause = branchStaff
+            ? `${clause} AND r.created_by = $${values.length + 1}`
+            : "WHERE FALSE";
+        const branchStaffMetricValues = branchStaff
+            ? [...values, req.user.id]
+            : [];
 
         // Recent Records is independent of the dashboard aggregates. Start it
         // now so it can run concurrently with the summary queries below.
         const recentTodayPromise = queryRecentTodayRecords(
             req.user,
-            req.query?.recentPage
+            req.query?.recentPage,
+            recentOfficeContextId
         );
 
         const normalizeStatusSql =
@@ -1388,9 +1548,9 @@ const getDashboardSummary = async (req, res) => {
                             WHERE ${normalizeStatusSql} = 'not ready'
                         )::int AS closed_cases
                     FROM records r
-                    ${clause}
+                    ${dashboardStatsClause}
                 `,
-                values
+                dashboardStatsValues
             ),
 
             pool.query(
@@ -1411,7 +1571,7 @@ const getDashboardSummary = async (req, res) => {
                             )
                         )::date AS period_start
                         FROM records r
-                        ${summaryClause}
+                        ${overviewReportSummaryClause}
                     )
                     SELECT
                         to_char(period_series.period_start, 'YYYY-MM-DD') AS day,
@@ -1422,7 +1582,7 @@ const getDashboardSummary = async (req, res) => {
                     GROUP BY period_series.period_start
                     ORDER BY period_series.period_start ASC
                 `,
-                summaryValues
+                overviewSummaryValues
             ),
 
             pool.query(
@@ -1434,12 +1594,12 @@ const getDashboardSummary = async (req, res) => {
                         ) AS label,
                         COUNT(*)::int AS count
                     FROM records r
-                    ${overviewDateClause}
+                    ${overviewReportOverviewDateClause}
                     GROUP BY 1
                     ORDER BY count DESC, label ASC
                     LIMIT 6
                 `,
-                summaryValues
+                overviewSummaryValues
             ),
 
             pool.query(
@@ -1453,7 +1613,7 @@ const getDashboardSummary = async (req, res) => {
                     FROM records r
                     LEFT JOIN branches b
                         ON b.id = r.branch_id
-                    ${clause}
+                    ${dashboardVisibleClause}
                     GROUP BY 1
                     ORDER BY count DESC, label ASC
                     LIMIT 5
@@ -1474,24 +1634,68 @@ const getDashboardSummary = async (req, res) => {
 
             pool.query(
                 `
-                    SELECT
-                        ${normalizedRegistrarSql("r")} AS label,
-                        COUNT(*)::int AS count
-                    FROM records r
-                    ${registrarPerformanceClause}
-                    GROUP BY 1
-                    ORDER BY count DESC, label ASC
+                    WITH record_performance AS (
+                        SELECT
+                            UPPER(${normalizedRegistrarSql("r")}) AS label,
+                            COALESCE(
+                                NULLIF(BTRIM(b.name), ''),
+                                NULLIF(BTRIM(creator_branch.name), ''),
+                                'Office-level'
+                            ) AS branch_name,
+                            COALESCE(NULLIF(BTRIM(o.name), ''), '') AS office_name,
+                            COUNT(*)::int AS count
+                        FROM records r
+                        LEFT JOIN branches b
+                            ON b.id = r.branch_id
+                        LEFT JOIN users creator
+                            ON creator.id = r.created_by
+                        LEFT JOIN branches creator_branch
+                            ON creator_branch.id = creator.branch_id
+                        LEFT JOIN offices o
+                            ON o.id = r.office_id
+                        ${activeCreatorPerformanceClause}
+                        GROUP BY 1, 2, 3
+                    ),
+                    staff_without_records AS (
+                        SELECT
+                            UPPER(BTRIM(u.name)) AS label,
+                            COALESCE(NULLIF(BTRIM(b.name), ''), 'Office-level') AS branch_name,
+                            COALESCE(NULLIF(BTRIM(o.name), ''), '') AS office_name,
+                            0::int AS count
+                        FROM users u
+                        LEFT JOIN branches b
+                            ON b.id = u.branch_id
+                        LEFT JOIN offices o
+                            ON o.id = u.office_id
+                        WHERE LOWER(REPLACE(REPLACE(COALESCE(u.role, ''), '_', ' '), '-', ' '))
+                            IN ('staff', 'branch staff')
+                          AND u.is_active = TRUE
+                          ${registrarStaffOfficeClause}
+                    )
+                    SELECT label, branch_name, office_name, count
+                    FROM record_performance
+                    UNION ALL
+                    SELECT s.label, s.branch_name, s.office_name, s.count
+                    FROM staff_without_records s
+                    WHERE NOT EXISTS (
+                        SELECT 1
+                        FROM record_performance r
+                        WHERE r.label = s.label
+                          AND r.branch_name = s.branch_name
+                          AND r.office_name = s.office_name
+                    )
+                    ORDER BY count DESC, label ASC, branch_name ASC
                 `,
-                summaryValues
+                registrarPerformanceValues
             ),
 
             pool.query(
                 `
                     SELECT COUNT(*)::int AS total
                     FROM records r
-                    ${todayCasesClause}
+                    ${dashboardTodayCasesClause}
                 `,
-                values
+                dashboardTodayCasesValues
             ),
 
             pool.query(
@@ -1515,7 +1719,7 @@ const getDashboardSummary = async (req, res) => {
                             )
                         )::int AS sms_failed_records
                     FROM records r
-                    ${overviewDateClause}
+                    ${reportOverviewDateClause}
                 `,
                 summaryValues
             ),
@@ -1563,9 +1767,9 @@ const getDashboardSummary = async (req, res) => {
                             )
                         )::int AS sms_failed
                     FROM records r
-                    ${branchStaff ? clause : "WHERE FALSE"}
+                    ${branchStaffMetricClause}
                 `,
-                branchStaff ? values : []
+                branchStaffMetricValues
             ),
 
             pool.query(
@@ -1577,11 +1781,11 @@ const getDashboardSummary = async (req, res) => {
                         ) AS month,
                         COUNT(*)::int AS count
                     FROM records r
-                    ${branchStaff ? clause : "WHERE FALSE"}
+                    ${branchStaffMetricClause}
                     GROUP BY date_trunc('month', r.registration_date)
                     ORDER BY date_trunc('month', r.registration_date) ASC
                 `,
-                branchStaff ? values : []
+                branchStaffMetricValues
             ),
 
             recentTodayPromise
@@ -1612,10 +1816,10 @@ const getDashboardSummary = async (req, res) => {
                         r.created_at::date
                     ) AS record_date
                     FROM records r
-                    ${summaryClause}
+                    ${overviewSummaryClause}
                 ) AS filtered
             `,
-            summaryValues
+            overviewSummaryValues
         );
 
         const currentCount =
@@ -1671,24 +1875,52 @@ const getDashboardSummary = async (req, res) => {
 
         let systemOverview = null;
 
-        if (role === "admin") {
+        if (isSystemSuperAdmin(req.user)) {
             const [
+                officesResult,
                 usersResult,
-                branchesResult
+                branchesResult,
+                awaitingApprovalResult
             ] = await Promise.all([
                 pool.query(
-                    "SELECT COUNT(*)::int AS count FROM users"
+                    `SELECT
+                        COUNT(*)::int AS total,
+                        COUNT(*) FILTER (WHERE UPPER(COALESCE(status, 'ACTIVE')) = 'ACTIVE')::int AS active,
+                        COUNT(*) FILTER (WHERE UPPER(COALESCE(status, 'ACTIVE')) <> 'ACTIVE')::int AS inactive
+                     FROM offices${Number.isInteger(officeContextId) ? " WHERE id = $1" : ""}`,
+                    Number.isInteger(officeContextId) ? [officeContextId] : []
                 ),
                 pool.query(
-                    "SELECT COUNT(*)::int AS count FROM branches"
+                    `SELECT COUNT(*)::int AS count FROM users${Number.isInteger(officeContextId) ? " WHERE office_id = $1" : ""}`,
+                    Number.isInteger(officeContextId) ? [officeContextId] : []
+                ),
+                pool.query(
+                    `SELECT COUNT(*)::int AS count FROM branches${Number.isInteger(officeContextId) ? " WHERE office_id = $1" : ""}`,
+                    Number.isInteger(officeContextId) ? [officeContextId] : []
+                ),
+                pool.query(
+                    `SELECT COUNT(*)::int AS count
+                     FROM records
+                     WHERE LOWER(REPLACE(REPLACE(COALESCE(status, ''), '_', ' '), '-', ' '))
+                           IN ('processing', 'waiting for approval', 'pending')
+                       ${Number.isInteger(officeContextId) ? "AND office_id = $1" : ""}`,
+                    Number.isInteger(officeContextId) ? [officeContextId] : []
                 )
             ]);
 
             systemOverview = {
+                offices:
+                    officesResult.rows[0]?.total || 0,
+                activeOffices:
+                    officesResult.rows[0]?.active || 0,
+                inactiveOffices:
+                    officesResult.rows[0]?.inactive || 0,
                 users:
                     usersResult.rows[0]?.count || 0,
                 branches:
                     branchesResult.rows[0]?.count || 0,
+                awaitingApproval:
+                    awaitingApprovalResult.rows[0]?.count || 0,
                 recordsThisMonth:
                     stats.new_cases || 0,
                 systemStatus: "Online"
@@ -1699,7 +1931,9 @@ const getDashboardSummary = async (req, res) => {
             success: true,
             summary: {
                 totalRecords:
-                    stats.total_records || 0,
+                    branchStaff
+                        ? Number(branchStaffMetricsResult.rows[0]?.total_records || 0)
+                        : (stats.total_records || 0),
                 readyRecords:
                     stats.ready_records || 0,
                 pendingRecords:
@@ -1738,6 +1972,7 @@ const getDashboardSummary = async (req, res) => {
                 branchBreakdown:
                     branchResult.rows || [],
                 systemOverview,
+                officeContext: req.dashboardOfficeContext || null,
                 overviewPeriod: period,
                 overviewRange: rangeKey,
                 overviewYear: branchStaff
@@ -1764,10 +1999,45 @@ const getDashboardSummary = async (req, res) => {
 // =========================================
 
 const getRecordRegistrars = async (req, res) => {
-    return res.json({
-        success: true,
-        registrars: DASHBOARD_REGISTRARS
-    });
+    try {
+        if (isSystemSuperAdmin(req.user)) {
+            return res.json({ success: true, registrars: DASHBOARD_REGISTRARS });
+        }
+
+        if (!Number.isInteger(Number(req.user?.office_id))) {
+            return res.json({ success: true, registrars: [] });
+        }
+
+        const result = await pool.query(
+            `
+                SELECT label
+                FROM (
+                    SELECT DISTINCT UPPER(${normalizedRegistrarSql("r")}) AS label
+                    FROM records r
+                    WHERE r.office_id = $1
+                      AND NULLIF(BTRIM(${normalizedRegistrarSql("r")}), '') IS NOT NULL
+                    UNION
+                    SELECT DISTINCT UPPER(BTRIM(u.name)) AS label
+                    FROM users u
+                    WHERE u.office_id = $1
+                      AND u.is_active = TRUE
+                      AND LOWER(REPLACE(REPLACE(COALESCE(u.role, ''), '_', ' '), '-', ' '))
+                          IN ('staff', 'branch staff')
+                      AND NULLIF(BTRIM(u.name), '') IS NOT NULL
+                ) scoped_registrars
+                ORDER BY label ASC
+            `,
+            [Number(req.user.office_id)]
+        );
+
+        return res.json({
+            success: true,
+            registrars: result.rows.map(row => row.label).filter(Boolean)
+        });
+    } catch (error) {
+        console.error("GET RECORD REGISTRARS ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to load registrars." });
+    }
 };
 
 const getSmsStatus = async (req, res) => {
@@ -1785,9 +2055,13 @@ const getSmsStatus = async (req, res) => {
                        sms_last_attempt_at, sms_last_attempt_by, sms_sent, sms_date
                 FROM records
                 WHERE NULLIF(BTRIM(COALESCE(sms_error, '')), '') IS NOT NULL
+                                    AND LOWER(COALESCE(sms_status, '')) <> 'sent'
+                                    AND LOWER(COALESCE(sms_sent::text, '')) NOT IN ('true', 't', 'yes', 'y', '1', 'sent', 'success')
+                  AND ($1::int IS NULL OR office_id = $1)
                 ORDER BY updated_at DESC NULLS LAST, id DESC
                 LIMIT 1
-            `
+            `,
+            [isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         return res.json({
@@ -1814,7 +2088,8 @@ const searchRecords = async (req, res) => {
             category,
             registrar,
             fromDate,
-            toDate
+            toDate,
+            office_id: requestedOfficeId
         } = req.query;
 
         let query = `
@@ -1825,12 +2100,32 @@ const searchRecords = async (req, res) => {
         const values = [];
         let parameter = 1;
 
-        if (isBranchStaff(req.user)) {
-            query += `
-                AND r.branch_id = $${parameter}
-            `;
+        if (isSystemSuperAdmin(req.user) && requestedOfficeId) {
+            const officeId = Number.parseInt(String(requestedOfficeId), 10);
+            if (!Number.isInteger(officeId) || officeId <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Select a valid office."
+                });
+            }
 
-            values.push(req.user.branch_id);
+            const officeResult = await pool.query(
+                "SELECT id FROM offices WHERE id = $1 LIMIT 1",
+                [officeId]
+            );
+            if (!officeResult.rowCount) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Office not found."
+                });
+            }
+
+            query += ` AND r.office_id = $${parameter}`;
+            values.push(officeId);
+            parameter++;
+        } else if (!isSystemSuperAdmin(req.user)) {
+            query += ` AND r.office_id = $${parameter}`;
+            values.push(req.user.office_id);
             parameter++;
         }
 
@@ -2000,42 +2295,15 @@ const exportRecords = async (req, res) => {
     try {
         const {
             name, dateOfBirth, status, category, registrar, fromDate, toDate,
-            branch
+            branch, office_id: requestedOfficeId
         } = req.query;
         const role = normalizeRole(req.user?.role);
-        const isAdmin = role === "admin";
-        const isRestrictedUser = role !== "admin";
-
-        if (!isAdmin && !req.user?.branch_id) {
-            return res.status(403).json({
-                success: false,
-                message: "You have not been assigned to a branch. Please contact an administrator."
-            });
-        }
+        const isAdmin = isSystemSuperAdmin(req.user);
+        const isRestrictedUser = !isAdmin && !isOfficeAdmin(req.user);
 
         let branchId = null;
-        if (isRestrictedUser) {
-            if (branch && branch !== "all" && String(branch) !== String(req.user.branch_id)) {
-                await recordActivity({
-                    request: req,
-                    userId: req.user.id,
-                    name: req.user.name,
-                    email: req.user.email,
-                    role,
-                    activityType: ACTIVITY_TYPES.UNAUTHORIZED_EXPORT_ATTEMPT,
-                    branchId: req.user.branch_id,
-                    details: "Attempted export from an unauthorized branch.",
-                    success: false
-                });
-                return res.status(403).json({ success: false, message: "You can only export records from your assigned branch." });
-            }
-            branchId = req.user.branch_id;
-        } else if (isAdmin && branch && branch !== "all") {
-            branchId = Number.parseInt(branch, 10);
-            if (!Number.isInteger(branchId) || branchId < 1) {
-                return res.status(400).json({ success: false, message: "Invalid branch filter." });
-            }
-        }
+        // Branch filters are legacy-only. Office scope below is the access
+        // boundary for every office role.
 
         for (const textValue of [name, category, registrar, status]) {
             if (textValue !== undefined && boundedText(textValue, 150) === null) {
@@ -2060,7 +2328,19 @@ const exportRecords = async (req, res) => {
             parameter += 1;
         };
 
-        if (branchId) add("r.branch_id = $1", branchId);
+        if (isSystemSuperAdmin(req.user) && requestedOfficeId) {
+            const officeId = Number.parseInt(String(requestedOfficeId), 10);
+            if (!Number.isInteger(officeId) || officeId <= 0) {
+                return res.status(400).json({ success: false, message: "Select a valid office." });
+            }
+            const officeResult = await pool.query("SELECT id FROM offices WHERE id = $1 LIMIT 1", [officeId]);
+            if (!officeResult.rowCount) {
+                return res.status(404).json({ success: false, message: "Office not found." });
+            }
+            add("r.office_id = $1", officeId);
+        } else if (!isSystemSuperAdmin(req.user)) {
+            add("r.office_id = $1", req.user.office_id);
+        }
         if (name) add("r.name ILIKE $1", `%${name}%`);
         if (dateOfBirth) {
             const normalizedCategory = String(category || "").toLowerCase();
@@ -2138,9 +2418,10 @@ const getRecordById = async (req, res) => {
                 `
                     ${recordSelectSql()}
                     WHERE r.id = $1
+                      AND ($2::int IS NULL OR r.office_id = $2)
                     LIMIT 1
                 `,
-                [id]
+                [id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
             );
 
         const record =
@@ -2242,9 +2523,10 @@ const updateRecord = async (req, res) => {
                     SELECT *
                     FROM records
                     WHERE id = $1
+                      AND ($2::int IS NULL OR office_id = $2)
                     LIMIT 1
                 `,
-                [id]
+                [id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
             );
 
         const existingRecord =
@@ -2344,6 +2626,7 @@ const updateRecord = async (req, res) => {
                         notes = $9,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = $10
+                      AND ($11::int IS NULL OR office_id = $11)
                     RETURNING *
                 `,
                 [
@@ -2356,7 +2639,8 @@ const updateRecord = async (req, res) => {
                     nextStatus,
                     nextRegistrar,
                     notes || null,
-                    id
+                    id,
+                    isSystemSuperAdmin(req.user) ? null : req.user.office_id
                 ]
             );
 
@@ -2495,7 +2779,7 @@ const updateRecord = async (req, res) => {
                         result.rows[0].status,
                     notes:
                         result.rows[0].notes
-                });
+                }, result.rows[0].office_id);
 
                 await saveSmsWorkflowState(
                     result.rows[0].id,
@@ -2605,9 +2889,10 @@ const updateSmsDetails = async (req, res) => {
                     END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $3
+                  AND ($4::int IS NULL OR office_id = $4)
                 RETURNING *
             `,
-            [clearSms, clearNote, id]
+            [clearSms, clearNote, id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         if (!result.rows.length) {
@@ -2817,8 +3102,8 @@ const approveRecord = async (req, res) => {
         const { status } = req.body;
 
         const existingResult = await pool.query(
-            "SELECT id, status FROM records WHERE id = $1 LIMIT 1",
-            [id]
+            "SELECT id, status FROM records WHERE id = $1 AND ($2::int IS NULL OR office_id = $2) LIMIT 1",
+            [id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         if (!existingResult.rows.length) {
@@ -2861,11 +3146,13 @@ const approveRecord = async (req, res) => {
                         status = $1,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = $2
+                      AND ($3::int IS NULL OR office_id = $3)
                     RETURNING *
                 `,
                 [
                     newStatus,
-                    id
+                    id,
+                    isSystemSuperAdmin(req.user) ? null : req.user.office_id
                 ]
             );
 
@@ -2935,7 +3222,7 @@ const approveRecord = async (req, res) => {
                         result.rows[0].status,
                     notes:
                         result.rows[0].notes
-                });
+                }, result.rows[0].office_id);
 
                 await saveSmsWorkflowState(
                     result.rows[0].id,
@@ -3008,16 +3295,17 @@ const approveProcessingRecord = async (req, res) => {
                     status = 'Pending',
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $1
+                  AND ($2::int IS NULL OR office_id = $2)
                   AND LOWER(REPLACE(REPLACE(COALESCE(status, ''), '_', ' '), '-', ' ')) = 'processing'
                 RETURNING *
             `,
-            [req.params.id]
+            [req.params.id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         if (!result.rows.length) {
             const existing = await pool.query(
-                "SELECT id, status FROM records WHERE id = $1 LIMIT 1",
-                [req.params.id]
+                "SELECT id, status FROM records WHERE id = $1 AND ($2::int IS NULL OR office_id = $2) LIMIT 1",
+                [req.params.id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
             );
 
             if (!existing.rows.length) {
@@ -3086,9 +3374,10 @@ const deleteRecord = async (req, res) => {
                 `
                     DELETE FROM records
                     WHERE id = $1
+                      AND ($2::int IS NULL OR office_id = $2)
                     RETURNING *
                 `,
-                [id]
+                [id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
             );
 
         if (!result.rows.length) {
@@ -3203,12 +3492,14 @@ const sendSms = async (req, res) => {
                     sms_last_response,
                     sms_last_attempt_at,
                     sms_last_attempt_by,
-                    sms_date
+                    sms_date,
+                    office_id
                 FROM records
                 WHERE id = $1
+                  AND ($2::int IS NULL OR office_id = $2)
                 LIMIT 1
             `,
-            [id]
+            [id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         const record = recordResult.rows[0];
@@ -3274,12 +3565,13 @@ const sendSms = async (req, res) => {
                     sms_last_attempt_by = $2,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $1
+                  AND ($3::int IS NULL OR office_id = $3)
                   AND status = 'Ready'
                                     AND LOWER(COALESCE(sms_sent, 'false')) NOT IN ('true', 't', 'yes', 'y', '1', 'sent', 'success')
                                     AND LOWER(COALESCE(sms_status, '')) NOT IN ('sending', 'sent')
                 RETURNING id, updated_at
             `,
-            [id, req.user?.id || null]
+            [id, req.user?.id || null, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
         );
 
         if (!claimResult.rowCount) {
@@ -3305,7 +3597,7 @@ const sendSms = async (req, res) => {
                 status: record.status,
                 notes: record.notes,
                 message
-            });
+            }, record.office_id);
 
             const smsResult = await saveSmsWorkflowState(
                 record.id,
@@ -3400,8 +3692,9 @@ const sendSms = async (req, res) => {
                            sms_last_attempt_by, sms_date
                     FROM records
                     WHERE id = $1
+                      AND ($2::int IS NULL OR office_id = $2)
                 `,
-                [id]
+                [id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
             );
 
             const updatedRecord = updatedResult.rows[0] || {};
@@ -3422,6 +3715,77 @@ const sendSms = async (req, res) => {
             });
         } catch (workflowError) {
             const workflowResponse = workflowError.smsResult?.rawResponse || workflowError.response || null;
+
+            if (workflowError.outcomeUnknown) {
+                await pool.query(
+                    `
+                        UPDATE records
+                        SET sms_status = 'SENDING',
+                            sms_error = NULL,
+                            sms_error_at = NULL,
+                            sms_last_response = $1::jsonb,
+                            sms_last_attempt_at = CURRENT_TIMESTAMP,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $2
+                          AND ($3::int IS NULL OR office_id = $3)
+                                                    AND LOWER(COALESCE(sms_status, '')) = 'sending'
+                                                    AND LOWER(COALESCE(sms_sent::text, '')) NOT IN ('true', 't', 'yes', 'y', '1', 'sent', 'success')
+                    `,
+                    [JSON.stringify(workflowResponse || {}), id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
+                );
+
+                const currentResult = await pool.query(
+                    `
+                        SELECT id, phone_number, sms_sent, sms_status, sms_error,
+                               sms_error_at, sms_last_response, sms_last_attempt_at,
+                               sms_last_attempt_by, sms_date
+                        FROM records
+                        WHERE id = $1
+                          AND ($2::int IS NULL OR office_id = $2)
+                    `,
+                    [id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
+                );
+                const currentRecord = currentResult.rows[0] || {};
+                const currentStatus = String(currentRecord.sms_status || "").trim().toLowerCase();
+                const currentSmsSent = ["true", "t", "yes", "y", "1", "sent", "success"].includes(
+                    String(currentRecord.sms_sent || "").trim().toLowerCase()
+                );
+
+                if (currentSmsSent || currentStatus === "sent") {
+                    return res.json({
+                        success: true,
+                        status: "SENT",
+                        message: "SMS sent successfully.",
+                        record: currentRecord
+                    });
+                }
+
+                if (currentStatus === "error" || currentRecord.sms_error) {
+                    return res.status(502).json({
+                        success: false,
+                        status: "ERROR",
+                        error: currentRecord.sms_error || "SMS delivery failed.",
+                        message: currentRecord.sms_error || "SMS delivery failed.",
+                        record: currentRecord
+                    });
+                }
+
+                return res.status(202).json({
+                    success: true,
+                    accepted: true,
+                    status: "SENDING",
+                    message: "The SMS request may still be processing. Its final database status will be checked.",
+                    record: {
+                        id: record.id,
+                        sms_sent: "false",
+                        sms_status: "SENDING",
+                        sms_error: null,
+                        sms_date: record.sms_date
+                    }
+                });
+            }
+
+            const smsError = String(workflowError.message || "SMS service rejected the request.").trim();
             await pool.query(
                 `
                     UPDATE records
@@ -3434,9 +3798,50 @@ const sendSms = async (req, res) => {
                         sms_last_attempt_by = $3,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = $4
+                      AND ($5::int IS NULL OR office_id = $5)
+                                            AND LOWER(COALESCE(sms_status, '')) = 'sending'
+                                            AND LOWER(COALESCE(sms_sent::text, '')) NOT IN ('true', 't', 'yes', 'y', '1', 'sent', 'success')
                 `,
-                [smsError, JSON.stringify(workflowResponse || {}), req.user?.id || null, id]
+                [smsError, JSON.stringify(workflowResponse || {}), req.user?.id || null, id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
             );
+
+            const currentResult = await pool.query(
+                `
+                    SELECT id, phone_number, sms_sent, sms_status, sms_error,
+                           sms_error_at, sms_last_response, sms_last_attempt_at,
+                           sms_last_attempt_by, sms_date
+                    FROM records
+                    WHERE id = $1
+                      AND ($2::int IS NULL OR office_id = $2)
+                `,
+                [id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
+            );
+            const currentRecord = currentResult.rows[0] || {};
+            const currentStatus = String(currentRecord.sms_status || "").trim().toLowerCase();
+            const currentSmsSent = ["true", "t", "yes", "y", "1", "sent", "success"].includes(
+                String(currentRecord.sms_sent || "").trim().toLowerCase()
+            );
+
+            if (currentSmsSent || currentStatus === "sent") {
+                return res.json({
+                    success: true,
+                    status: "SENT",
+                    message: "SMS sent successfully.",
+                    record: currentRecord
+                });
+            }
+
+            if (currentStatus !== "error") {
+                return res.status(202).json({
+                    success: true,
+                    accepted: true,
+                    status: "SENDING",
+                    message: "SMS is still processing; the final database status will be checked.",
+                    record: currentRecord
+                });
+            }
+
+            const confirmedError = currentRecord.sms_error || smsError;
 
             await recordActivity({
                 request: req,
@@ -3449,19 +3854,19 @@ const sendSms = async (req, res) => {
                 branchId: record.branch_id,
                 branchName: req.user?.branch,
                 success: false,
-                details: `SMS status: ERROR. Name: ${record.name || "-"}. Phone: ${record.phone_number || phoneNumber}. ${smsError}`,
-                newValue: smsError,
+                details: `SMS status: ERROR. Name: ${record.name || "-"}. Phone: ${record.phone_number || phoneNumber}. ${confirmedError}`,
+                newValue: confirmedError,
                 recordSnapshot: makeRecordSnapshot({
                     ...record,
                     sms_status: "ERROR",
-                    sms_error: smsError,
+                    sms_error: confirmedError,
                     sms_last_response: workflowResponse
                 })
             });
 
             await notifySmsAdmins(req, record, {
                 success: false,
-                errorMessage: smsError,
+                errorMessage: confirmedError,
                 smsStatus: "Error",
                 eventId: `sms:${record.id}:${claimResult.rows[0]?.updated_at || "unknown"}`
             });
@@ -3469,13 +3874,9 @@ const sendSms = async (req, res) => {
             return res.status(502).json({
                 success: false,
                 status: "ERROR",
-                error: smsError,
-                message: smsError,
-                record: {
-                    id: record.id,
-                    sms_status: "ERROR",
-                    sms_error: smsError
-                }
+                error: confirmedError,
+                message: confirmedError,
+                record: currentRecord
             });
         }
     } catch (error) {

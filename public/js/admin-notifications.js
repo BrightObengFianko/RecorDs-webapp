@@ -3,7 +3,9 @@
     const user = (() => {
         try { return JSON.parse(localStorage.getItem("user") || "null") || {}; } catch { return {}; }
     })();
-    const isAdmin = String(user.role || "").trim().toLowerCase().replace(/[\s-]+/g, "_") === "admin";
+    const normalizedRole = String(user.role || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+    const isSystemSuperAdmin = normalizedRole === "system_super_admin";
+    const notificationOfficeField = document.getElementById("notificationOfficeField");
     const API = "/api/notifications";
     const TYPE_ICONS = {
         RECORD_CREATED: "🔵", RECORD_UPDATED: "🔵", RECORD_APPROVED: "🟢", RECORD_DELETED: "🗑️", RECORD_RESTORED: "🟢",
@@ -25,7 +27,9 @@
     let urgentNotificationsInitialized = false;
     let notificationAudioContext = null;
 
-    if (!token || !isAdmin) return;
+    // Notification visibility is enforced by the authenticated API. The bell
+    // must still be available to every signed-in application role.
+    if (!token || !normalizedRole || normalizedRole === "branch_staff") return;
 
     function escapeHtml(value) {
         return String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
@@ -126,9 +130,10 @@
     function notificationMarkup(item) {
         const priority = String(item.priority || "INFO").toLowerCase();
         const grouped = Array.isArray(item.metadata?.record_ids) && item.metadata.record_ids.length > 1;
+        const scope = [item.office_name, item.branch_name].filter(Boolean).join(" / ");
         return `<button type="button" class="admin-notification-item ${item.is_read ? "" : "is-unread"}" data-notification-id="${escapeHtml(item.id)}">
             <span class="admin-notification-item-icon priority-${priority}">${TYPE_ICONS[item.type] || "🔔"}</span>
-            <span class="admin-notification-item-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.message)}</span>${grouped ? "<small>View affected records</small>" : ""}<small>${escapeHtml(timeAgo(item.created_at))}</small></span>
+            <span class="admin-notification-item-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.message)}</span>${scope ? `<small>${escapeHtml(scope)}</small>` : ""}${grouped ? "<small>View affected records</small>" : ""}<small>${escapeHtml(timeAgo(item.created_at))}</small></span>
         </button>`;
     }
 
@@ -148,10 +153,11 @@
         const priority = String(item.priority || "INFO").toLowerCase();
         const grouped = Array.isArray(item.metadata?.record_ids) && item.metadata.record_ids.length > 1;
         const label = `${item.title}. ${item.message}`;
+        const scope = [item.office_name, item.branch_name].filter(Boolean).join(" / ");
         return `<div class="admin-notification-row ${item.is_read ? "" : "is-unread"}">
             <button type="button" class="admin-notification-item ${item.is_read ? "" : "is-unread"}" data-notification-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(label)}">
                 <span class="admin-notification-item-icon priority-${priority}">${notificationIcon(item.type)}</span>
-                <span class="admin-notification-item-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.message)}</span>${grouped ? "<small>View affected records</small>" : ""}<small>${escapeHtml(timeAgo(item.created_at))}</small></span>
+                <span class="admin-notification-item-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.message)}</span>${scope ? `<small>${escapeHtml(scope)}</small>` : ""}${grouped ? "<small>View affected records</small>" : ""}<small>${escapeHtml(timeAgo(item.created_at))}</small></span>
             </button>
             <button type="button" class="admin-notification-action" data-notification-action-id="${escapeHtml(item.id)}">${escapeHtml(notificationAction(item))}</button>
         </div>`;
@@ -324,8 +330,10 @@
     }
 
     function createBell() {
-        const target = document.querySelector(".topbar-right, .reports-topbar, .page-top-right, .account-heading, .pending-sync-heading, .page-heading, .settings-main .hero");
-        if (!target || document.getElementById("adminNotificationButton")) return;
+        const target = document.querySelector(".topbar-right, .reports-topbar, .page-top-right, .account-heading, .pending-sync-heading, .page-heading, .users-page-heading, .settings-main .hero");
+        if (!target) return;
+        const existingNotificationButton = target.querySelector(".admin-notification-button, .notification-button, [data-notification-trigger]");
+        if (document.getElementById("adminNotificationButton") || existingNotificationButton) return;
         button = document.createElement("button");
         button.id = "adminNotificationButton";
         button.className = "admin-notification-button";
@@ -334,7 +342,9 @@
         button.setAttribute("aria-haspopup", "dialog");
         button.setAttribute("aria-expanded", "false");
         button.setAttribute("aria-controls", "adminNotificationPanel");
+        button.innerHTML = `<svg class="admin-notification-svg admin-notification-bell" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 17.5H8.5"></path><path d="M9 17.5a3 3 0 0 0 6 0"></path><path d="M6.5 10a5.5 5.5 0 0 1 11 0c0 4 1.5 5 1.5 5H5s1.5-1 1.5-5"></path></g></svg><span class="admin-notification-badge" hidden></span>`;
         button.innerHTML = "🔔<span class=\"admin-notification-badge\" hidden></span>";
+        button.innerHTML = `<svg class="admin-notification-svg admin-notification-bell" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 17.5H8.5"></path><path d="M9 17.5a3 3 0 0 0 6 0"></path><path d="M6.5 10a5.5 5.5 0 0 1 11 0c0 4 1.5 5 1.5 5H5s1.5-1 1.5-5"></path></g></svg><span class="admin-notification-badge" hidden></span>`;
         const smsBalance = target.querySelector(".dashboard-sms-balance, .search-sms-balance");
         const logout = target.querySelector("#logoutButton");
         if (smsBalance) {
@@ -356,7 +366,10 @@
         panelUnreadIndicator.hidden = true;
         panel.querySelector("header > strong").after(panelUnreadIndicator);
         document.body.appendChild(panel);
-        button.addEventListener("click", async () => {
+        button.addEventListener("click", async event => {
+            // Keep the bell independent from header-level click handlers.
+            event.preventDefault();
+            event.stopPropagation();
             panel.hidden = !panel.hidden;
             button.setAttribute("aria-expanded", String(!panel.hidden));
             if (!panel.hidden) { positionPanel(); await loadDropdown(); }
@@ -391,9 +404,11 @@
         const dateFromInput = document.getElementById("notificationDateFrom");
         const dateToInput = document.getElementById("notificationDateTo");
         const sortInput = document.getElementById("notificationSort");
+        const officeInput = document.getElementById("notificationOfficeFilter");
         if (reportFilter === "unread" || reportFilter === "read") params.set("readStatus", reportFilter);
         if (searchInput?.value.trim()) params.set("search", searchInput.value.trim());
         if (typeInput?.value) params.set("type", typeInput.value);
+        if (isSystemSuperAdmin && officeInput?.value) params.set("office_id", officeInput.value);
         if (sortInput?.value) params.set("sort", sortInput.value);
         if (dateInput?.value === "custom") {
             if (dateFromInput?.value) params.set("dateFrom", dateFromInput.value);
@@ -441,11 +456,12 @@
         const dateFromInput = document.getElementById("notificationDateFrom");
         const dateToInput = document.getElementById("notificationDateTo");
         const sortInput = document.getElementById("notificationSort");
+        const officeInput = document.getElementById("notificationOfficeFilter");
         searchInput?.addEventListener("input", () => {
             window.clearTimeout(notificationSearchTimer);
             notificationSearchTimer = window.setTimeout(() => { reportPage = 1; loadReportNotifications(); }, 350);
         });
-        [typeInput, dateInput, dateFromInput, dateToInput, sortInput].forEach(input => input?.addEventListener("change", () => {
+        [typeInput, officeInput, dateInput, dateFromInput, dateToInput, sortInput].forEach(input => input?.addEventListener("change", () => {
             if (input === dateInput) {
                 const custom = dateInput.value === "custom";
                 dateFromInput.hidden = !custom;
@@ -458,6 +474,7 @@
             reportFilter = "";
             if (searchInput) searchInput.value = "";
             if (typeInput) typeInput.value = "";
+            if (officeInput) officeInput.value = "";
             if (dateInput) dateInput.value = "";
             if (dateFromInput) { dateFromInput.value = ""; dateFromInput.hidden = true; }
             if (dateToInput) { dateToInput.value = ""; dateToInput.hidden = true; }
@@ -469,6 +486,16 @@
         document.getElementById("notificationReportPrevious")?.addEventListener("click", () => { if (reportPage > 1) { reportPage--; loadReportNotifications(); } });
         document.getElementById("notificationReportNext")?.addEventListener("click", () => { reportPage++; loadReportNotifications(); });
         document.getElementById("notificationReportClearAll")?.addEventListener("click", clearAllNotifications);
+        if (isSystemSuperAdmin && officeInput) {
+            fetch("/api/admin/offices", { headers: { Authorization: `Bearer ${token}` } })
+                .then(response => response.ok ? response.json() : null)
+                .then(data => {
+                    if (!data) return;
+                    if (notificationOfficeField) notificationOfficeField.hidden = false;
+                    officeInput.innerHTML = '<option value="">All offices</option>' + (data.offices || []).map(office => `<option value="${escapeHtml(office.id)}">${escapeHtml(office.name)}</option>`).join("");
+                })
+                .catch(() => {});
+        }
         if (window.location.hash === "#notifications") loadReportNotifications();
     }
 
