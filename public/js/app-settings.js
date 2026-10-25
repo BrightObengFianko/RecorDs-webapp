@@ -640,6 +640,8 @@
     function showAuthLoadingState() {
         injectLoadingStyles();
 
+        document.getElementById("record-auth-boot-loader")?.remove();
+
         if (document.getElementById("record-auth-loader")) {
             return;
         }
@@ -658,6 +660,7 @@
         if (loader) {
             loader.remove();
         }
+        document.getElementById("record-auth-boot-loader")?.remove();
 
         const bootStyle = document.getElementById("record-auth-boot-style");
         if (bootStyle) {
