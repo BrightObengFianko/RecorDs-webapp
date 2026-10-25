@@ -514,6 +514,38 @@ function recordSelectSql() {
     `;
 }
 
+// Search results do not need the full SMS response/history payload. Keeping
+// this projection small makes large result sets faster without changing the
+// full record-details endpoint.
+function recordSearchSelectSql() {
+    return `
+        SELECT
+            r.id,
+            r.category,
+            r.name,
+            r.date_of_birth,
+            r.date_of_death,
+            r.registration_date,
+            r.phone_number,
+            r.registrar,
+            r.status,
+            r.sms_sent,
+            r.sms_date,
+            r.sms_status,
+            r.sms_error,
+            r.notes,
+            r.branch_id,
+            r.office_id,
+            r.created_by,
+            r.created_at,
+            r.updated_at,
+            COALESCE(b.name, '') AS branch_name
+        FROM records r
+        LEFT JOIN branches b
+            ON b.id = r.branch_id
+    `;
+}
+
 function dashboardBranchClause(user, officeContextId = null) {
     if (isSystemSuperAdmin(user) && Number.isInteger(officeContextId)) {
         return {
@@ -2093,7 +2125,7 @@ const searchRecords = async (req, res) => {
         } = req.query;
 
         let query = `
-            ${recordSelectSql()}
+            ${recordSearchSelectSql()}
             WHERE LOWER(REPLACE(REPLACE(COALESCE(r.status, ''), '_', ' '), '-', ' ')) <> 'processing'
         `;
 
