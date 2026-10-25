@@ -8,6 +8,7 @@
     "start": "node server.js",
     "bootstrap:admin": "node scripts/bootstrap-admin.js",
     "create-admin": "node scripts/bootstrap-admin.js",
+    "bootstrap:system-super-admin": "node scripts/promote-system-super-admin.js",
     "sync:users": "node scripts/sync-users-to-online.js",
     "test": "node scripts/test-office-isolation.js && node scripts/test-role-authorization.js && node scripts/test-staff-quota.js && node scripts/test-office-sms.js",
     "migrate": "node migrateGoogleSheets.js",
