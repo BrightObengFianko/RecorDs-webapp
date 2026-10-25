@@ -3419,6 +3419,10 @@ const deleteRecord = async (req, res) => {
             }
         });
 
+        // Keep the aggregated approval notification in sync after deleting a
+        // case that may have been waiting for approval.
+        await refreshPendingApprovalNotifications();
+
         return res.json({
             success: true,
             message:
