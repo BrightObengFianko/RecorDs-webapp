@@ -569,7 +569,7 @@
                 border-radius: 28px;
                 background: rgba(255, 255, 255, 0.96);
                 box-shadow: 0 18px 44px rgba(5, 10, 32, 0.24);
-                animation: record-brand-transition 260ms ease-out both;
+                animation: record-brand-transition 140ms ease-out both;
             }
 
             .record-page-logo-transition .record-auth-loader-box::before {
@@ -578,7 +578,7 @@
                 inset: -13px;
                 border: 1px solid rgba(91, 77, 245, 0.28);
                 border-radius: 38px;
-                animation: record-brand-ring 300ms ease-out both;
+                animation: record-brand-ring 160ms ease-out both;
             }
 
             .record-page-logo-transition .record-auth-loader-logo {
@@ -634,7 +634,7 @@
         const removeTransition = () => transition.remove();
         transition.addEventListener("animationend", removeTransition, { once: true });
         // Keep the effect non-blocking even if animation events are throttled.
-        window.setTimeout(removeTransition, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 320);
+        window.setTimeout(removeTransition, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 60 : 160);
     }
 
     function showAuthLoadingState() {
