@@ -163,7 +163,7 @@ a {
     display: flex;
     flex-direction: column;
 
-    gap: 4px;
+    gap: 8px;
 }
 
 .menu a,
@@ -177,13 +177,15 @@ a {
 
     text-decoration: none;
 
-    padding: 10px 12px;
+    min-height: 48px;
+    padding: 13px 14px;
 
     border-radius: 8px;
 
-    margin-bottom: 3px;
+    margin-bottom: 0;
 
     font-size: 14px;
+    line-height: 1.35;
 
     transition: 0.2s;
 }
