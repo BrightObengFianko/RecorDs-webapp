@@ -623,6 +623,16 @@ async function queryRecentTodayRecords(user, requestedPage, officeContextId = nu
         values
     } = dashboardBranchClause(user, officeContextId);
 
+    // Branch Staff Recent Records are personal and limited to today's cases.
+    // Keep the existing office scope for every other role unchanged.
+    const recentValues = [...values];
+    const recentClause = isBranchStaff(user)
+        ? `${clause || "WHERE TRUE"} AND r.created_by = $${recentValues.length + 1}`
+        : clause;
+    if (isBranchStaff(user)) {
+        recentValues.push(user?.id || null);
+    }
+
     // registration_date is a PostgreSQL TIMESTAMP without time zone. The
     // application stores it as Ghana-local time, so compare against the
     // current Accra calendar day rather than the database server's timezone.
@@ -653,15 +663,15 @@ async function queryRecentTodayRecords(user, requestedPage, officeContextId = nu
         };
     }
 
-    const dateParameter = values.length + 1;
-    const limitParameter = values.length + 2;
-    const offsetParameter = values.length + 3;
+    const dateParameter = recentValues.length + 1;
+    const limitParameter = recentValues.length + 2;
+    const offsetParameter = recentValues.length + 3;
     const offset = (page - 1) * RECENT_RECORDS_PAGE_SIZE;
-    const selectedDateClause = clause
-        ? `${clause} AND COALESCE(r.registration_date, r.created_at) >= $${dateParameter}::date AND COALESCE(r.registration_date, r.created_at) < ($${dateParameter}::date + INTERVAL '1 day')`
+    const selectedDateClause = recentClause
+        ? `${recentClause} AND COALESCE(r.registration_date, r.created_at) >= $${dateParameter}::date AND COALESCE(r.registration_date, r.created_at) < ($${dateParameter}::date + INTERVAL '1 day')`
         : `WHERE COALESCE(r.registration_date, r.created_at) >= $${dateParameter}::date AND COALESCE(r.registration_date, r.created_at) < ($${dateParameter}::date + INTERVAL '1 day')`;
     const dateValues = [
-        ...values,
+        ...recentValues,
         selectedDateText
     ];
     const statusClause = isBranchStaff(user)
