@@ -2114,6 +2114,7 @@ const searchRecords = async (req, res) => {
     try {
         const {
             name,
+            phone,
             dateOfBirth,
             date_of_birth,
             status,
@@ -2174,13 +2175,31 @@ const searchRecords = async (req, res) => {
             dateOfBirth ||
             date_of_birth;
 
-        for (const textValue of [name, category, registrar, status]) {
+        for (const textValue of [name, phone, category, registrar, status]) {
             if (textValue !== undefined && boundedText(textValue, 150) === null) {
                 return res.status(400).json({
                     success: false,
                     message: "A search filter is too long."
                 });
             }
+        }
+
+        const normalizedPhone = String(phone || "").replace(/\D/g, "");
+        if (phone && !normalizedPhone) {
+            return res.status(400).json({
+                success: false,
+                message: "Phone search must contain at least one digit."
+            });
+        }
+
+        if (phone) {
+            query += `
+                AND regexp_replace(COALESCE(r.phone_number::text, ''), '[^0-9]', '', 'g')
+                    LIKE '%' || regexp_replace($${parameter}, '[^0-9]', '', 'g') || '%'
+            `;
+
+            values.push(normalizedPhone);
+            parameter++;
         }
 
         for (const dateValue of [dob, fromDate, toDate]) {

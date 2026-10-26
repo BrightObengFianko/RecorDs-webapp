@@ -62,18 +62,23 @@
 
             <section class="reports-content">
                 <div class="reports-card reports-filters">
-                    <label>From<input id="fromDateFilter" type="date"></label>
-                    <label>To<input id="toDateFilter" type="date"></label>
-                    <label>User<input id="userFilter" type="search" placeholder="Name or email"></label>
-                    <label>Search logs<input id="searchFilter" type="search" placeholder="Activity, case, details"></label>
-                    <label id="officeFilterField" hidden>Office<select id="officeFilter"><option value="">All offices</option></select></label>
-                    <label>Branch<select id="branchFilter"><option value="">All branches</option></select></label>
-                    <label>Role<select id="roleFilter"><option value="">All roles</option><option value="admin">Admin</option><option value="staff">Staff</option><option value="branch_staff">Branch Staff</option></select></label>
-                    <label>Activity<select id="activityFilter"><option value="">All activity</option><option value="LOGIN_SUCCESS">Successful login</option><option value="LOGOUT_SUCCESS">Successful logout</option><option value="LOGIN_FAILURE">Failed login</option><option value="RECORD_CREATED">Record created</option><option value="RECORD_EDITED">Record edited</option><option value="RECORD_APPROVED">Record approved</option><option value="RECORD_DELETED">Record deleted</option><option value="RECORD_RESTORED">Record restored</option><option value="SMS_ACTIVITY">SMS activity</option><option value="USER_CREATED">User created</option><option value="USER_DELETED">User deleted</option><option value="USER_DISABLED">User disabled</option><option value="USER_ENABLED">User enabled</option><option value="BRANCH_CREATED">Branch created</option><option value="BRANCH_ASSIGNMENT_CHANGED">Branch assignment changed</option><option value="SETTINGS_CHANGED">Settings changed</option><option value="PASSWORD_RESET_REQUESTED">Password reset requested</option><option value="PASSWORD_RESET_COMPLETED">Password reset completed</option><option value="PASSWORD_RESET_FAILED">Password reset failed</option><option value="DEVICE_SESSION_CREATED">Device session created</option><option value="DEVICE_SESSION_REVOKED">Device session revoked</option><option value="STAFF_QUOTA_CHANGED">Staff quota changed</option><option value="STAFF_QUOTA_REJECTED">Staff quota rejected</option></select></label>
-                    <label>Result<select id="resultFilter"><option value="">All results</option><option value="success">Successful</option><option value="failed">Failed</option></select></label>
-                    <label>Sort<select id="sortFilter"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
-                    <button class="reports-primary" id="filterButton" type="button"><svg class="ui-icon"><use href="#icon-filter"></use></svg>Filter</button>
-                    <button class="reports-secondary" id="resetButton" type="button">Reset</button>
+                    <label class="reports-user-search">User<input id="userFilter" type="search" placeholder="Name or email"></label>
+                    <div class="reports-mobile-filter-controls">
+                        <button class="reports-filter-toggle" id="reportsFilterToggle" type="button" aria-expanded="false" aria-controls="reportsFilterPanel" title="Show report filters" aria-label="Show report filters"><svg class="ui-icon"><use href="#icon-filter"></use></svg><span>Filters</span></button>
+                    </div>
+                    <div class="reports-filter-panel" id="reportsFilterPanel">
+                        <label>From<input id="fromDateFilter" type="date"></label>
+                        <label>To<input id="toDateFilter" type="date"></label>
+                        <label>Search logs<input id="searchFilter" type="search" placeholder="Activity, case, details"></label>
+                        <label id="officeFilterField" hidden>Office<select id="officeFilter"><option value="">All offices</option></select></label>
+                        <label>Branch<select id="branchFilter"><option value="">All branches</option></select></label>
+                        <label>Role<select id="roleFilter"><option value="">All roles</option><option value="admin">Admin</option><option value="staff">Staff</option><option value="branch_staff">Branch Staff</option></select></label>
+                        <label>Activity<select id="activityFilter"><option value="">All activity</option><option value="LOGIN_SUCCESS">Successful login</option><option value="LOGOUT_SUCCESS">Successful logout</option><option value="LOGIN_FAILURE">Failed login</option><option value="RECORD_CREATED">Record created</option><option value="RECORD_EDITED">Record edited</option><option value="RECORD_APPROVED">Record approved</option><option value="RECORD_DELETED">Record deleted</option><option value="RECORD_RESTORED">Record restored</option><option value="SMS_ACTIVITY">SMS activity</option><option value="USER_CREATED">User created</option><option value="USER_DELETED">User deleted</option><option value="USER_DISABLED">User disabled</option><option value="USER_ENABLED">User enabled</option><option value="BRANCH_CREATED">Branch created</option><option value="BRANCH_ASSIGNMENT_CHANGED">Branch assignment changed</option><option value="SETTINGS_CHANGED">Settings changed</option><option value="PASSWORD_RESET_REQUESTED">Password reset requested</option><option value="PASSWORD_RESET_COMPLETED">Password reset completed</option><option value="PASSWORD_RESET_FAILED">Password reset failed</option><option value="DEVICE_SESSION_CREATED">Device session created</option><option value="DEVICE_SESSION_REVOKED">Device session revoked</option><option value="STAFF_QUOTA_CHANGED">Staff quota changed</option><option value="STAFF_QUOTA_REJECTED">Staff quota rejected</option></select></label>
+                        <label>Result<select id="resultFilter"><option value="">All results</option><option value="success">Successful</option><option value="failed">Failed</option></select></label>
+                        <label>Sort<select id="sortFilter"><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label>
+                        <button class="reports-primary" id="filterButton" type="button"><svg class="ui-icon"><use href="#icon-filter"></use></svg>Filter</button>
+                        <button class="reports-secondary" id="resetButton" type="button">Reset</button>
+                    </div>
                 </div>
 
                 <section class="reports-card activity-card">

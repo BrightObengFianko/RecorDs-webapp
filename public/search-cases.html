@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="apple-touch-icon" href="/assets/records-icon-192.png">
 
@@ -30,7 +30,7 @@
         })();
     </script>
 
-    <link rel="stylesheet" href="css/search-cases.css?v=2d6ad46">
+    <link rel="stylesheet" href="css/search-cases.css?v=2d6ad48">
     <link rel="stylesheet" href="css/notification.css">
     <link rel="stylesheet" href="css/confirm-dialog.css">
     <link rel="stylesheet" href="css/sidebar.css">
@@ -345,6 +345,8 @@
                     <a
                         href="create-record.html"
                         class="heading-action-button"
+                        aria-label="Record Case"
+                        title="Record Case"
                     >
                         <svg class="ui-icon heading-action-icon" aria-hidden="true">
                             <use href="#icon-plus"></use>
@@ -380,7 +382,7 @@
                                 <input
                                 type="text"
                                 id="name"
-                                placeholder="Enter customer name..."
+                                placeholder="Search by name or phone..."
                                 autocomplete="off"
                                 autocapitalize="characters"
                             >
@@ -388,7 +390,7 @@
                         </div>
 
 
-                        <div class="search-field">
+                        <div class="search-field" id="dateSearchField">
                             <label for="dateOfBirth">Date of Birth / Death</label>
                             <div class="input-box">
                                 <svg class="ui-icon input-icon" aria-hidden="true">
@@ -429,6 +431,32 @@
                                 <use href="#icon-refresh"></use>
                             </svg>
                             <span>Reset</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            class="mobile-search-icon-button"
+                            id="mobileFilterButton"
+                            aria-label="Open filters"
+                            title="Open filters"
+                        >
+                            <svg class="ui-icon" aria-hidden="true">
+                                <use href="#icon-filter"></use>
+                            </svg>
+                        </button>
+
+                        <button
+                            type="button"
+                            class="mobile-search-icon-button"
+                            id="mobileDateFilterButton"
+                            aria-label="Search by date"
+                            title="Search by date"
+                            aria-expanded="false"
+                            aria-controls="dateSearchField"
+                        >
+                            <svg class="ui-icon" aria-hidden="true">
+                                <use href="#icon-calendar"></use>
+                            </svg>
                         </button>
 
                     </div>
@@ -530,6 +558,14 @@
                                     id="toDate"
                                 >
                             </div>
+
+                            <button
+                                type="button"
+                                class="mobile-filter-reset"
+                                id="mobileFilterReset"
+                            >
+                                Reset filters
+                            </button>
 
                         </div>
 
@@ -695,7 +731,8 @@
     <script src="js/offline-records.js"></script>
     <script src="js/admin-notifications.js"></script>
     <script src="js/category-colors.js"></script>
-    <script src="js/search-cases.js?v=office-search-filter-1"></script>
+    <script src="js/search-date-utils.js?v=2"></script>
+    <script src="js/search-cases.js?v=office-search-filter-3"></script>
 
 </body>
 

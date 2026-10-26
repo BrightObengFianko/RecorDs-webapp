@@ -11,6 +11,7 @@
     "bootstrap:system-super-admin": "node scripts/promote-system-super-admin.js",
     "sync:users": "node scripts/sync-users-to-online.js",
     "test": "node scripts/test-office-isolation.js && node scripts/test-role-authorization.js && node scripts/test-staff-quota.js && node scripts/test-office-sms.js",
+    "test:search-date": "node scripts/test-search-date.js",
     "migrate": "node migrateGoogleSheets.js",
     "migrate:sheets": "node migrateGoogleSheets.js",
     "migrate:phones:dry": "node migratePhoneNumbers.js --dry-run",

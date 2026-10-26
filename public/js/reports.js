@@ -354,6 +354,13 @@ if (!reportsToken) {
         document.getElementById("branchFilter").innerHTML = '<option value="">All branches</option>' + (data.branches || []).map(branch => `<option value="${escapeReportHtml(branch.id)}">${escapeReportHtml(branch.name)}</option>`).join("");
     }
     document.getElementById("filterButton").addEventListener("click", () => loadActivity({ resetPage: true }));
+    document.getElementById("reportsFilterToggle")?.addEventListener("click", event => {
+        const panel = document.getElementById("reportsFilterPanel");
+        if (!panel) return;
+        const willOpen = !panel.classList.contains("is-open");
+        panel.classList.toggle("is-open", willOpen);
+        event.currentTarget.setAttribute("aria-expanded", String(willOpen));
+    });
     document.getElementById("deletedCasesButton").addEventListener("click", () => {
         document.getElementById("activityFilter").value = "RECORD_DELETED";
         loadActivity({ resetPage: true });

@@ -81,6 +81,18 @@ const searchButton =
 const resetButton =
     document.getElementById("resetButton");
 
+const mainSearch =
+    document.querySelector(".main-search");
+
+const mobileFilterButton =
+    document.getElementById("mobileFilterButton");
+
+const mobileDateFilterButton =
+    document.getElementById("mobileDateFilterButton");
+
+const mobileFilterReset =
+    document.getElementById("mobileFilterReset");
+
 const exportButton =
     document.getElementById("exportButton");
 
@@ -422,35 +434,29 @@ let activeActionMenu = null;
 let actionMenuFrame = 0;
 
 function formatDateWhileTyping(value) {
-    const digits = String(value || "").replace(/\D/g, "").slice(0, 8);
-
-    if (digits.length <= 2) return digits;
-    if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
-    return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
+    return window.RecordSearchDate.format(value);
 }
 
 function parseDateInput(value) {
-    const match = String(value || "").trim().match(/^([0-9]{2})-([0-9]{2})-([0-9]{4})$/);
+    return window.RecordSearchDate.toIso(value);
+}
 
-    if (!match) return null;
+function getPhoneSearchTerm(value) {
+    const rawValue = String(value || "").trim();
+    const digits = rawValue.replace(/\D/g, "");
 
-    const [, day, month, year] = match;
-    const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
-
-    if (
-        date.getUTCFullYear() !== Number(year) ||
-        date.getUTCMonth() !== Number(month) - 1 ||
-        date.getUTCDate() !== Number(day)
-    ) {
-        return null;
-    }
-
-    return `${year}-${month}-${day}`;
+    return rawValue && /^[+().\s\d-]+$/.test(rawValue) && digits.length >= 3
+        ? digits
+        : "";
 }
 
 if (dateOfBirthInput) {
     dateOfBirthInput.addEventListener("input", () => {
-        dateOfBirthInput.value = formatDateWhileTyping(dateOfBirthInput.value);
+        const rawValue = dateOfBirthInput.value;
+        const rawCaret = dateOfBirthInput.selectionStart ?? rawValue.length;
+        dateOfBirthInput.value = formatDateWhileTyping(rawValue);
+        const nextCaret = window.RecordSearchDate.caretPosition(rawValue, rawCaret);
+        dateOfBirthInput.setSelectionRange(nextCaret, nextCaret);
         dateOfBirthInput.setCustomValidity("");
         scheduleAutomaticSearch();
     });
@@ -461,6 +467,13 @@ if (dateOfBirthInput) {
                 ? "Enter a valid date in DD-MM-YYYY format."
                 : ""
         );
+    });
+
+    dateOfBirthInput.addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            searchCases();
+        }
     });
 }
 
@@ -644,13 +657,18 @@ async function loadSearchSmsBalance() {
             data.balance ?? "Unavailable";
 
         searchSmsError.hidden = false;
+        const smsErrorMessage = statusResponse.ok && statusData.error?.sms_error
+            ? String(statusData.error.sms_error)
+            : "";
+        searchSmsError.classList.toggle("is-error", Boolean(smsErrorMessage));
+        searchSmsError.classList.toggle("is-ok", !smsErrorMessage);
         searchSmsError.querySelector("strong").textContent =
-            statusResponse.ok && statusData.error?.sms_error
-                ? statusData.error.sms_error
-                : "No errors";
+            smsErrorMessage || "No errors";
     } catch (error) {
         searchSmsBalance.querySelector("strong").textContent = "Unavailable";
         searchSmsError.hidden = false;
+        searchSmsError.classList.remove("is-ok");
+        searchSmsError.classList.add("is-error");
         searchSmsError.querySelector("strong").textContent = "Unavailable";
         console.error("Unable to load Search page SMS balance:", error.message);
     } finally {
@@ -1353,7 +1371,13 @@ function scheduleAutomaticSearch() {
     );
 
     if (!name && !dateValue && !hasOtherCriteria) {
-        resetAutomaticSearchResults();
+        if (hasActiveSearch) {
+            automaticSearchTimer = window.setTimeout(() => {
+                searchCases({ automatic: true });
+            }, AUTOMATIC_SEARCH_DEBOUNCE_MS);
+        } else {
+            resetAutomaticSearchResults();
+        }
         return;
     }
 
@@ -1374,6 +1398,7 @@ async function getOfflineSearchResults(filters) {
 
     const entries = await window.RecordOfflineQueue.getPendingRecords();
     const name = String(filters.name || "").trim().toLowerCase();
+    const phone = String(filters.phone || "").replace(/\D/g, "");
     const category = String(filters.category || "").trim().toLowerCase();
     const status = String(filters.status || "").trim().toLowerCase().replace(/[_-]+/g, " ");
     const registrar = (window.RecordRegistrar?.normalize(filters.registrar) || "")
@@ -1391,22 +1416,24 @@ async function getOfflineSearchResults(filters) {
         }))
         .filter(record => {
             const recordName = String(record.name || "").toLowerCase();
+            const recordPhone = String(record.phone_number || "").replace(/\D/g, "");
             const recordCategory = String(record.category || "").toLowerCase();
             const recordStatus = String(record.status || "Pending").toLowerCase().replace(/[_-]+/g, " ");
             const recordRegistrar = (window.RecordRegistrar?.normalize(record.registrar) || "")
                 .toLowerCase();
             const dateMatches = !filters.dateOfBirth || (
                 (category.includes("death") && !category.includes("birth")
-                    ? record.date_of_death === filters.dateOfBirth
+                    ? String(record.date_of_death || "").slice(0, 10) === filters.dateOfBirth
                     : category.includes("birth") && !category.includes("death")
-                        ? record.date_of_birth === filters.dateOfBirth
-                        : record.date_of_birth === filters.dateOfBirth || record.date_of_death === filters.dateOfBirth)
+                        ? String(record.date_of_birth || "").slice(0, 10) === filters.dateOfBirth
+                        : String(record.date_of_birth || "").slice(0, 10) === filters.dateOfBirth || String(record.date_of_death || "").slice(0, 10) === filters.dateOfBirth)
             );
             const registrationDate = String(record.registration_date || "").slice(0, 10);
             const fromMatches = !filters.fromDate || registrationDate >= filters.fromDate;
             const toMatches = !filters.toDate || registrationDate <= filters.toDate;
 
             return (!name || recordName.includes(name))
+                && (!phone || recordPhone.includes(phone))
                 && (!officeId || String(record.office_id || "") === officeId)
                 && (!category || recordCategory === category)
                 && (!status || recordStatus === status)
@@ -1419,10 +1446,9 @@ async function getOfflineSearchResults(filters) {
 
 async function searchCases({ silent = false, automatic = false } = {}) {
 
-    const name =
-        nameInput.value
-            .trim()
-            .toUpperCase();
+    const rawSearchTerm = nameInput.value.trim();
+    const phone = getPhoneSearchTerm(rawSearchTerm);
+    const name = phone ? "" : rawSearchTerm.toUpperCase();
 
 
     const dateOfBirthInputValue =
@@ -1533,6 +1559,13 @@ async function searchCases({ silent = false, automatic = false } = {}) {
                 name
             );
 
+        }
+
+        if (phone) {
+            params.append(
+                "phone",
+                phone
+            );
         }
 
         if (officeId) {
@@ -1761,6 +1794,7 @@ async function searchCases({ silent = false, automatic = false } = {}) {
         try {
             const offlineResults = await getOfflineSearchResults({
                 name,
+                phone,
                 dateOfBirth,
                 status,
                 category,
@@ -1770,7 +1804,7 @@ async function searchCases({ silent = false, automatic = false } = {}) {
                 toDate
             });
 
-            if (name || dateOfBirth || status || category || registrar || officeId || fromDate || toDate) {
+            if (name || phone || dateOfBirth || status || category || registrar || officeId || fromDate || toDate || !allResults.length) {
                 const changed = recordsHaveChanged(allResults, offlineResults);
                 allResults = offlineResults;
                 hasActiveSearch = true;
@@ -2260,6 +2294,50 @@ function displayResults() {
                 `
                 : "";
 
+            const mobileCardHtml = `
+                <td class="mobile-record-cell" colspan="11">
+                    <article class="mobile-record-card">
+                        <header class="mobile-record-card-header">
+                            <div class="mobile-record-card-heading">
+                                <span class="mobile-record-number">${number}</span>
+                                <span class="category-badge" style="--category-color:${window.RecordCategoryColors ? window.RecordCategoryColors.getColor(category) : "#6b5bff"}">${escapeHtml(category)}</span>
+                                <strong class="mobile-record-name">${escapeHtml(name)}</strong>
+                            </div>
+                            <div class="mobile-record-card-actions">
+                                <span class="status ${statusClass}">${escapeHtml(record.is_offline ? "Pending Sync" : formatStatusLabel(status))}</span>
+                                ${actionMenuHtml}
+                            </div>
+                        </header>
+                        <div class="mobile-record-details">
+                            <div class="mobile-record-detail">
+                                <svg class="ui-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg>
+                                <span><small>Date of Birth/Death</small><strong>${escapeHtml(formatDateOnly(dateValue))}</strong></span>
+                            </div>
+                            <div class="mobile-record-detail">
+                                <svg class="ui-icon" aria-hidden="true"><use href="#icon-user"></use></svg>
+                                <span><small>Registrar</small><strong>${escapeHtml(registrar)}</strong></span>
+                            </div>
+                            <div class="mobile-record-detail">
+                                <svg class="ui-icon" aria-hidden="true"><use href="#icon-calendar"></use></svg>
+                                <span><small>Registered</small><strong>${escapeHtml(formatDateOnly(registrationDate))}</strong></span>
+                            </div>
+                            <div class="mobile-record-detail">
+                                <svg class="ui-icon" aria-hidden="true"><use href="#icon-message"></use></svg>
+                                <span><small>SMS</small><strong>${smsHtml}</strong></span>
+                            </div>
+                            <div class="mobile-record-detail">
+                                <svg class="ui-icon" aria-hidden="true"><use href="#icon-user"></use></svg>
+                                <span><small>Phone</small><strong>${escapeHtml(phone)}</strong></span>
+                            </div>
+                            <div class="mobile-record-detail">
+                                <svg class="ui-icon" aria-hidden="true"><use href="#icon-message"></use></svg>
+                                <span><small>Note</small><strong class="mobile-record-note" title="${escapeHtml(noteTitle)}">${noteHtml}</strong></span>
+                            </div>
+                        </div>
+                    </article>
+                </td>
+            `;
+
 
             // =================================
             // TABLE ROW
@@ -2377,6 +2455,8 @@ function displayResults() {
                 <td class="action-cell">
                     ${actionMenuHtml}
                 </td>
+
+                ${mobileCardHtml}
 
             `;
 
@@ -2605,6 +2685,27 @@ filtersToggle?.addEventListener("click", () => {
     setFiltersExpanded(!searchFilters.classList.contains("is-expanded"));
 });
 
+mobileFilterButton?.addEventListener("click", () => {
+    filtersToggle?.click();
+});
+
+mobileDateFilterButton?.addEventListener("click", () => {
+    const isVisible = mainSearch?.classList.toggle("is-date-search-visible") || false;
+    mobileDateFilterButton.setAttribute("aria-expanded", String(isVisible));
+
+    if (!isVisible) {
+        return;
+    }
+
+    window.setTimeout(() => {
+        dateOfBirthInput?.focus({ preventScroll: true });
+    }, 0);
+});
+
+mobileFilterReset?.addEventListener("click", () => {
+    resetButton?.click();
+});
+
 syncMobileFilters();
 window.matchMedia("(max-width: 750px)").addEventListener("change", syncMobileFilters);
 
@@ -2715,6 +2816,10 @@ if (resetButton) {
             dateOfBirthInput.value =
                 "";
 
+            dateOfBirthInput.setCustomValidity("");
+            mainSearch?.classList.remove("is-date-search-visible");
+            mobileDateFilterButton?.setAttribute("aria-expanded", "false");
+
             statusSelect.value =
                 "";
 
@@ -2782,6 +2887,8 @@ if (resetButton) {
             nextPage.disabled =
                 true;
 
+            searchCases();
+
         }
     );
 
@@ -2790,6 +2897,7 @@ if (resetButton) {
 
 loadRegistrars();
 loadSearchOffices();
+searchCases();
 
 
 // =========================================

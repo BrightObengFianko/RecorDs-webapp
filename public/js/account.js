@@ -3,6 +3,8 @@ const processingBody = document.getElementById("processingBody");
 const registrarFilter = document.getElementById("registrarFilter");
 const nameFilter = document.getElementById("nameFilter");
 const dateOfBirthFilter = document.getElementById("dateOfBirthFilter");
+const accountFilterToggle = document.getElementById("accountFilterToggle");
+const accountFilterPanel = document.getElementById("accountFilterPanel");
 const totalCases = document.getElementById("totalCases");
 const showingInfo = document.getElementById("showingInfo");
 const selectedCount = document.getElementById("selectedCount");
@@ -24,6 +26,13 @@ if (logoutButton) {
         window.location.replace("index.html");
     });
 }
+
+accountFilterToggle?.addEventListener("click", event => {
+    if (!accountFilterPanel) return;
+    const willOpen = !accountFilterPanel.classList.contains("is-open");
+    accountFilterPanel.classList.toggle("is-open", willOpen);
+    event.currentTarget.setAttribute("aria-expanded", String(willOpen));
+});
 
 function escapeHtml(value) {
     return String(value ?? "")

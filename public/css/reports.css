@@ -486,3 +486,86 @@ body.activity-modal-open { overflow: hidden; }
     .activity-modal-body { padding: 16px; }
     .activity-detail-row { grid-template-columns: 1fr; gap: 3px; }
 }
+
+/* Mobile reports filters follow the compact Search Cases control pattern. */
+.reports-filter-panel,
+.reports-mobile-filter-controls {
+    display: contents;
+}
+
+.reports-filter-toggle {
+    display: none;
+}
+
+@media (max-width: 600px) {
+    .reports-filters {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+    }
+
+    .reports-user-search {
+        min-width: 0;
+    }
+
+    .reports-mobile-filter-controls {
+        display: flex;
+        min-width: 0;
+    }
+
+    .reports-filter-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        min-height: 42px;
+        padding: 0;
+        border: 1px solid var(--app-border);
+        border-radius: 9px;
+        background: var(--app-surface);
+        color: var(--app-text);
+        font: inherit;
+        cursor: pointer;
+    }
+
+    .reports-filter-toggle .ui-icon {
+        width: 18px;
+        height: 18px;
+    }
+
+    .reports-filter-toggle span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+    }
+
+    .reports-filter-panel {
+        display: none;
+        grid-column: 1 / -1;
+        grid-template-columns: 1fr;
+        gap: 9px;
+        width: 100%;
+        min-width: 0;
+        padding-top: 2px;
+    }
+
+    .reports-filter-panel.is-open {
+        display: grid;
+    }
+
+    .reports-filter-panel label,
+    .reports-filter-panel input,
+    .reports-filter-panel select,
+    .reports-filter-panel button {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .reports-filter-panel input,
+    .reports-filter-panel select,
+    .reports-filter-panel button {
+        min-height: 42px;
+    }
+}

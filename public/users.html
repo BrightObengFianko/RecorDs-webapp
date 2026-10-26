@@ -34,7 +34,7 @@
     <link rel="stylesheet" href="css/sidebar.css">
     <link rel="stylesheet" href="css/notification.css">
     <link rel="stylesheet" href="css/confirm-dialog.css">
-    <link rel="stylesheet" href="css/users.css?v=52">
+    <link rel="stylesheet" href="css/users.css?v=68">
     <link rel="stylesheet" href="css/mobile-form-controls.css">
     <link rel="stylesheet" href="css/admin-notifications.css">
 </head>
@@ -76,6 +76,13 @@
             <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="6.5"></circle>
                 <path d="M16 16l5 5"></path>
+            </g>
+        </symbol>
+        <symbol id="icon-filter" viewBox="0 0 24 24">
+            <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 6h16"></path>
+                <path d="M7 12h10"></path>
+                <path d="M10 18h4"></path>
             </g>
         </symbol>
         <symbol id="icon-chart" viewBox="0 0 24 24">
@@ -366,6 +373,11 @@
                             </tbody>
                         </table>
                     </div>
+                    <div class="mobile-management-pagination" id="officeMobilePagination" hidden>
+                        <button type="button" id="officeMobilePrevious" aria-label="Previous offices">&#8249;</button>
+                        <span id="officeMobilePageInfo">Page 1</span>
+                        <button type="button" id="officeMobileNext" aria-label="Next offices">&#8250;</button>
+                    </div>
                 </section>
 
                 <section class="users-shell users-all-shell" id="usersAllShell">
@@ -406,24 +418,31 @@
                                     autocomplete="off"
                                 >
                             </label>
-                            <select class="users-filter" id="userOfficeFilter" aria-label="Filter users by office" hidden>
-                                <option value="">All offices</option>
-                            </select>
-                            <select class="users-filter" id="userBranchFilter" aria-label="Filter users by branch">
-                                <option value="">All branches</option>
-                            </select>
-                            <select class="users-filter" id="userRoleFilter" aria-label="Filter users by role">
-                                <option value="">All roles</option>
-                                <option value="office_admin">Office Admin</option>
-                                <option value="staff">Staff</option>
-                                <option value="branch_staff">Branch Staff</option>
-                            </select>
-                            <select class="users-filter" id="userStatusFilter" aria-label="Filter users by status">
-                                <option value="">All statuses</option>
-                                <option value="approved">Approved</option>
-                                <option value="pending">Pending</option>
-                                <option value="inactive">Inactive</option>
-                            </select>
+                            <button type="button" class="users-filter-toggle" id="usersFilterToggle" aria-expanded="false" aria-controls="usersFilterPanel" title="Show user filters">
+                                <svg class="ui-icon" aria-hidden="true"><use href="#icon-filter"></use></svg>
+                                <span>Filters</span>
+                                <span class="users-filter-count" id="usersFilterCount" hidden>0</span>
+                            </button>
+                            <div class="users-filter-panel" id="usersFilterPanel">
+                                <select class="users-filter" id="userOfficeFilter" aria-label="Filter users by office" hidden>
+                                    <option value="">All offices</option>
+                                </select>
+                                <select class="users-filter" id="userBranchFilter" aria-label="Filter users by branch">
+                                    <option value="">All branches</option>
+                                </select>
+                                <select class="users-filter" id="userRoleFilter" aria-label="Filter users by role">
+                                    <option value="">All roles</option>
+                                    <option value="office_admin">Office Admin</option>
+                                    <option value="staff">Staff</option>
+                                    <option value="branch_staff">Branch Staff</option>
+                                </select>
+                                <select class="users-filter" id="userStatusFilter" aria-label="Filter users by status">
+                                    <option value="">All statuses</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
                         </div>
 
                     </div>
@@ -450,6 +469,11 @@
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                    <div class="mobile-management-pagination" id="userMobilePagination" hidden>
+                        <button type="button" id="userMobilePrevious" aria-label="Previous users">&#8249;</button>
+                        <span id="userMobilePageInfo">Page 1</span>
+                        <button type="button" id="userMobileNext" aria-label="Next users">&#8250;</button>
                     </div>
 
                 </section>

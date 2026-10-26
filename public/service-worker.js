@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v107";
+const CACHE_NAME = "records-shell-v129";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -21,10 +21,12 @@ const APP_SHELL = [
     "/css/create-record.css",
     "/css/search-cases.css",
     "/css/account.css",
+    "/css/account.css?v=2",
     "/css/case-details.css",
     "/css/reports.css",
     "/css/settings.css",
     "/css/users.css",
+    "/css/users.css?v=68",
     "/css/pending-sync.css",
     "/css/admin-notifications.css",
     "/js/app-settings.js",
@@ -32,6 +34,7 @@ const APP_SHELL = [
     "/js/notification.js",
     "/js/confirm-dialog.js",
     "/js/create-record.js",
+    "/js/search-date-utils.js",
     "/js/search-cases.js",
     "/js/dashboard.js",
     "/js/account.js",
@@ -47,7 +50,6 @@ const APP_SHELL = [
     "/assets/records-icon-512.png",
     "/assets/records-icon-maskable-512.png",
     "/manifest.webmanifest",
-    "/favicon.ico"
 ];
 
 self.addEventListener("install", event => {

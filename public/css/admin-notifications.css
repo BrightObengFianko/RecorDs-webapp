@@ -78,6 +78,7 @@
 
 .admin-notification-badge { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: #d44747; color: #fff; font-size: 10px; font-weight: 800; line-height: 18px; }
 .admin-notification-panel { position: fixed; z-index: 10000; width: 340px; overflow: hidden; border: 1px solid var(--app-border, #e5e7eb); border-radius: 14px; background: var(--app-surface, #fff); box-shadow: 0 18px 50px rgba(17, 24, 39, .18); }
+.admin-notification-panel[hidden] { display: none !important; }
 .admin-notification-panel header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--app-border, #e5e7eb); }
 .admin-notification-panel header > strong { margin-right: auto; }
 .admin-notification-unread-copy { margin-right: 10px; color: var(--app-muted, #667085); font-size: 10px; font-weight: 700; }
@@ -126,6 +127,7 @@
         width: 46px;
         height: 46px;
         margin-left: 4px;
+        z-index: 1001;
     }
 
     .topbar-right,
@@ -194,20 +196,27 @@
     }
 
     .admin-notification-panel.is-mobile header {
-        flex-wrap: wrap;
-        gap: 8px;
-        padding: 12px;
+        position: relative;
+        display: block;
+        padding: 12px 54px 12px 12px;
     }
 
     .admin-notification-panel.is-mobile header > strong {
-        flex: 1 1 auto;
         min-width: 0;
     }
 
     .admin-notification-panel.is-mobile .admin-notification-header-actions {
         width: 100%;
-        justify-content: flex-end;
+        justify-content: flex-start;
         gap: 6px;
+        margin-top: 8px;
+    }
+
+    .admin-notification-panel.is-mobile .admin-notification-close {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        margin: 0;
     }
 
     .admin-notification-panel.is-mobile .admin-notification-mark-all,

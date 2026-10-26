@@ -13,6 +13,17 @@
     const userRoleFilter = document.getElementById("userRoleFilter");
     const userBranchFilter = document.getElementById("userBranchFilter");
     const userStatusFilter = document.getElementById("userStatusFilter");
+    const usersFilterToggle = document.getElementById("usersFilterToggle");
+    const usersFilterPanel = document.getElementById("usersFilterPanel");
+    const usersFilterCount = document.getElementById("usersFilterCount");
+    const officeMobilePagination = document.getElementById("officeMobilePagination");
+    const officeMobilePrevious = document.getElementById("officeMobilePrevious");
+    const officeMobilePageInfo = document.getElementById("officeMobilePageInfo");
+    const officeMobileNext = document.getElementById("officeMobileNext");
+    const userMobilePagination = document.getElementById("userMobilePagination");
+    const userMobilePrevious = document.getElementById("userMobilePrevious");
+    const userMobilePageInfo = document.getElementById("userMobilePageInfo");
+    const userMobileNext = document.getElementById("userMobileNext");
     const userModal = document.getElementById("userModal");
     const closeModalButton = document.getElementById("closeModalButton");
     const cancelModalButton = document.getElementById("cancelModalButton");
@@ -119,6 +130,29 @@
     let officeMenu = null;
     let editingBranchId = null;
     let officeDestructiveState = null;
+    const mobilePageSize = 5;
+    let mobileOfficePage = 1;
+    let mobileUserPage = 1;
+
+    function isMobileManagementView() {
+        return window.matchMedia?.("(max-width: 760px)").matches === true;
+    }
+
+    function updateMobilePagination(element, previous, pageInfo, next, page, total, onPageChange) {
+        if (!element || !previous || !pageInfo || !next) return;
+        const pageCount = Math.max(1, Math.ceil(total / mobilePageSize));
+        const currentPage = Math.min(Math.max(1, page), pageCount);
+        element.hidden = !isMobileManagementView() || total <= mobilePageSize;
+        pageInfo.textContent = `Page ${currentPage} of ${pageCount}`;
+        previous.disabled = currentPage <= 1;
+        next.disabled = currentPage >= pageCount;
+        previous.onclick = () => {
+            if (currentPage > 1) onPageChange(currentPage - 1);
+        };
+        next.onclick = () => {
+            if (currentPage < pageCount) onPageChange(currentPage + 1);
+        };
+    }
 
     function normalize(value) {
         return String(value || "")
@@ -311,6 +345,49 @@
             .join(" ");
     }
 
+    function updateUsersFilterState() {
+        const activeCount = [userOfficeFilter, userBranchFilter, userRoleFilter, userStatusFilter]
+            .filter(select => select && !select.hidden && select.value)
+            .length;
+        if (usersFilterCount) {
+            usersFilterCount.hidden = activeCount === 0;
+            usersFilterCount.textContent = String(activeCount);
+        }
+        usersFilterToggle?.classList.toggle("has-active-filters", activeCount > 0);
+    }
+
+    function renderMobileUserCard(user, index, officeLabel, roleClass, statusClass, statusLabel, canEdit) {
+        const branchLabel = user.branch || user.branch_name || "-";
+        const deviceCount = `${Number(user.active_devices || 0)} / ${Math.max(1, Number(user.max_devices || 2))}`;
+        const action = canEdit
+            ? `<button type="button" class="mobile-user-action mobile-user-menu-button action-button" data-user-id="${escapeHtml(user.id)}" title="User actions" aria-label="Actions for ${escapeHtml(user.name || "user")}">
+                    <span aria-hidden="true">&#8942;</span><span class="sr-only">Edit</span>
+               </button>`
+            : '<span class="status-pill status-inactive">Protected</span>';
+
+        return `<td class="mobile-user-cell" colspan="8">
+            <article class="mobile-user-card">
+                <div class="mobile-user-card-header">
+                    <span class="mobile-user-number">${index + 1}</span>
+                    <div class="mobile-user-identity">
+                        <strong>${escapeHtml(user.name || "-")}</strong>
+                        <span>${escapeHtml(user.email || "-")}</span>
+                    </div>
+                    <div class="mobile-user-header-meta">
+                        <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
+                        ${action}
+                    </div>
+                </div>
+                <div class="mobile-user-details">
+                    <div><span>Office</span><strong>${escapeHtml(officeLabel)}</strong></div>
+                    <div><span>Role</span><strong><span class="role-pill ${roleClass}">${escapeHtml(formatRole(user.role))}</span></strong></div>
+                    <div><span>Branch</span><strong>${escapeHtml(branchLabel)}</strong></div>
+                    <div><span>Devices</span><strong><button type="button" class="device-summary-button" data-device-user-id="${escapeHtml(user.id)}" title="Manage active devices">${escapeHtml(deviceCount)}</button></strong></div>
+                </div>
+            </article>
+        </td>`;
+    }
+
     function handleAuthFailure() {
         localStorage.removeItem("token");
         localStorage.removeItem("user");
@@ -401,10 +478,22 @@
                     </td>
                 </tr>
             `;
+            updateMobilePagination(userMobilePagination, userMobilePrevious, userMobilePageInfo, userMobileNext, 1, 0, nextPage => {
+                mobileUserPage = nextPage;
+                renderUsers();
+            });
             return;
         }
 
-        usersBody.innerHTML = filteredUsers.map((user, index) => {
+        const userPageCount = Math.max(1, Math.ceil(filteredUsers.length / mobilePageSize));
+        if (mobileUserPage > userPageCount) mobileUserPage = userPageCount;
+        const usersToRender = isMobileManagementView()
+            ? filteredUsers.slice((mobileUserPage - 1) * mobilePageSize, mobileUserPage * mobilePageSize)
+            : filteredUsers;
+        const userIndexOffset = isMobileManagementView() ? (mobileUserPage - 1) * mobilePageSize : 0;
+
+        usersBody.innerHTML = usersToRender.map((user, index) => {
+            const rowIndex = userIndexOffset + index;
             const roleClass = getRoleClass(user.role);
             const statusClass = getStatusClass(user);
             const statusLabel = getStatusLabel(user);
@@ -414,28 +503,28 @@
 
             return `
                 <tr>
-                    <td>${index + 1}</td>
-                    <td class="name-cell">
+                    <td class="desktop-user-cell">${rowIndex + 1}</td>
+                    <td class="desktop-user-cell name-cell">
                         <strong>${escapeHtml(user.name || "-")}</strong>
                     </td>
-                    <td>${escapeHtml(user.email || "-")}</td>
-                    <td>${escapeHtml(officeLabel)}</td>
-                    <td>
+                    <td class="desktop-user-cell">${escapeHtml(user.email || "-")}</td>
+                    <td class="desktop-user-cell">${escapeHtml(officeLabel)}</td>
+                    <td class="desktop-user-cell">
                         <span class="role-pill ${roleClass}">
                             ${escapeHtml(formatRole(user.role))}
                         </span>
                     </td>
-                    <td>
+                    <td class="desktop-user-cell">
                         <button type="button" class="device-summary-button" data-device-user-id="${escapeHtml(user.id)}" title="Manage active devices">
                             ${escapeHtml(`${Number(user.active_devices || 0)} / ${Math.max(1, Number(user.max_devices || 2))}`)}
                         </button>
                     </td>
-                    <td>
+                    <td class="desktop-user-cell">
                         <span class="status-pill ${statusClass}">
                             ${escapeHtml(statusLabel)}
                         </span>
                     </td>
-                    <td>
+                    <td class="desktop-user-cell">
                         ${canEdit ? `<button
                             type="button"
                             class="action-button"
@@ -448,9 +537,37 @@
                             <span>Edit</span>
                         </button>` : '<span class="status-pill status-inactive">Protected</span>'}
                     </td>
+                    ${renderMobileUserCard(user, rowIndex, officeLabel, roleClass, statusClass, statusLabel, canEdit)}
                 </tr>
             `;
         }).join("");
+        updateMobilePagination(userMobilePagination, userMobilePrevious, userMobilePageInfo, userMobileNext, mobileUserPage, filteredUsers.length, nextPage => {
+            mobileUserPage = nextPage;
+            renderUsers();
+        });
+    }
+
+    function renderMobilePendingCard(user, index, roleClass, statusClass, statusLabel, createdAt) {
+        return `<td class="mobile-pending-cell" colspan="7">
+            <article class="mobile-pending-card">
+                <div class="mobile-pending-card-header">
+                    <span class="mobile-user-number">${index + 1}</span>
+                    <div class="mobile-user-identity">
+                        <strong>${escapeHtml(user.name || "-")}</strong>
+                        <span>${escapeHtml(user.email || "-")}</span>
+                    </div>
+                    <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
+                </div>
+                <div class="mobile-pending-details">
+                    <div><span>Role</span><strong><span class="role-pill ${roleClass}">${escapeHtml(formatRole(user.role))}</span></strong></div>
+                    <div><span>Registered</span><strong>${escapeHtml(createdAt)}</strong></div>
+                </div>
+                <div class="pending-actions mobile-pending-actions">
+                    <button type="button" class="action-button is-approve" data-pending-action="approve" data-user-id="${escapeHtml(user.id)}"><span aria-hidden="true">&#10003;</span><span>Approve</span></button>
+                    <button type="button" class="action-button is-decline" data-pending-action="decline" data-user-id="${escapeHtml(user.id)}"><span aria-hidden="true">&#215;</span><span>Decline</span></button>
+                </div>
+            </article>
+        </td>`;
     }
 
     async function loadStaffQuota() {
@@ -503,23 +620,23 @@
 
             return `
                 <tr>
-                    <td>${index + 1}</td>
-                    <td class="name-cell">
+                    <td class="desktop-pending-cell">${index + 1}</td>
+                    <td class="desktop-pending-cell name-cell">
                         <strong>${escapeHtml(user.name || "-")}</strong>
                     </td>
-                    <td>${escapeHtml(user.email || "-")}</td>
-                    <td>
+                    <td class="desktop-pending-cell">${escapeHtml(user.email || "-")}</td>
+                    <td class="desktop-pending-cell">
                         <span class="role-pill ${roleClass}">
                             ${escapeHtml(formatRole(user.role))}
                         </span>
                     </td>
-                    <td>${escapeHtml(createdAt)}</td>
-                    <td>
+                    <td class="desktop-pending-cell">${escapeHtml(createdAt)}</td>
+                    <td class="desktop-pending-cell">
                         <span class="status-pill ${statusClass}">
                             ${escapeHtml(statusLabel)}
                         </span>
                     </td>
-                    <td>
+                    <td class="desktop-pending-cell">
                         <div class="pending-actions">
                             <button
                                 type="button"
@@ -545,6 +662,7 @@
                             </button>
                         </div>
                     </td>
+                    ${renderMobilePendingCard(user, index, roleClass, statusClass, statusLabel, createdAt)}
                 </tr>
             `;
         }).join("");
@@ -790,6 +908,7 @@
                 ? selectedBranch
                 : "";
         }
+        updateUsersFilterState();
     }
 
     function officeStatusLabel(status) {
@@ -801,19 +920,26 @@
         officesCount.textContent = `${allOffices.length} office${allOffices.length === 1 ? "" : "s"} configured`;
         if (!allOffices.length) {
             officesBody.innerHTML = '<tr><td colspan="8" class="empty">No offices found.</td></tr>';
+            updateMobilePagination(officeMobilePagination, officeMobilePrevious, officeMobilePageInfo, officeMobileNext, 1, 0, nextPage => {
+                mobileOfficePage = nextPage;
+                renderOffices();
+            });
             return;
         }
 
-        officesBody.innerHTML = allOffices.map(office => {
+        const officePageCount = Math.max(1, Math.ceil(allOffices.length / mobilePageSize));
+        if (mobileOfficePage > officePageCount) mobileOfficePage = officePageCount;
+        const officesToRender = isMobileManagementView()
+            ? allOffices.slice((mobileOfficePage - 1) * mobilePageSize, mobileOfficePage * mobilePageSize)
+            : allOffices;
+
+        officesBody.innerHTML = officesToRender.map(office => {
             const active = String(office.status || "").toUpperCase() === "ACTIVE";
             const smsConfigured = String(office.sms_config_status || "").toUpperCase() === "ACTIVE";
             return `
                 <tr>
                     <td class="name-cell" data-label="Office">
                         <strong>${escapeHtml(office.name)}</strong>
-                        <span>${escapeHtml(office.address || "No address")}</span>
-                        ${office.phone ? `<span class="office-contact">Phone: ${escapeHtml(office.phone)}</span>` : ""}
-                        ${office.email ? `<span class="office-contact">Email: ${escapeHtml(office.email)}</span>` : ""}
                     </td>
                     <td data-label="Code"><strong>${escapeHtml(office.code)}</strong></td>
                     <td data-label="Users">${Number(office.user_count || 0).toLocaleString()}</td>
@@ -825,6 +951,10 @@
                 </tr>
             `;
         }).join("");
+        updateMobilePagination(officeMobilePagination, officeMobilePrevious, officeMobilePageInfo, officeMobileNext, mobileOfficePage, allOffices.length, nextPage => {
+            mobileOfficePage = nextPage;
+            renderOffices();
+        });
     }
 
     function closeOfficeMenu() {
@@ -1636,15 +1766,37 @@ They can login immediately.
         });
 
         if (searchInput) {
-            searchInput.addEventListener("input", renderUsers);
+            searchInput.addEventListener("input", () => {
+                mobileUserPage = 1;
+                renderUsers();
+            });
         }
-        userRoleFilter?.addEventListener("change", renderUsers);
-        userOfficeFilter?.addEventListener("change", () => {
-            renderUserFilterOptions();
+        userRoleFilter?.addEventListener("change", () => {
+            mobileUserPage = 1;
             renderUsers();
         });
-        userBranchFilter?.addEventListener("change", renderUsers);
-        userStatusFilter?.addEventListener("change", renderUsers);
+        userOfficeFilter?.addEventListener("change", () => {
+            renderUserFilterOptions();
+            mobileUserPage = 1;
+            renderUsers();
+        });
+        userBranchFilter?.addEventListener("change", () => {
+            mobileUserPage = 1;
+            renderUsers();
+        });
+        userStatusFilter?.addEventListener("change", () => {
+            mobileUserPage = 1;
+            renderUsers();
+        });
+        [userOfficeFilter, userBranchFilter, userRoleFilter, userStatusFilter].forEach(select => {
+            select?.addEventListener("change", updateUsersFilterState);
+        });
+        usersFilterToggle?.addEventListener("click", () => {
+            if (!usersFilterPanel) return;
+            const willOpen = !usersFilterPanel.classList.contains("is-open");
+            usersFilterPanel.classList.toggle("is-open", willOpen);
+            usersFilterToggle.setAttribute("aria-expanded", String(willOpen));
+        });
 
         createOfficeBtn?.addEventListener("click", () => openOfficeModal());
         closeOfficeModalButton?.addEventListener("click", closeOfficeModal);
@@ -1726,7 +1878,11 @@ They can login immediately.
                 closeOfficeMenu();
             }
         });
-        window.addEventListener("resize", closeOfficeMenu);
+        window.addEventListener("resize", () => {
+            closeOfficeMenu();
+            renderOffices();
+            renderUsers();
+        });
         window.addEventListener("scroll", closeOfficeMenu, true);
 
         if (usersBody) {

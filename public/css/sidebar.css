@@ -47,6 +47,17 @@ body {
     overflow: hidden;
 }
 
+/* Keep laptop layouts compact without changing phone or large-monitor sizing. */
+@media (min-width: 761px) and (max-width: 1440px) {
+    html {
+        font-size: 15px;
+    }
+
+    body:not(.login-page) {
+        font-size: 0.94rem;
+    }
+}
+
 button,
 a {
     font-family: inherit;

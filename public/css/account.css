@@ -694,3 +694,80 @@ body.account-page textarea {
         min-width: 920px;
     }
 }
+
+/* Mobile Account filters follow the compact Search Cases pattern. */
+.account-filter-panel,
+.account-mobile-filter-controls {
+    display: contents;
+}
+
+.account-filter-toggle {
+    display: none;
+}
+
+@media (max-width: 700px) {
+    .account-filters {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+    }
+
+    .account-name-search {
+        min-width: 0;
+    }
+
+    .account-mobile-filter-controls {
+        display: flex;
+        min-width: 0;
+    }
+
+    .account-filter-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 46px;
+        min-height: 46px;
+        padding: 0;
+        border: 1px solid var(--app-border);
+        border-radius: 9px;
+        background: var(--app-surface);
+        color: var(--app-text);
+        font: inherit;
+        cursor: pointer;
+    }
+
+    .account-filter-toggle .ui-icon {
+        width: 18px;
+        height: 18px;
+    }
+
+    .account-filter-toggle span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+    }
+
+    .account-filter-panel {
+        display: none;
+        grid-column: 1 / -1;
+        grid-template-columns: 1fr;
+        gap: 10px;
+        width: 100%;
+        min-width: 0;
+        padding-top: 2px;
+    }
+
+    .account-filter-panel.is-open {
+        display: grid;
+    }
+
+    .account-filter-panel label,
+    .account-filter-panel input,
+    .account-filter-panel select,
+    .account-filter-panel button {
+        min-width: 0;
+        max-width: 100%;
+    }
+}
