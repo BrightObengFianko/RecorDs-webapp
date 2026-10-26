@@ -368,10 +368,13 @@
         return `<td class="mobile-user-cell" colspan="8">
             <article class="mobile-user-card">
                 <div class="mobile-user-card-header">
-                    <span class="mobile-user-number">${index + 1}</span>
+                    <span class="mobile-user-number" aria-label="User ${index + 1}">${index + 1}</span>
                     <div class="mobile-user-identity">
                         <strong>${escapeHtml(user.name || "-")}</strong>
-                        <span>${escapeHtml(user.email || "-")}</span>
+                        <span class="mobile-user-email">
+                            <svg class="ui-icon" aria-hidden="true"><use href="#icon-mail"></use></svg>
+                            <span>${escapeHtml(user.email || "-")}</span>
+                        </span>
                     </div>
                     <div class="mobile-user-header-meta">
                         <span class="status-pill ${statusClass}">${escapeHtml(statusLabel)}</span>
@@ -379,10 +382,22 @@
                     </div>
                 </div>
                 <div class="mobile-user-details">
-                    <div><span>Office</span><strong>${escapeHtml(officeLabel)}</strong></div>
-                    <div><span>Role</span><strong><span class="role-pill ${roleClass}">${escapeHtml(formatRole(user.role))}</span></strong></div>
-                    <div><span>Branch</span><strong>${escapeHtml(branchLabel)}</strong></div>
-                    <div><span>Devices</span><strong><button type="button" class="device-summary-button" data-device-user-id="${escapeHtml(user.id)}" title="Manage active devices">${escapeHtml(deviceCount)}</button></strong></div>
+                    <div class="mobile-user-detail">
+                        <svg class="mobile-user-detail-icon ui-icon" aria-hidden="true"><use href="#icon-building"></use></svg>
+                        <span class="mobile-user-detail-copy"><span>Office</span><strong>${escapeHtml(officeLabel)}</strong></span>
+                    </div>
+                    <div class="mobile-user-detail">
+                        <svg class="mobile-user-detail-icon ui-icon" aria-hidden="true"><use href="#icon-user"></use></svg>
+                        <span class="mobile-user-detail-copy"><span>Role</span><strong><span class="role-pill ${roleClass}">${escapeHtml(formatRole(user.role))}</span></strong></span>
+                    </div>
+                    <div class="mobile-user-detail">
+                        <svg class="mobile-user-detail-icon ui-icon" aria-hidden="true"><use href="#icon-location"></use></svg>
+                        <span class="mobile-user-detail-copy"><span>Branch</span><strong>${escapeHtml(branchLabel)}</strong></span>
+                    </div>
+                    <div class="mobile-user-detail">
+                        <svg class="mobile-user-detail-icon ui-icon" aria-hidden="true"><use href="#icon-device"></use></svg>
+                        <span class="mobile-user-detail-copy"><span>Devices</span><strong><button type="button" class="device-summary-button" data-device-user-id="${escapeHtml(user.id)}" title="Manage active devices">${escapeHtml(deviceCount)}</button></strong></span>
+                    </div>
                 </div>
             </article>
         </td>`;

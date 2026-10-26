@@ -20,7 +20,17 @@ body.users-page .content {
     flex: 1;
     min-height: 0;
     overflow: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     padding: 28px;
+}
+
+body.users-page .content::-webkit-scrollbar:vertical {
+    width: 0;
+}
+
+body.users-page .content::-webkit-scrollbar:horizontal {
+    height: 8px;
 }
 
 body.users-page .content > section {
@@ -2265,7 +2275,17 @@ body.reduced-motion *::after {
 
     body.users-page .content {
         padding-top: 12px;
-        padding-bottom: max(18px, env(safe-area-inset-bottom));
+        padding-bottom: max(42px, calc(28px + env(safe-area-inset-bottom)));
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    body.users-page .content::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
     }
 
     body.users-page .users-page-heading {
@@ -2317,6 +2337,15 @@ body.reduced-motion *::after {
         box-shadow: 0 5px 18px rgba(32, 77, 135, 0.08);
         box-sizing: border-box;
         overflow-x: hidden;
+    }
+
+    body.users-page .users-all-shell,
+    body.users-page .offices-shell {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        overflow-x: clip;
+        overflow-y: visible;
     }
 
     body.users-page .users-header {
@@ -2501,19 +2530,27 @@ body.reduced-motion *::after {
         text-align: center;
     }
 
+    body.users-page #officeMobilePagination,
     body.users-page #userMobilePagination {
-        position: fixed;
-        left: 50%;
-        bottom: max(32px, env(safe-area-inset-bottom));
-        z-index: 900;
-        transform: translateX(-50%);
-        margin: 0;
+        position: static;
+        transform: none;
+        margin: 8px auto 0;
         padding: 6px 10px;
         border: 1px solid var(--app-border);
         border-radius: 12px;
         background: color-mix(in srgb, var(--app-surface) 94%, transparent);
         box-shadow: 0 5px 18px rgba(32, 77, 135, 0.12);
         backdrop-filter: blur(8px);
+    }
+
+    body.users-page #officeMobilePagination,
+    body.users-page #userMobilePagination {
+        margin-top: 8px;
+        align-self: center;
+    }
+
+    body.users-page #officeMobilePagination {
+        margin-bottom: 0;
     }
 
     body.users-page #userMobilePagination[hidden] {
@@ -2778,22 +2815,19 @@ body.reduced-motion *::after {
 /* Treat narrow laptop/tablet CSS viewports as desktop for the office action. */
 @media (min-width: 601px) {
     body.users-page .offices-shell .users-all-heading-row {
-        position: relative !important;
+        position: static !important;
         display: flex !important;
         width: 100% !important;
         box-sizing: border-box !important;
         align-items: flex-start;
         min-height: 48px;
-        padding-right: 150px;
-        justify-content: flex-start !important;
+        padding-right: 0 !important;
+        justify-content: space-between !important;
     }
 
     body.users-page .offices-shell .users-create-staff-button {
-        position: absolute !important;
-        top: 0 !important;
-        right: 0 !important;
-        left: auto !important;
-        margin-left: 0 !important;
+        position: static !important;
+        margin-left: auto !important;
         display: inline-flex !important;
         width: auto !important;
         min-width: 132px;
@@ -2803,5 +2837,211 @@ body.reduced-motion *::after {
         border-radius: 999px;
         font-size: 0.82rem;
         flex: 0 0 auto !important;
+    }
+}
+
+@media (max-width: 600px) {
+    body.users-page .offices-shell {
+        position: relative;
+    }
+
+    body.users-page .offices-shell .users-all-heading-row {
+        position: static !important;
+        width: 100% !important;
+        padding-right: 48px !important;
+    }
+
+    body.users-page .offices-shell .users-create-staff-button {
+        position: absolute !important;
+        top: 12px !important;
+        right: 10px !important;
+        left: auto !important;
+        width: 38px !important;
+        min-width: 38px !important;
+        height: 38px !important;
+        min-height: 38px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        z-index: 2;
+    }
+}
+
+/* Reference-style user cards on mobile; desktop keeps the existing table. */
+@media (max-width: 760px) {
+    body.users-page .mobile-user-card {
+        padding: 14px;
+        border: 1px solid #dbe7f5;
+        border-radius: 20px;
+        background: #fff;
+        box-shadow: 0 5px 16px rgba(32, 77, 135, 0.07);
+    }
+
+    body.users-page .mobile-user-card-header {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr) auto;
+        align-items: start;
+        gap: 10px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #dbe7f5;
+        overflow: visible;
+    }
+
+    body.users-page .mobile-user-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: #eaf2ff;
+        color: #1956a8;
+        font-size: 0.84rem;
+        font-weight: 800;
+    }
+
+    body.users-page .mobile-user-identity {
+        display: grid;
+        min-width: 0;
+        gap: 4px;
+        padding-top: 1px;
+    }
+
+    body.users-page .mobile-user-identity strong {
+        color: #112f61;
+        font-size: 0.98rem;
+        font-weight: 800;
+        line-height: 1.2;
+    }
+
+    body.users-page .mobile-user-email {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 5px;
+        color: #6d86aa;
+        font-size: 0.74rem;
+    }
+
+    body.users-page .mobile-user-email .ui-icon {
+        flex: 0 0 14px;
+        width: 14px;
+        height: 14px;
+        color: #4f79b1;
+    }
+
+    body.users-page .mobile-user-email > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    body.users-page .mobile-user-header-meta {
+        display: flex;
+        align-items: flex-end;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    body.users-page .mobile-user-header-meta .status-pill {
+        min-height: 25px;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        white-space: nowrap;
+    }
+
+    body.users-page .mobile-user-menu-button {
+        width: 36px;
+        min-width: 36px;
+        height: 36px;
+        min-height: 36px;
+        padding: 0;
+        border: 1px solid #dbe7f5;
+        border-radius: 50%;
+        color: #315fa7;
+        background: #f7fbff;
+        font-size: 1.25rem;
+    }
+
+    body.users-page .mobile-user-details {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0 16px;
+        padding: 12px 0 0;
+    }
+
+    body.users-page .mobile-user-detail {
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr);
+        align-items: start;
+        gap: 8px;
+        min-width: 0;
+        padding: 10px 0;
+        border-bottom: 1px solid #e3edf8;
+    }
+
+    body.users-page .mobile-user-detail-icon {
+        width: 18px;
+        height: 18px;
+        margin-top: 1px;
+        color: #315f9d;
+    }
+
+    body.users-page .mobile-user-detail-copy {
+        display: grid;
+        min-width: 0;
+        gap: 4px;
+    }
+
+    body.users-page .mobile-user-detail-copy > span:first-child {
+        color: #7188a9;
+        font-size: 0.62rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    body.users-page .mobile-user-detail-copy strong {
+        min-width: 0;
+        color: #18345f;
+        font-size: 0.76rem;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+    }
+
+    body.users-page .mobile-user-detail .role-pill,
+    body.users-page .mobile-user-detail .device-summary-button {
+        min-height: 30px;
+        width: fit-content;
+        max-width: 100%;
+        padding: 0 9px;
+        border-radius: 10px;
+        font-size: 0.72rem;
+    }
+
+    body.users-page .mobile-user-detail .device-summary-button {
+        border: 1px solid #dbe7f5;
+        background: #f3f7ff;
+        color: #4b4df2;
+        font-weight: 800;
+    }
+
+    body.users-page .mobile-user-detail:nth-child(3),
+    body.users-page .mobile-user-detail:nth-child(4) {
+        border-bottom: 0;
+        padding-bottom: 2px;
+    }
+
+    body.users-page .mobile-user-card .status-pill.status-approved {
+        background: #e6f7eb;
+        color: #248b43;
+    }
+
+    body.users-page .mobile-user-card .status-pill.status-inactive,
+    body.users-page .mobile-user-card .status-pill.status-declined {
+        background: #fff0f0;
+        color: #c44949;
     }
 }
