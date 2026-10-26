@@ -2275,7 +2275,7 @@ body.reduced-motion *::after {
 
     body.users-page .content {
         padding-top: 12px;
-        padding-bottom: max(42px, calc(28px + env(safe-area-inset-bottom)));
+        padding-bottom: max(30px, calc(20px + env(safe-area-inset-bottom)));
         overflow-y: auto;
         overflow-x: hidden;
         scrollbar-width: none;
@@ -2343,6 +2343,7 @@ body.reduced-motion *::after {
     body.users-page .offices-shell {
         display: flex;
         flex-direction: column;
+        flex: 0 0 auto;
         min-height: 0;
         overflow-x: clip;
         overflow-y: visible;
@@ -2469,6 +2470,7 @@ body.reduced-motion *::after {
 
     body.users-page .users-all-shell .table-wrapper,
     body.users-page .pending-shell .table-wrapper {
+        flex: 0 0 auto;
         padding-top: 8px;
     }
 
