@@ -217,9 +217,11 @@
                     handleNotificationAction(action);
                 });
             });
+            positionPanel();
         } catch (error) {
             panel.querySelector(".admin-notification-list").innerHTML = `<p class="admin-notification-state">Unable to load notifications.<br><button type="button" class="admin-notification-retry">Try Again</button></p>`;
             panel.querySelector(".admin-notification-retry")?.addEventListener("click", loadDropdown);
+            positionPanel();
         }
     }
 
@@ -317,8 +319,14 @@
         const mobile = window.matchMedia("(max-width: 600px)").matches;
         panel.classList.toggle("is-mobile", mobile);
         if (!mobile) {
-            panel.style.top = `${Math.min(window.innerHeight - 18, rect.bottom + 10)}px`;
+            const panelHeight = panel.offsetHeight || 0;
+            const preferredTop = rect.bottom + 10;
+            const safeTop = Math.max(12, window.innerHeight - panelHeight - 12);
+            panel.style.top = `${Math.min(safeTop, preferredTop)}px`;
             panel.style.left = `${Math.max(12, Math.min(window.innerWidth - 360, rect.right - 340))}px`;
+        } else {
+            panel.style.top = "";
+            panel.style.left = "";
         }
     }
 

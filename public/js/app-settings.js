@@ -69,7 +69,7 @@
         }
 
         if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/service-worker.js?v=141", {
+        navigator.serviceWorker.register("/service-worker.js?v=142", {
                 updateViaCache: "none"
             }).then(registration => {
                 // Do not make offline startup wait on a service-worker update check.
