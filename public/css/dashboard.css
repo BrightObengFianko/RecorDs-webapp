@@ -743,6 +743,19 @@ a {
         max-height: none !important;
         overflow-y: visible !important;
     }
+
+    body.dashboard-page .record-copyright-footer {
+        position: fixed;
+        right: 10px;
+        bottom: calc(5px + env(safe-area-inset-bottom, 0px));
+        z-index: 900;
+        max-width: calc(100% - 20px);
+        pointer-events: none;
+    }
+
+    body.dashboard-page .content {
+        padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    }
 }
 
 

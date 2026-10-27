@@ -110,6 +110,7 @@ function closeActionMenus() {
         menu.style.top = "";
         menu.style.left = "";
         menu.style.bottom = "";
+        menu.__accountTrigger = null;
     });
 }
 
@@ -138,7 +139,7 @@ function positionAccountActionMenu(menu, trigger) {
 
 function repositionAccountActionMenus() {
     document.querySelectorAll(".account-action-menu.is-open").forEach(menu => {
-        const trigger = [...document.querySelectorAll("[data-menu-id]")]
+        const trigger = menu.__accountTrigger || [...document.querySelectorAll("[data-menu-id]")]
             .find(button => button.dataset.menuId === menu.dataset.actionMenu);
         positionAccountActionMenu(menu, trigger);
     });
@@ -169,27 +170,69 @@ function renderRecords() {
     const pageRecords = records.slice(startIndex, startIndex + rowsPerPage);
 
     processingBody.innerHTML = pageRecords.map((record, index) => `
+        ${(() => {
+            const recordId = escapeHtml(record.id);
+            const category = record.category || "-";
+            const registrar = window.RecordRegistrar?.normalize(record.registrar) || "-";
+            const dateOfBirth = formatDate(record.date_of_birth);
+            const dateOfDeath = formatDate(record.date_of_death);
+            const displayDate = dateOfDeath !== "-" ? dateOfDeath : dateOfBirth;
+            const displayDateLabel = dateOfDeath !== "-" ? "Date of Death" : "Date of Birth";
+            const status = String(record.status || "Processing")
+                .replace(/[_-]+/g, " ")
+                .replace(/\s+/g, " ")
+                .trim() || "Processing";
+            const actionMenu = `
+                <div class="account-actions">
+                    <button class="account-menu-button" type="button" data-menu-id="${recordId}" aria-label="Open case actions"><svg class="ui-icon"><use href="#account-menu"></use></svg></button>
+                    <div class="account-action-menu" data-action-menu="${recordId}">
+                        <button type="button" data-action="approve" data-id="${recordId}"><svg class="ui-icon"><use href="#account-check"></use></svg>Approve</button>
+                        <button type="button" data-action="edit" data-id="${recordId}"><svg class="ui-icon"><use href="#account-edit"></use></svg>Edit</button>
+                        <button type="button" data-action="delete" data-id="${recordId}"><svg class="ui-icon"><use href="#account-trash"></use></svg>Delete</button>
+                    </div>
+                </div>`;
+            return `
         <tr data-id="${escapeHtml(record.id)}">
             <td><input class="record-check" type="checkbox" data-id="${escapeHtml(record.id)}" ${selectedIds.has(String(record.id)) ? "checked" : ""}></td>
             <td>${startIndex + index + 1}</td>
             <td><strong>${escapeHtml(record.name || "-")}</strong></td>
             <td>${escapeHtml(formatDate(record.date_of_birth))}</td>
             <td>${escapeHtml(formatDate(record.date_of_death))}</td>
-            <td><span class="category-badge" style="--category-color:${window.RecordCategoryColors ? window.RecordCategoryColors.getColor(record.category) : "#6b5bff"}">${escapeHtml(record.category || "-")}</span></td>
-            <td>${escapeHtml(window.RecordRegistrar?.normalize(record.registrar) || "-")}</td>
+            <td><span class="category-badge" style="--category-color:${window.RecordCategoryColors ? window.RecordCategoryColors.getColor(category) : "#6b5bff"}">${escapeHtml(category)}</span></td>
+            <td>${escapeHtml(registrar)}</td>
             <td>${escapeHtml(formatDateTime(record.registration_date))}</td>
             <td class="${record.notes ? "account-note" : "account-note is-empty"}">${escapeHtml(record.notes || "-")}</td>
-            <td>
-                <div class="account-actions">
-                    <button class="account-menu-button" type="button" data-menu-id="${escapeHtml(record.id)}" aria-label="Open case actions"><svg class="ui-icon"><use href="#account-menu"></use></svg></button>
-                    <div class="account-action-menu" data-action-menu="${escapeHtml(record.id)}">
-                        <button type="button" data-action="approve" data-id="${escapeHtml(record.id)}"><svg class="ui-icon"><use href="#account-check"></use></svg>Approve</button>
-                        <button type="button" data-action="edit" data-id="${escapeHtml(record.id)}"><svg class="ui-icon"><use href="#account-edit"></use></svg>Edit</button>
-                        <button type="button" data-action="delete" data-id="${escapeHtml(record.id)}"><svg class="ui-icon"><use href="#account-trash"></use></svg>Delete</button>
+            <td>${actionMenu}</td>
+            <td class="account-mobile-cell" colspan="10">
+                <article class="account-record-card">
+                    <header class="account-record-card-header">
+                        <label class="account-record-select">
+                            <input class="record-check" type="checkbox" data-id="${recordId}" ${selectedIds.has(String(record.id)) ? "checked" : ""}>
+                            <span class="account-record-number">${startIndex + index + 1}</span>
+                        </label>
+                        <strong class="account-record-name">${escapeHtml(record.name || "-")}</strong>
+                        <span class="category-badge" style="--category-color:${window.RecordCategoryColors ? window.RecordCategoryColors.getColor(category) : "#6b5bff"}">${escapeHtml(category)}</span>
+                    </header>
+                    <div class="account-record-meta">
+                        <span class="account-record-date">${displayDateLabel}: <strong>${escapeHtml(displayDate)}</strong></span>
+                        <span class="account-status-badge">${escapeHtml(status)}</span>
                     </div>
-                </div>
+                    <div class="account-record-details">
+                        ${dateOfBirth !== "-" && displayDate !== dateOfBirth ? `<div><span>Date of Birth</span><strong>${escapeHtml(dateOfBirth)}</strong></div>` : ""}
+                        ${dateOfDeath !== "-" && displayDate !== dateOfDeath ? `<div><span>Date of Death</span><strong>${escapeHtml(dateOfDeath)}</strong></div>` : ""}
+                        <div><span>Phone</span><strong>${escapeHtml(record.phone_number || "-")}</strong></div>
+                        <div><span>Registered</span><strong>${escapeHtml(formatDateTime(record.registration_date))}</strong></div>
+                        <div class="account-record-note"><span>Note</span><strong>${escapeHtml(record.notes || "-")}</strong></div>
+                    </div>
+                    <footer class="account-record-card-footer">
+                        <span class="account-record-registrar">Registrar: <strong>${escapeHtml(registrar)}</strong></span>
+                        ${actionMenu}
+                    </footer>
+                </article>
             </td>
         </tr>
+            `;
+        })()}
     `).join("");
 
     updateSummary();
@@ -288,10 +331,12 @@ if (!accountToken) {
         const menuButton = event.target.closest("[data-menu-id]");
         if (menuButton) {
             closeActionMenus();
-            const menu = [...document.querySelectorAll("[data-action-menu]")]
-                .find(item => item.dataset.actionMenu === menuButton.dataset.menuId);
+            const menu = menuButton.closest(".account-actions")?.querySelector("[data-action-menu]") ||
+                [...document.querySelectorAll("[data-action-menu]")]
+                    .find(item => item.dataset.actionMenu === menuButton.dataset.menuId);
 
             if (menu) {
+                menu.__accountTrigger = menuButton;
                 const placeholder = document.createComment("account-action-menu");
                 menu.before(placeholder);
                 menu.__accountMenuPlaceholder = placeholder;

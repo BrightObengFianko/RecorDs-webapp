@@ -513,6 +513,10 @@ body.account-page textarea {
     height: 15px;
 }
 
+.account-mobile-cell {
+    display: none;
+}
+
 @media (max-width: 600px) {
     .account-action-menu button {
         min-height: 40px;
@@ -692,6 +696,221 @@ body.account-page textarea {
 
     .account-table-wrap table {
         min-width: 920px;
+    }
+}
+
+/* Mobile account records use the same compact card language as Dashboard
+   Recent Records while preserving the desktop table and its actions. */
+@media (max-width: 700px) {
+    .account-card {
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+    }
+
+    .account-table-wrap {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        overflow: visible;
+    }
+
+    .account-table-wrap table,
+    .account-table-wrap tbody,
+    .account-table-wrap tbody tr {
+        display: block;
+        width: 100% !important;
+        max-width: 100%;
+        min-width: 0 !important;
+        box-sizing: border-box;
+    }
+
+    .account-table-wrap table {
+        table-layout: fixed;
+    }
+
+    .account-table-wrap thead {
+        display: none;
+    }
+
+    .account-table-wrap tbody tr {
+        margin-bottom: 10px;
+    }
+
+    .account-table-wrap tbody tr > td:not(.account-mobile-cell) {
+        display: none;
+    }
+
+    .account-table-wrap tbody tr > td.account-mobile-cell {
+        display: block;
+        width: 100% !important;
+        max-width: 100%;
+        min-width: 0 !important;
+        padding: 0;
+        border: 0;
+        box-sizing: border-box;
+    }
+
+    .account-table-wrap tbody tr > td.account-empty {
+        display: block !important;
+        width: 100%;
+        padding: 28px 12px !important;
+        border: 0;
+    }
+
+    .account-record-card {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        padding: 16px 14px 14px;
+        border: 1px solid var(--app-border);
+        border-radius: 16px;
+        background: var(--app-surface);
+        box-shadow: var(--app-shadow);
+        overflow: hidden;
+        box-sizing: border-box;
+    }
+
+    .account-record-card-header {
+        display: grid;
+        grid-template-columns: 52px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--app-border);
+    }
+
+    .account-record-select {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+        color: var(--accent-ink);
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .account-record-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 9px;
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+        font-size: 0.78rem;
+        font-weight: 800;
+    }
+
+    .account-record-select input {
+        width: 18px;
+        height: 18px;
+        flex: 0 0 auto;
+    }
+
+    .account-record-name {
+        min-width: 0;
+        color: var(--app-text);
+        font-size: 0.88rem;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .account-status-badge {
+        max-width: 100%;
+        padding: 6px 8px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+        font-size: 0.68rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+        text-align: center;
+    }
+
+    .account-record-card-header .category-badge {
+        width: auto;
+        max-width: min(112px, 28vw);
+        min-height: 26px;
+        padding: 0 8px;
+        font-size: 0.68rem;
+        overflow-wrap: anywhere;
+        white-space: normal;
+        text-align: center;
+    }
+
+    .account-record-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 0;
+        padding: 10px 0;
+    }
+
+    .account-record-date {
+        flex: 1 1 auto;
+        min-width: 0;
+        color: var(--app-muted);
+        font-size: 0.7rem;
+        overflow-wrap: anywhere;
+    }
+
+    .account-record-date strong,
+    .account-record-registrar strong {
+        color: var(--app-text);
+    }
+
+    .account-record-details {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 14px;
+        min-width: 0;
+        padding: 12px 0;
+    }
+
+    .account-record-details > div {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+    }
+
+    .account-record-details span {
+        color: var(--app-muted);
+        font-size: 0.68rem;
+    }
+
+    .account-record-details strong {
+        min-width: 0;
+        color: var(--app-text);
+        font-size: 0.76rem;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .account-record-note {
+        grid-column: 1 / -1;
+    }
+
+    .account-record-card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-width: 0;
+        padding-top: 12px;
+        border-top: 1px solid var(--app-border);
+    }
+
+    .account-record-registrar {
+        flex: 1 1 auto;
+        min-width: 0;
+        color: var(--app-muted);
+        font-size: 0.7rem;
+        overflow-wrap: anywhere;
     }
 }
 
