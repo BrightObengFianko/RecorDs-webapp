@@ -87,6 +87,8 @@
 .admin-notification-close:hover { background: var(--app-surface-2, #f3f4f8); }
 .admin-notification-mark-all { border: 0; background: transparent; color: var(--accent-ink, #5735e8); font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
 .admin-notification-clear-all { border: 0; background: transparent; color: #b42318; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.admin-notification-action-icon { display: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.admin-notification-view-arrow { margin-left: 3px; }
 .admin-notification-list { flex: 0 1 auto; min-height: 0; max-height: min(390px, calc(100vh - 170px)); overflow-y: auto; }
 .admin-notification-row { position: relative; display: flex; align-items: stretch; border-bottom: 1px solid var(--app-border, #e5e7eb); }
 .admin-notification-item { display: flex; width: 100%; gap: 10px; padding: 13px 16px; border: 0; border-bottom: 1px solid var(--app-border, #e5e7eb); background: transparent; color: inherit; text-align: left; cursor: pointer; }
@@ -101,7 +103,7 @@
 .admin-notification-item-copy span { color: var(--app-muted, #667085); font-size: 11px; overflow-wrap: anywhere; }
 .admin-notification-item-copy small { color: var(--app-muted, #667085); font-size: 10px; }
 .admin-notification-item-icon.priority-critical { filter: saturate(1.35); }
-.admin-notification-view-all { display: block; padding: 13px 16px; color: var(--accent-ink, #5735e8); font-size: 12px; font-weight: 700; text-align: center; text-decoration: none; }
+.admin-notification-view-all { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 4px; padding: 13px 16px; border-top: 1px solid var(--app-border, #e5e7eb); color: var(--accent-ink, #5735e8); font-size: 12px; font-weight: 700; text-align: center; text-decoration: none; }
 .admin-notification-state { padding: 28px 18px; margin: 0; color: var(--app-muted, #667085); font-size: 12px; line-height: 1.7; text-align: center; }
 .admin-notification-state strong { color: var(--app-text, #172033); }
 .admin-notification-retry { margin-top: 8px; padding: 7px 11px; border: 1px solid var(--app-border, #e5e7eb); border-radius: 7px; background: var(--app-surface, #fff); cursor: pointer; }
@@ -189,7 +191,7 @@
         width: auto;
         max-width: calc(100vw - 24px);
         height: auto;
-        max-height: calc(100dvh - 76px);
+        max-height: min(65dvh, 480px);
         display: flex;
         flex-direction: column;
         overscroll-behavior: contain;
@@ -198,7 +200,8 @@
     .admin-notification-panel.is-mobile header {
         position: relative;
         display: block;
-        padding: 12px 54px 12px 12px;
+        flex: 0 0 auto;
+        padding: 11px 54px 10px 12px;
     }
 
     .admin-notification-panel.is-mobile header > strong {
@@ -209,7 +212,7 @@
         width: 100%;
         justify-content: flex-start;
         gap: 6px;
-        margin-top: 8px;
+        margin-top: 6px;
     }
 
     .admin-notification-panel.is-mobile .admin-notification-close {
@@ -221,17 +224,76 @@
 
     .admin-notification-panel.is-mobile .admin-notification-mark-all,
     .admin-notification-panel.is-mobile .admin-notification-clear-all {
+        display: inline-grid;
+        place-items: center;
         min-height: 36px;
+        width: 38px;
+        min-width: 38px;
         padding: 7px 9px;
         border-radius: 7px;
+    }
+
+    .admin-notification-panel.is-mobile .admin-notification-action-label,
+    .admin-notification-panel.is-mobile .admin-notification-view-arrow {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+
+    .admin-notification-panel.is-mobile .admin-notification-action-icon {
+        display: block;
+    }
+
+    .admin-notification-panel.is-mobile .admin-notification-view-all {
+        display: inline-grid;
+        place-items: center;
+        align-self: center;
+        width: 44px;
+        min-height: 44px;
+        padding: 8px;
+        border-radius: 9px;
+        transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    .admin-notification-panel.is-mobile .admin-notification-view-all:hover,
+    .admin-notification-panel.is-mobile .admin-notification-mark-all:hover,
+    .admin-notification-panel.is-mobile .admin-notification-clear-all:hover {
+        background: var(--accent-soft, #f1efff);
+        box-shadow: 0 5px 14px rgba(87, 53, 232, .14);
+        transform: translateY(-1px);
+    }
+
+    .admin-notification-panel.is-mobile .admin-notification-mark-all,
+    .admin-notification-panel.is-mobile .admin-notification-clear-all {
+        transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    .admin-notification-panel.is-mobile .admin-notification-view-all:active,
+    .admin-notification-panel.is-mobile .admin-notification-mark-all:active,
+    .admin-notification-panel.is-mobile .admin-notification-clear-all:active {
+        transform: scale(.93);
+    }
+
+    .admin-notification-panel.is-mobile .admin-notification-view-all:focus-visible,
+    .admin-notification-panel.is-mobile .admin-notification-mark-all:focus-visible,
+    .admin-notification-panel.is-mobile .admin-notification-clear-all:focus-visible {
+        outline: 3px solid color-mix(in srgb, var(--accent, #5735e8) 35%, transparent);
+        outline-offset: 2px;
     }
 
     .admin-notification-panel.is-mobile .admin-notification-list {
         flex: 0 1 auto;
         min-height: 0;
-        max-height: calc(100dvh - 190px);
+        max-height: calc(min(65dvh, 480px) - 135px);
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
+    }
+
+    .admin-notification-panel.is-mobile .admin-notification-view-all {
+        order: 3;
     }
 
     .admin-notification-panel.is-mobile .admin-notification-list::-webkit-scrollbar {
@@ -239,7 +301,12 @@
     }
 
     .admin-notification-panel.is-mobile .admin-notification-item {
-        padding: 13px 12px;
+        padding: 11px 12px;
+    }
+
+    .admin-notification-panel.is-mobile .admin-notification-state {
+        padding: 18px 12px;
+        line-height: 1.45;
     }
 
     .admin-notification-panel.is-mobile .admin-notification-action {
