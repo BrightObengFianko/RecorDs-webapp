@@ -2363,7 +2363,7 @@ function displayResults() {
                 </td>
 
 
-                <td>
+                <td class="customer-name-cell">
 
                     <strong>
 
@@ -2376,7 +2376,7 @@ function displayResults() {
                 </td>
 
 
-                <td>
+                <td class="date-of-birth-cell">
 
                     ${escapeHtml(
                         formatDateOnly(

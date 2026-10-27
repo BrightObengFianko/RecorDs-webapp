@@ -765,3 +765,23 @@ body.sidebar-collapsed .logout span {
         font-size: 28px;
     }
 }
+
+/* Tablet sidebar spacing: keep navigation items easy to distinguish and
+   lift the profile/logout controls slightly from the lower edge. */
+@media (min-width: 701px) and (max-width: 1000px) {
+    .sidebar .navigation {
+        gap: 14px;
+        padding-top: 16px;
+        padding-bottom: 14px;
+    }
+
+    .sidebar .navigation .nav-item {
+        min-height: 56px;
+        padding-top: 15px;
+        padding-bottom: 15px;
+    }
+
+    .sidebar .sidebar-bottom {
+        padding-bottom: 32px;
+    }
+}

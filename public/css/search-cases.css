@@ -3,7 +3,6 @@
     margin: 0;
     padding: 0;
 }
-
 html,
 body {
     width: 100%;
@@ -820,6 +819,13 @@ td {
 }
 
 .phone-number-cell {
+    font-weight: 700;
+}
+
+.customer-name-cell,
+.date-of-birth-cell,
+.phone-number-cell {
+    font-size: 14px;
     font-weight: 700;
 }
 
@@ -2205,7 +2211,8 @@ body.search-page .content {
         min-width: 0;
         max-width: 100%;
         color: var(--accent-ink);
-        font-size: 14px;
+        font-size: 16px;
+        font-weight: 800;
         line-height: 1.25;
         overflow-wrap: anywhere;
         word-break: break-word;
@@ -2273,6 +2280,12 @@ body.search-page .content {
         font-weight: 500;
         overflow-wrap: anywhere;
         word-break: break-word;
+    }
+
+    body.search-page .mobile-record-detail:nth-child(1) strong,
+    body.search-page .mobile-record-detail:nth-child(5) strong {
+        font-size: 14px;
+        font-weight: 800;
     }
 
     body.search-page .mobile-record-detail .sms-yes,
@@ -2378,5 +2391,68 @@ body.search-page .content {
 
     body.search-page .mobile-record-card .status {
         display: none;
+    }
+}
+
+/* Tablet search cards: keep the compact card presentation readable without
+   changing the desktop table or narrow-phone layout. */
+@media (min-width: 601px) and (max-width: 750px) {
+    body.search-page .mobile-record-card {
+        padding: 14px 16px 15px;
+        border-radius: 14px;
+    }
+
+    body.search-page .mobile-record-card-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+        gap: 12px;
+        padding-bottom: 12px;
+    }
+
+    body.search-page .mobile-record-card-heading {
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr);
+        align-items: center;
+        gap: 8px;
+    }
+
+    body.search-page .mobile-record-number {
+        font-size: 13px;
+    }
+
+    body.search-page .mobile-record-name {
+        font-size: 15px;
+        line-height: 1.2;
+    }
+
+    body.search-page .mobile-record-card-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    body.search-page .mobile-record-details {
+        column-gap: 24px;
+        row-gap: 14px;
+        padding-top: 13px;
+    }
+
+    body.search-page .mobile-record-detail {
+        gap: 7px;
+    }
+
+    body.search-page .mobile-record-detail small {
+        font-size: 10px;
+    }
+
+    body.search-page .mobile-record-detail strong {
+        font-size: 12px;
+    }
+
+    body.search-page .mobile-record-detail:nth-child(1) strong,
+    body.search-page .mobile-record-detail:nth-child(5) strong {
+        font-size: 13px;
     }
 }

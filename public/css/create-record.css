@@ -898,3 +898,62 @@ textarea:focus-visible {
         margin-top: 8px;
     }
 }
+
+/* Tablet Record Case form: remove desktop minimum widths and use a balanced
+   two-column layout that fits beside the tablet sidebar. */
+@media (min-width: 701px) and (max-width: 1000px) {
+    .content {
+        min-width: 0;
+        padding: 20px 22px 24px;
+    }
+
+    .form-card {
+        min-width: 0;
+        padding: 22px;
+    }
+
+    .form-row,
+    .category-registrar-row,
+    .name-date-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+
+    .phone-status-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+
+    .form-group {
+        margin-bottom: 16px;
+    }
+
+    .form-group label {
+        margin-bottom: 6px;
+        font-size: 13px;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        min-width: 0;
+        max-width: 100%;
+        padding: 11px 12px;
+        font-size: 14px;
+    }
+
+    .form-group textarea {
+        min-height: 96px;
+    }
+
+    .form-actions {
+        gap: 12px;
+        padding-top: 18px;
+    }
+
+    .cancel-button,
+    .submit-button {
+        min-width: 130px;
+        min-height: 42px;
+    }
+}

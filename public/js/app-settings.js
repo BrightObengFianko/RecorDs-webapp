@@ -69,7 +69,7 @@
         }
 
         if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/service-worker.js?v=170", {
+        navigator.serviceWorker.register("/service-worker.js?v=180", {
                 updateViaCache: "none"
             }).then(registration => {
                 // Do not make offline startup wait on a service-worker update check.
@@ -1380,6 +1380,103 @@
             "click",
             closeMobileSidebar
         );
+
+        // Add mobile-only edge gestures without replacing the existing drawer
+        // controls. Vertical movement remains normal page scrolling.
+        const gestureQuery = window.matchMedia("(max-width: 700px)");
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchTracking = false;
+        let horizontalGesture = false;
+
+        document.addEventListener("touchstart", event => {
+            if (!gestureQuery.matches || event.touches.length !== 1) {
+                touchTracking = false;
+                return;
+            }
+
+            const touch = event.touches[0];
+            const drawerOpen = sidebar.classList.contains("mobile-open");
+            const startedInSidebar = sidebar.contains(event.target);
+            const startedOnInteractive = Boolean(
+                event.target.closest?.("a, button, input, select, textarea")
+            );
+
+            const canOpen = !drawerOpen && touch.clientX <= 24;
+            const canClose =
+                drawerOpen &&
+                startedInSidebar &&
+                !startedOnInteractive;
+
+            touchTracking = canOpen || canClose;
+            horizontalGesture = false;
+
+            if (!touchTracking) {
+                return;
+            }
+
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+        }, { passive: true });
+
+        document.addEventListener("touchmove", event => {
+            if (!touchTracking || event.touches.length !== 1) {
+                return;
+            }
+
+            const touch = event.touches[0];
+            const deltaX = touch.clientX - touchStartX;
+            const deltaY = touch.clientY - touchStartY;
+
+            if (!horizontalGesture) {
+                if (Math.abs(deltaY) > Math.abs(deltaX) + 6) {
+                    touchTracking = false;
+                    return;
+                }
+
+                if (Math.abs(deltaX) < 12) {
+                    return;
+                }
+
+                horizontalGesture = true;
+            }
+
+            event.preventDefault();
+        }, { passive: false });
+
+        document.addEventListener("touchend", event => {
+            if (!touchTracking || !horizontalGesture) {
+                touchTracking = false;
+                horizontalGesture = false;
+                return;
+            }
+
+            const touch = event.changedTouches[0];
+            const deltaX = touch.clientX - touchStartX;
+            const drawerOpen = sidebar.classList.contains("mobile-open");
+
+            if (!drawerOpen && deltaX >= 56) {
+                openMobileSidebar();
+            } else if (drawerOpen && deltaX <= -56) {
+                closeMobileSidebar();
+            }
+
+            touchTracking = false;
+            horizontalGesture = false;
+        }, { passive: true });
+
+        document.addEventListener("touchcancel", () => {
+            touchTracking = false;
+            horizontalGesture = false;
+        }, { passive: true });
+
+        sidebar.querySelectorAll("a[href]").forEach(link => {
+            link.addEventListener("click", () => {
+                if (isMobileSidebar()) {
+                    closeMobileSidebar();
+                }
+            });
+        });
 
         document.addEventListener("keydown", event => {
             if (

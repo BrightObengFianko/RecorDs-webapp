@@ -2055,3 +2055,213 @@ body.sidebar-collapsed .content {
 body.sidebar-collapsed .welcome {
     padding: 0;
 }
+
+/* Tablet dashboard: keep the four main areas visually unified instead of
+   repeating a separate bordered card for every statistic. */
+@media (min-width: 701px) and (max-width: 1000px) {
+    .dashboard-page .stats {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0;
+        padding: 4px 0;
+        border: 1px solid var(--app-border);
+        border-radius: 16px;
+        background: var(--app-surface);
+        box-shadow: var(--app-shadow-soft);
+    }
+
+    .dashboard-page .stat-card {
+        min-width: 0;
+        padding: 10px 14px;
+        border: 0;
+        border-right: 1px solid var(--app-border);
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .dashboard-page .stat-card:last-child {
+        border-right: 0;
+    }
+
+    .dashboard-page .stat-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+    }
+
+    .dashboard-page .admin-dashboard {
+        gap: 22px;
+    }
+
+    .dashboard-page .overview-category-container {
+        padding: 14px 18px 18px;
+        background: var(--app-surface);
+        border: 1px solid var(--app-border);
+        border-radius: 16px;
+        box-shadow: var(--app-shadow-soft);
+    }
+
+    .dashboard-page .overview-category-container > .admin-dashboard-grid > .admin-panel,
+    .dashboard-page .admin-panel-system-status > .admin-panel {
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .dashboard-page .admin-panel {
+        min-width: 0;
+        padding: 18px 0;
+        border: 0;
+        border-bottom: 1px solid var(--app-border);
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .dashboard-page .admin-panel-header {
+        margin-bottom: 14px;
+    }
+
+    .dashboard-page .admin-panel-system-status {
+        gap: 0;
+    }
+
+    .dashboard-page .admin-panel-system-status > .admin-panel + .admin-panel {
+        padding-top: 18px;
+        border-top: 1px solid var(--app-border);
+    }
+
+    .dashboard-page .status-sms-grid,
+    .dashboard-page .system-grid,
+    .dashboard-page .registrar-performance-list {
+        min-width: 0;
+    }
+
+    .dashboard-page .status-sms-grid > *,
+    .dashboard-page .system-grid > *,
+    .dashboard-page .registrar-performance-list > * {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .dashboard-page .admin-dashboard-grid-bottom {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+        gap: 0;
+        padding: 0 18px;
+        overflow: hidden;
+        border: 1px solid var(--app-border);
+        border-radius: 16px;
+        background: var(--app-surface);
+        box-shadow: var(--app-shadow-soft);
+    }
+
+    /* Flatten the nested wrapper so all three dashboard areas share one
+       container while keeping System Overview on its own full-width row. */
+    .dashboard-page .admin-panel-system-status {
+        display: contents;
+    }
+
+    .dashboard-page .admin-panel-registrars,
+    .dashboard-page .admin-panel-status,
+    .dashboard-page .admin-panel-system {
+        min-width: 0;
+        padding: 18px 16px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .dashboard-page .admin-panel-status {
+        border-left: 1px solid var(--app-border);
+    }
+
+    .dashboard-page .admin-panel-system {
+        grid-column: 1 / -1;
+        border-top: 1px solid var(--app-border);
+    }
+
+    .dashboard-page .admin-panel-registrars .admin-panel-header,
+    .dashboard-page .admin-panel-status .admin-panel-header,
+    .dashboard-page .admin-panel-system .admin-panel-header {
+        margin-bottom: 12px;
+    }
+
+    .dashboard-page .admin-panel-registrars .registrar-office-filter {
+        min-width: 118px;
+    }
+
+    .dashboard-page .admin-panel-registrars .registrar-office-filter select {
+        min-width: 118px;
+        width: 100%;
+    }
+
+    .dashboard-page .registrar-performance-list {
+        gap: 10px;
+    }
+
+    .dashboard-page .registrar-performance-label strong {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .dashboard-page .registrar-today-total {
+        margin-top: 12px;
+        padding: 10px 12px;
+    }
+
+    .dashboard-page .status-sms-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .dashboard-page .status-sms-item {
+        padding: 9px 8px;
+    }
+
+    .dashboard-page .status-sms-item strong {
+        font-size: 15px;
+    }
+
+    .dashboard-page .system-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .dashboard-page .system-item {
+        min-width: 0;
+        padding: 10px;
+        gap: 8px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .dashboard-page .system-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+    }
+
+    .dashboard-page .system-copy {
+        min-width: 0;
+    }
+
+    .dashboard-page .system-copy strong,
+    .dashboard-page .system-copy small {
+        overflow-wrap: anywhere;
+    }
+
+    .dashboard-page .recent-records-panel {
+        border: 1px solid var(--app-border);
+        border-radius: 14px;
+        background: var(--app-surface);
+        box-shadow: var(--app-shadow-soft);
+    }
+}
