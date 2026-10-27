@@ -597,6 +597,11 @@ async function resolveDashboardOfficeContext(req, queryKey = "office_id") {
 
 const RECENT_RECORDS_PAGE_SIZE = 10;
 
+function normalizeRecentRecordsLimit(value) {
+    const limit = Number.parseInt(String(value || "10"), 10);
+    return limit === 5 ? 5 : RECENT_RECORDS_PAGE_SIZE;
+}
+
 function normalizePage(value) {
     const page = Number.parseInt(String(value || "1"), 10);
     return Number.isInteger(page) && page > 0 ? page : 1;
@@ -617,7 +622,7 @@ function sqlDateText(value) {
     return match ? match[1] : null;
 }
 
-async function queryRecentTodayRecords(user, requestedPage, officeContextId = null) {
+async function queryRecentTodayRecords(user, requestedPage, officeContextId = null, requestedLimit = null) {
     const {
         clause,
         values
@@ -637,6 +642,7 @@ async function queryRecentTodayRecords(user, requestedPage, officeContextId = nu
     // application stores it as Ghana-local time, so compare against the
     // current Accra calendar day rather than the database server's timezone.
     const page = normalizePage(requestedPage);
+    const pageSize = normalizeRecentRecordsLimit(requestedLimit);
 
     const todayResult = await pool.query(
         `
@@ -656,7 +662,7 @@ async function queryRecentTodayRecords(user, requestedPage, officeContextId = nu
             isToday: false,
             pagination: {
                 page: 1,
-                limit: RECENT_RECORDS_PAGE_SIZE,
+                limit: pageSize,
                 total: 0,
                 totalPages: 0
             }
@@ -666,7 +672,7 @@ async function queryRecentTodayRecords(user, requestedPage, officeContextId = nu
     const dateParameter = recentValues.length + 1;
     const limitParameter = recentValues.length + 2;
     const offsetParameter = recentValues.length + 3;
-    const offset = (page - 1) * RECENT_RECORDS_PAGE_SIZE;
+    const offset = (page - 1) * pageSize;
     const selectedDateClause = recentClause
         ? `${recentClause} AND COALESCE(r.registration_date, r.created_at) >= $${dateParameter}::date AND COALESCE(r.registration_date, r.created_at) < ($${dateParameter}::date + INTERVAL '1 day')`
         : `WHERE COALESCE(r.registration_date, r.created_at) >= $${dateParameter}::date AND COALESCE(r.registration_date, r.created_at) < ($${dateParameter}::date + INTERVAL '1 day')`;
@@ -705,14 +711,14 @@ async function queryRecentTodayRecords(user, requestedPage, officeContextId = nu
             `,
             [
                 ...dateValues,
-                RECENT_RECORDS_PAGE_SIZE,
+                pageSize,
                 offset
             ]
         )
     ]);
 
     const total = Number(countResult.rows[0]?.total || 0);
-    const totalPages = Math.ceil(total / RECENT_RECORDS_PAGE_SIZE);
+    const totalPages = Math.ceil(total / pageSize);
 
     return {
         records: normalizeRecordRows(recordsResult.rows || []),
@@ -720,7 +726,7 @@ async function queryRecentTodayRecords(user, requestedPage, officeContextId = nu
         isToday,
         pagination: {
             page,
-            limit: RECENT_RECORDS_PAGE_SIZE,
+            limit: pageSize,
             total,
             totalPages
         }
@@ -736,7 +742,8 @@ const getRecentTodayRecords = async (req, res) => {
         const result = await queryRecentTodayRecords(
             req.user,
             req.query?.page,
-            officeContextId
+            officeContextId,
+            req.query?.limit
         );
 
         return res.json({
@@ -1538,7 +1545,8 @@ const getDashboardSummary = async (req, res) => {
         const recentTodayPromise = queryRecentTodayRecords(
             req.user,
             req.query?.recentPage,
-            recentOfficeContextId
+            recentOfficeContextId,
+            req.query?.recentLimit
         );
 
         const normalizeStatusSql =

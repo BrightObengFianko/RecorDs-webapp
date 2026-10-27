@@ -86,6 +86,10 @@ let offlineRecentRecords = null;
 
 let dashboardSummaryLoading = false;
 
+function getRecentRecordsPageSize() {
+    return window.matchMedia?.("(max-width: 700px)").matches ? 5 : 10;
+}
+
 function readStoredUser() {
     try {
         return JSON.parse(localStorage.getItem("user") || "null") || {};
@@ -1292,7 +1296,7 @@ function renderRecentPagination(pagination) {
     }
 
     const total = Number(pagination?.total || 0);
-    const limit = Math.max(1, Number(pagination?.limit || 10));
+    const limit = Math.max(1, Number(pagination?.limit || getRecentRecordsPageSize()));
     const reportedTotalPages = Number(pagination?.totalPages || 0);
     const totalPages = reportedTotalPages > 0
         ? reportedTotalPages
@@ -1413,6 +1417,7 @@ function renderRecentRecords(records, pagination, metadata = {}) {
     recentRecordsBody.innerHTML = "";
 
     const page = Number(pagination?.page || 1);
+    const pageSize = Math.max(1, Number(pagination?.limit || getRecentRecordsPageSize()));
 
     visibleRecords.forEach((record, index) => {
         const row = document.createElement("tr");
@@ -1420,6 +1425,12 @@ function renderRecentRecords(records, pagination, metadata = {}) {
         const statusClass = getStatusClass(record.status);
         const registrationDate = formatDateOnly(record.registration_date);
         const dateValue = formatDateOnly(getRecordDisplayDate(record));
+        const dateOfBirth = formatDateOnly(record.date_of_birth);
+        const dateOfDeath = formatDateOnly(record.date_of_death);
+        const displayDateLabel = dateOfDeath !== "-" && dateValue === dateOfDeath
+            ? "Date of Death"
+            : "Date of Birth";
+        const phone = String(record.phone_number || "").trim() || "-";
         const category = record.category || "-";
         const registrar = window.RecordRegistrar?.normalize(record.registrar) || "-";
         const name = record.name || "-";
@@ -1452,6 +1463,41 @@ function renderRecentRecords(records, pagination, metadata = {}) {
             <td>${escapeHtml(registrar)}</td>
             <td>
                 ${viewAction}
+            </td>
+            <td class="recent-mobile-cell" colspan="8">
+                <article class="recent-record-card">
+                    <div class="recent-record-card-header">
+                        <span class="recent-record-number">${((page - 1) * pageSize) + index + 1}</span>
+                        <strong class="recent-record-name">${escapeHtml(name)}</strong>
+                        <span class="category-badge" style="--category-color:${window.RecordCategoryColors ? window.RecordCategoryColors.getColor(category) : "#6b5bff"}">
+                            ${escapeHtml(category)}
+                        </span>
+                    </div>
+                    <div class="recent-record-card-meta">
+                        <span class="recent-record-date">${displayDateLabel}: <strong>${escapeHtml(dateValue)}</strong></span>
+                        <span class="record-status ${statusClass}">${escapeHtml(status)}</span>
+                    </div>
+                    <div class="recent-record-card-details">
+                        ${dateOfBirth !== "-" && dateValue !== dateOfBirth ? `
+                        <div class="recent-record-detail">
+                            <span>Date of Birth</span>
+                            <strong>${escapeHtml(dateOfBirth)}</strong>
+                        </div>` : ""}
+                        ${dateOfDeath !== "-" && dateValue !== dateOfDeath ? `
+                        <div class="recent-record-detail">
+                            <span>Date of Death</span>
+                            <strong>${escapeHtml(dateOfDeath)}</strong>
+                        </div>` : ""}
+                        <div class="recent-record-detail recent-record-phone">
+                            <span>Phone</span>
+                            <strong>${escapeHtml(phone)}</strong>
+                        </div>
+                    </div>
+                    <div class="recent-record-card-footer">
+                        <span class="recent-record-registrar">Registrar: <strong>${escapeHtml(registrar)}</strong></span>
+                        ${viewAction}
+                    </div>
+                </article>
             </td>
         `;
 
@@ -1488,7 +1534,7 @@ async function loadRecentRecordsPage(page) {
 
     try {
         if (offlineRecentRecords && navigator.onLine === false) {
-            const limit = 10;
+            const limit = getRecentRecordsPageSize();
             const totalPages = Math.ceil(offlineRecentRecords.length / limit);
             const safePage = Math.min(page, Math.max(1, totalPages));
             const start = (safePage - 1) * limit;
@@ -1506,7 +1552,10 @@ async function loadRecentRecordsPage(page) {
             return;
         }
 
-        const recentParams = new URLSearchParams({ page: String(page) });
+        const recentParams = new URLSearchParams({
+            page: String(page),
+            limit: String(getRecentRecordsPageSize())
+        });
         const officeContextId = getDashboardOfficeContextId() ||
             (isSystemWideDashboardUser() ? overviewState.registrarOfficeId : "");
         if (officeContextId) {
@@ -1572,7 +1621,8 @@ async function loadDashboardSummary() {
         const params = new URLSearchParams({
             period: overviewState.period,
             range: overviewState.range,
-            recentPage: String(recentRecordsState.page)
+            recentPage: String(recentRecordsState.page),
+            recentLimit: String(getRecentRecordsPageSize())
         });
 
         const officeContextId = getDashboardOfficeContextId();
@@ -1641,14 +1691,14 @@ async function loadDashboardSummary() {
         const recentPagination =
             summary.recentRecordsPagination || {
                 page: recentRecordsState.page,
-                limit: 10,
+                limit: getRecentRecordsPageSize(),
                 total: recentRecords.length,
                 totalPages: recentRecords.length ? 1 : 0
             };
 
         if (!Number(recentPagination.totalPages) && Number(recentPagination.total) > 0) {
             recentPagination.totalPages = Math.ceil(
-                Number(recentPagination.total) / Math.max(1, Number(recentPagination.limit || 10))
+                Number(recentPagination.total) / Math.max(1, Number(recentPagination.limit || getRecentRecordsPageSize()))
             );
         }
 
@@ -1700,13 +1750,13 @@ async function loadDashboardSummary() {
                 showedOfflineRecords = offlineRecentRecords.length > 0;
 
                 renderRecentRecords(
-                    offlineRecentRecords.slice(0, 10),
+                    offlineRecentRecords.slice(0, getRecentRecordsPageSize()),
                     {
                         page: 1,
-                        limit: 10,
+                        limit: getRecentRecordsPageSize(),
                         total: offlineRecentRecords.length,
                         totalPages: offlineRecentRecords.length
-                            ? Math.ceil(offlineRecentRecords.length / 10)
+                            ? Math.ceil(offlineRecentRecords.length / getRecentRecordsPageSize())
                             : 0
                     },
                     { selectedDate: "", isToday: false }

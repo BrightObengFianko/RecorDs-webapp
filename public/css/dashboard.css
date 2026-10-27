@@ -375,6 +375,335 @@ a {
     animation: recent-records-refresh-spin 700ms linear infinite;
 }
 
+.recent-mobile-cell {
+    display: none;
+}
+
+@media (max-width: 700px) {
+    .recent-records-panel {
+        min-width: 0;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        overflow-x: hidden;
+        overflow: hidden;
+    }
+
+    .recent-records-panel *,
+    .recent-records-panel *::before,
+    .recent-records-panel *::after {
+        box-sizing: border-box;
+    }
+
+    .recent-records-panel .panel-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .recent-records-panel .panel-header > div:first-child {
+        min-width: 0;
+        flex: 1 1 180px;
+    }
+
+    .recent-records-panel .recent-records-actions {
+        flex: 0 1 auto;
+        margin-left: auto;
+    }
+
+    .recent-records-panel .recent-records-actions a {
+        min-height: 34px;
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+        max-width: 100%;
+    }
+
+    .recent-records-table-wrapper {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: hidden;
+        overflow-y: visible;
+        scrollbar-width: none;
+        border: 0;
+        background: transparent;
+    }
+
+    .recent-records-table-wrapper::-webkit-scrollbar {
+        display: none;
+    }
+
+    .recent-records-panel .recent-records-pagination {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        justify-content: center;
+        flex-wrap: wrap;
+        overflow: hidden;
+        padding-inline: 0;
+    }
+
+    .recent-records-panel .recent-page-numbers {
+        max-width: 100%;
+        min-width: 0;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .recent-records-panel .recent-page-button {
+        max-width: 100%;
+        white-space: nowrap;
+    }
+
+    .recent-records-table-wrapper table,
+    .recent-records-table-wrapper tbody,
+    .recent-records-table-wrapper tbody tr {
+        display: block;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .recent-records-table-wrapper table {
+        table-layout: fixed;
+    }
+
+    .recent-records-table-wrapper thead {
+        display: none;
+    }
+
+    .recent-records-table-wrapper tbody tr {
+        margin: 0 0 10px;
+    }
+
+    .recent-records-table-wrapper tbody tr > td:not(.recent-mobile-cell) {
+        display: none;
+    }
+
+    .recent-records-table-wrapper tbody tr > td.recent-mobile-cell {
+        display: block;
+        width: 100% !important;
+        max-width: 100%;
+        min-width: 0 !important;
+        padding: 0;
+        border: 0;
+        box-sizing: border-box;
+    }
+
+    .recent-records-table-wrapper tbody tr > td.empty {
+        display: block !important;
+        width: 100%;
+        padding: 24px 12px;
+        border: 0;
+        text-align: center;
+    }
+
+    .recent-record-card {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        padding: 16px 14px 14px;
+        border: 1px solid var(--app-border);
+        border-radius: 16px;
+        background: var(--app-surface);
+        box-shadow: var(--app-shadow);
+        overflow: hidden;
+    }
+
+    .recent-record-card-header {
+        display: grid;
+        grid-template-columns: 30px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--app-border);
+    }
+
+    .recent-record-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        background: var(--accent-soft);
+        color: var(--accent-ink);
+        font-size: 0.78rem;
+        font-weight: 800;
+    }
+
+    .recent-record-name {
+        min-width: 0;
+        color: var(--app-text);
+        font-size: 0.88rem;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+
+    .recent-record-card-header .category-badge {
+        width: auto;
+        max-width: min(112px, 28vw);
+        min-height: 26px;
+        padding: 0 8px;
+        font-size: 0.66rem;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        text-align: center;
+    }
+
+    .recent-record-card-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 0;
+        padding: 10px 0;
+    }
+
+    .recent-record-card-meta .record-status {
+        flex: 0 0 auto;
+        min-height: 26px;
+        padding: 0 8px;
+        font-size: 0.68rem;
+    }
+
+    .recent-record-date {
+        flex: 1 1 auto;
+        min-width: 0;
+        color: var(--app-muted);
+        font-size: 0.7rem;
+        overflow-wrap: anywhere;
+        text-align: right;
+    }
+
+    .recent-record-card-meta .recent-record-date {
+        text-align: left;
+    }
+
+    .recent-record-date strong,
+    .recent-record-registrar strong {
+        color: var(--app-text);
+    }
+
+    .recent-record-card-details {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 14px;
+        min-width: 0;
+        padding: 12px 0;
+    }
+
+    .recent-record-detail {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+    }
+
+    .recent-record-detail span {
+        color: var(--app-muted);
+        font-size: 0.68rem;
+    }
+
+    .recent-record-detail strong {
+        min-width: 0;
+        color: var(--app-text);
+        font-size: 0.76rem;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .recent-record-phone {
+        grid-column: 1 / -1;
+    }
+
+    .recent-record-card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-width: 0;
+        padding-top: 12px;
+        border-top: 1px solid var(--app-border);
+    }
+
+    .recent-record-registrar {
+        flex: 1 1 auto;
+        min-width: 0;
+        color: var(--app-muted);
+        font-size: 0.7rem;
+        overflow-wrap: anywhere;
+    }
+
+    .recent-record-card-footer .table-action-link {
+        flex: 0 0 auto;
+        min-height: 34px;
+        padding: 7px 11px;
+        border: 1px solid var(--app-border);
+        border-radius: 8px;
+        background: var(--app-surface-2);
+        color: var(--accent-ink);
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    .recent-record-card-footer .record-status {
+        flex: 0 0 auto;
+    }
+}
+
+@media (max-width: 380px) {
+    .recent-records-panel .panel-header {
+        gap: 8px;
+    }
+
+    .recent-records-panel .panel-header > div:first-child {
+        flex-basis: 150px;
+    }
+
+    .recent-records-panel .panel-header h2 {
+        font-size: 1rem;
+    }
+
+    .recent-records-panel .panel-header p {
+        font-size: 0.72rem;
+    }
+
+    .recent-record-card {
+        padding: 13px 10px 12px;
+    }
+
+    .recent-record-card-details {
+        column-gap: 8px;
+    }
+
+    .recent-record-card-header {
+        grid-template-columns: 28px minmax(0, 1fr);
+    }
+
+    .recent-record-card-header .category-badge {
+        grid-column: 2;
+        justify-self: start;
+        max-width: 100%;
+    }
+
+    .recent-record-card-meta {
+        align-items: flex-start;
+        flex-wrap: nowrap;
+    }
+
+    .recent-record-date {
+        flex-basis: auto;
+    }
+}
+
 @keyframes recent-records-refresh-spin {
     to {
         transform: rotate(360deg);
@@ -384,6 +713,35 @@ a {
 @media (prefers-reduced-motion: reduce) {
     .recent-records-refresh.is-refreshing {
         animation: none;
+    }
+}
+
+/* Keep only the mobile dashboard on one document scroll axis. */
+@media (max-width: 700px) {
+    body.dashboard-page {
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    body.dashboard-page .app,
+    body.dashboard-page .main {
+        height: auto !important;
+        min-height: 100vh;
+        overflow-y: visible !important;
+        overflow-x: hidden !important;
+    }
+
+    body.dashboard-page .content {
+        height: auto !important;
+        min-height: 0;
+        max-height: none !important;
+        overflow-y: visible !important;
+        overflow-x: hidden !important;
+    }
+
+    body.dashboard-page .sidebar {
+        max-height: none !important;
+        overflow-y: visible !important;
     }
 }
 
@@ -1594,13 +1952,14 @@ th {
     }
 
     .branch-staff-monthly-bars {
-        gap: 5px;
-        overflow-x: auto;
-        padding-bottom: 5px;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
+        overflow: visible;
+        padding-bottom: 0;
     }
 
     .branch-staff-month {
-        min-width: 42px;
+        min-width: 0;
     }
 
     .system-grid {

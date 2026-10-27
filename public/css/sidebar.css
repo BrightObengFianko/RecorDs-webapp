@@ -624,7 +624,9 @@ body.sidebar-collapsed .logout span {
 
     .main {
         margin-left: 0;
-        width: 100vw;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
     }
 
 }
@@ -663,7 +665,9 @@ body.sidebar-collapsed .logout span {
 
     .main,
     .settings-app {
-        width: 100vw !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
         margin-left: 0 !important;
     }
 
