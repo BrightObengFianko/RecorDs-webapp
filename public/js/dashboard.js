@@ -85,6 +85,9 @@ const recentRecordsState = {
 let offlineRecentRecords = null;
 
 let dashboardSummaryLoading = false;
+let dashboardRefreshTimer = null;
+
+const DASHBOARD_REFRESH_INTERVAL_MS = 15000;
 
 function getRecentRecordsPageSize() {
     return window.matchMedia?.("(max-width: 700px)").matches ? 5 : 10;
@@ -1903,6 +1906,29 @@ async function loadDashboard() {
     }
 }
 
+function refreshDashboardWhenActive() {
+    if (document.visibilityState !== "visible" || dashboardSummaryLoading) {
+        return;
+    }
+
+    loadDashboardSummary();
+}
+
+function startDashboardRefresh() {
+    if (dashboardRefreshTimer !== null) {
+        return;
+    }
+
+    dashboardRefreshTimer = window.setInterval(
+        refreshDashboardWhenActive,
+        DASHBOARD_REFRESH_INTERVAL_MS
+    );
+
+    document.addEventListener("visibilitychange", refreshDashboardWhenActive);
+    window.addEventListener("focus", refreshDashboardWhenActive);
+    window.addEventListener("pageshow", refreshDashboardWhenActive);
+}
+
 
 // Logout
 
@@ -1921,3 +1947,4 @@ document
 loadDashboard();
 loadOverviewRegistrars();
 loadRegistrarPerformanceOffices();
+startDashboardRefresh();
