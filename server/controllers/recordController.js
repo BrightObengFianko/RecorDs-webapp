@@ -673,9 +673,15 @@ async function queryRecentTodayRecords(user, requestedPage, officeContextId = nu
     const limitParameter = recentValues.length + 2;
     const offsetParameter = recentValues.length + 3;
     const offset = (page - 1) * pageSize;
+    // Branch Staff Recent Records means records actually created today by the
+    // authenticated user. Use created_at in Accra time so a registration date
+    // value or database timezone cannot hide a newly created case.
+    const selectedDateExpression = isBranchStaff(user)
+        ? "COALESCE((r.created_at AT TIME ZONE 'Africa/Accra')::date, r.registration_date::date)"
+        : "COALESCE(r.registration_date, r.created_at)";
     const selectedDateClause = recentClause
-        ? `${recentClause} AND COALESCE(r.registration_date, r.created_at) >= $${dateParameter}::date AND COALESCE(r.registration_date, r.created_at) < ($${dateParameter}::date + INTERVAL '1 day')`
-        : `WHERE COALESCE(r.registration_date, r.created_at) >= $${dateParameter}::date AND COALESCE(r.registration_date, r.created_at) < ($${dateParameter}::date + INTERVAL '1 day')`;
+        ? `${recentClause} AND ${selectedDateExpression} >= $${dateParameter}::date AND ${selectedDateExpression} < ($${dateParameter}::date + INTERVAL '1 day')`
+        : `WHERE ${selectedDateExpression} >= $${dateParameter}::date AND ${selectedDateExpression} < ($${dateParameter}::date + INTERVAL '1 day')`;
     const dateValues = [
         ...recentValues,
         selectedDateText
