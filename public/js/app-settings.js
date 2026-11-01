@@ -69,7 +69,7 @@
         }
 
         if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/service-worker.js?v=182", {
+        navigator.serviceWorker.register("/service-worker.js?v=184", {
                 updateViaCache: "none"
             }).then(registration => {
                 // Do not make offline startup wait on a service-worker update check.
@@ -475,7 +475,7 @@
         logoContainer.replaceChildren();
 
         const logo = document.createElement("img");
-        logo.src = "/assets/records-logo.jpeg";
+        logo.src = "/assets/Record-logo.jpeg";
         logo.alt = "RecorDs";
         logo.decoding = "async";
 
@@ -628,7 +628,7 @@
         transition.id = "record-page-logo-transition";
         transition.className = "record-page-logo-transition";
         transition.setAttribute("aria-hidden", "true");
-        transition.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/records-icon-192.png" alt=""></div>';
+        transition.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/Record-logo.jpeg" alt=""></div>';
         document.body.appendChild(transition);
 
         const removeTransition = () => transition.remove();
@@ -650,7 +650,7 @@
         loader.id = "record-auth-loader";
         loader.setAttribute("aria-live", "polite");
         loader.setAttribute("aria-busy", "true");
-        loader.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/records-icon-192.png" alt="RecorDs"></div>';
+        loader.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/Record-logo.jpeg" alt="RecorDs"></div>';
         document.body.appendChild(loader);
         document.body.classList.add("record-auth-loading");
     }
@@ -1075,7 +1075,7 @@
 
         element.classList.add("logo-avatar");
         element.classList.remove("has-photo");
-        element.style.backgroundImage = 'url("/assets/records-logo.jpeg")';
+        element.style.backgroundImage = 'url("/assets/Record-logo.jpeg")';
         element.style.backgroundSize = "135% auto";
         element.style.backgroundPosition = "center 18%";
         element.style.backgroundRepeat = "no-repeat";

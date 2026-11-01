@@ -8,21 +8,21 @@
     "theme_color": "#06113b",
     "icons": [
         {
-            "src": "/assets/records-icon-192.png",
-            "sizes": "192x192",
-            "type": "image/png",
+            "src": "/assets/Record-logo.jpeg",
+            "sizes": "1024x1024",
+            "type": "image/jpeg",
             "purpose": "any"
         },
         {
-            "src": "/assets/records-icon-512.png",
-            "sizes": "512x512",
-            "type": "image/png",
+            "src": "/assets/Record-logo.jpeg",
+            "sizes": "1024x1024",
+            "type": "image/jpeg",
             "purpose": "any"
         },
         {
-            "src": "/assets/records-icon-maskable-512.png",
-            "sizes": "512x512",
-            "type": "image/png",
+            "src": "/assets/Record-logo.jpeg",
+            "sizes": "1024x1024",
+            "type": "image/jpeg",
             "purpose": "maskable"
         }
     ]

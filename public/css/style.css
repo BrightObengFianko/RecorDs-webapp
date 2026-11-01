@@ -320,7 +320,7 @@ input {
     height: 104px;
     object-fit: contain;
     object-position: center;
-    border-radius: 0;
+    border-radius: 20px;
     background: transparent;
 }
 
