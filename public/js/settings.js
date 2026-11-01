@@ -383,12 +383,12 @@ function setAvatar(element, image, label) {
 
     element.classList.add("logo-avatar");
     element.classList.remove("has-photo");
-    element.style.backgroundImage = "";
-    element.style.backgroundSize = "";
-    element.style.backgroundPosition = "";
-    element.style.backgroundRepeat = "";
-    element.style.backgroundColor = "";
-    element.textContent = label;
+    element.style.backgroundImage = 'url("/assets/Record-logo.jpeg")';
+    element.style.backgroundSize = "cover";
+    element.style.backgroundPosition = "center";
+    element.style.backgroundRepeat = "no-repeat";
+    element.style.backgroundColor = "#ffffff";
+    element.textContent = "";
 }
 
 function showToast(message) {
