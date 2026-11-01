@@ -306,6 +306,21 @@
         return file.toLowerCase();
     }
 
+    function hasSavedAccentPreference() {
+        try {
+            const raw = localStorage.getItem(getSettingsStorageKey());
+            if (!raw) return false;
+            const parsed = JSON.parse(raw);
+            return Boolean(
+                parsed &&
+                parsed.appearance &&
+                Object.prototype.hasOwnProperty.call(parsed.appearance, "accent")
+            );
+        } catch (_) {
+            return false;
+        }
+    }
+
     function applyOfficeConfiguration(office) {
         if (!office || !document.documentElement) return;
         const root = document.documentElement;
@@ -317,14 +332,18 @@
             const foreground = luminance >= 190 ? "#0f172a" : "#ffffff";
             const ink = luminance >= 190 ? "#0f172a" : primary;
             root.style.setProperty("--office-primary", primary);
-            root.style.setProperty("--accent", primary);
-            root.style.setProperty("--accent-strong", darken(primary, 0.82));
-            root.style.setProperty("--accent-foreground", foreground);
-            root.style.setProperty("--accent-ink", ink);
+            if (!hasSavedAccentPreference()) {
+                root.style.setProperty("--accent", primary);
+                root.style.setProperty("--accent-strong", darken(primary, 0.82));
+                root.style.setProperty("--accent-foreground", foreground);
+                root.style.setProperty("--accent-ink", ink);
+            }
         }
         if (secondary) {
             root.style.setProperty("--office-secondary", secondary);
-            root.style.setProperty("--accent-soft", secondary);
+            if (!hasSavedAccentPreference()) {
+                root.style.setProperty("--accent-soft", secondary);
+            }
             root.style.setProperty("--app-sidebar-hover-bg", secondary);
         }
         if (office.name) root.dataset.officeName = office.name;
