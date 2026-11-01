@@ -3270,6 +3270,29 @@ const approveRecord = async (req, res) => {
             }
         });
 
+        if (newStatus === "Ready") {
+            try {
+                await notifyRecordOwner({
+                    recordId: approvedRecord.id,
+                    excludeUserId: req.user?.id,
+                    type: NOTIFICATION_TYPES.RECORD_APPROVED,
+                    title: "Case Ready for Collection",
+                    message: `Case #${approvedRecord.id} is ready for collection.`,
+                    priority: NOTIFICATION_PRIORITIES.IMPORTANT,
+                    branchId: approvedRecord.branch_id,
+                    metadata: {
+                        record_id: approvedRecord.id,
+                        branch_id: approvedRecord.branch_id,
+                        previous_status: existingResult.rows[0].status,
+                        new_status: approvedRecord.status,
+                        event_id: `record-ready-owner:${approvedRecord.id}:${String(approvedRecord.updated_at || Date.now())}`
+                    }
+                });
+            } catch (notificationError) {
+                console.error("READY OWNER NOTIFICATION ERROR:", notificationError.message);
+            }
+        }
+
         // =========================================
         // TRIGGER n8n WHEN RECORD BECOMES READY
         // =========================================
