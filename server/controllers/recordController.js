@@ -674,14 +674,17 @@ async function queryRecentTodayRecords(user, requestedPage, officeContextId = nu
     const offsetParameter = recentValues.length + 3;
     const offset = (page - 1) * pageSize;
     // Branch Staff Recent Records means records actually created today by the
-    // authenticated user. Use created_at in Accra time so a registration date
-    // value or database timezone cannot hide a newly created case.
+    // authenticated user. Prefer the Ghana-local registration date written at
+    // creation time, with a UTC-to-Accra timestamp fallback for legacy rows.
     const selectedDateExpression = isBranchStaff(user)
-        ? "COALESCE((r.created_at AT TIME ZONE 'Africa/Accra')::date, r.registration_date::date)"
+        ? "COALESCE(r.registration_date::date, ((r.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Africa/Accra')::date)"
         : "COALESCE(r.registration_date, r.created_at)";
+    const selectedDateCondition = isBranchStaff(user)
+        ? `${selectedDateExpression} = $${dateParameter}::date`
+        : `${selectedDateExpression} >= $${dateParameter}::date AND ${selectedDateExpression} < ($${dateParameter}::date + INTERVAL '1 day')`;
     const selectedDateClause = recentClause
-        ? `${recentClause} AND ${selectedDateExpression} >= $${dateParameter}::date AND ${selectedDateExpression} < ($${dateParameter}::date + INTERVAL '1 day')`
-        : `WHERE ${selectedDateExpression} >= $${dateParameter}::date AND ${selectedDateExpression} < ($${dateParameter}::date + INTERVAL '1 day')`;
+        ? `${recentClause} AND ${selectedDateCondition}`
+        : `WHERE ${selectedDateCondition}`;
     const dateValues = [
         ...recentValues,
         selectedDateText
@@ -711,7 +714,7 @@ async function queryRecentTodayRecords(user, requestedPage, officeContextId = nu
             `
                 ${recordSelectSql()}
                 ${filteredDateClause}
-                ORDER BY COALESCE(r.registration_date, r.created_at) DESC NULLS LAST, r.id DESC
+                ORDER BY ${selectedDateExpression} DESC NULLS LAST, r.id DESC
                 LIMIT $${limitParameter}
                 OFFSET $${offsetParameter}
             `,

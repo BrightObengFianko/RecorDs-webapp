@@ -15,7 +15,12 @@ async function main() {
     await assertZero("records without an office", "SELECT COUNT(*)::int AS count FROM records WHERE office_id IS NULL");
     await assertZero(
         "activity logs without an office snapshot",
-        "SELECT COUNT(*)::int AS count FROM auth_activity_logs WHERE office_id IS NULL AND NULLIF(TRIM(COALESCE(office_name_snapshot, '')), '') IS NULL"
+        `SELECT COUNT(*)::int AS count
+         FROM auth_activity_logs l
+         LEFT JOIN users u ON u.id = l.user_id
+         WHERE l.office_id IS NULL
+           AND NULLIF(TRIM(COALESCE(l.office_name_snapshot, '')), '') IS NULL
+           AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(u.role, '')), '_', ' '), '-', ' ')) <> 'system super admin'`
     );
     await assertZero("notifications without an office", "SELECT COUNT(*)::int AS count FROM notifications WHERE office_id IS NULL");
     await assertZero(

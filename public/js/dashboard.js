@@ -145,6 +145,24 @@ function isRecordVisibleToDashboardUser(record) {
     return Boolean(user.office_id) && String(record?.office_id) === String(user.office_id);
 }
 
+function isDateTodayInAccra(value) {
+    const toAccraDateKey = input => {
+        const date = new Date(input);
+        if (Number.isNaN(date.getTime())) return "";
+        const parts = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Africa/Accra",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit"
+        }).formatToParts(date);
+        const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+        return `${values.year}-${values.month}-${values.day}`;
+    };
+
+    const recordDate = toAccraDateKey(value);
+    return Boolean(recordDate) && recordDate === toAccraDateKey(new Date());
+}
+
 function getDashboardProfile(apiUser) {
     const settingsProfile =
         window.RecordSettings &&
@@ -1734,7 +1752,10 @@ async function loadDashboardSummary() {
                 const pendingRecords = await window.RecordOfflineQueue.getPendingRecords();
                 const localRecords = pendingRecords
                     .filter(entry =>
-                        isRecordVisibleToDashboardUser(entry.payload) &&
+                        // getPendingRecords is already scoped to the current
+                        // user's owner key, so do not require an office_id
+                        // that offline payloads do not contain.
+                        (!isBranchStaffDashboardUser() || isDateTodayInAccra(entry.createdAt)) &&
                         (isBranchStaffDashboardUser() || ["pending", "ready", "not ready"].includes(normalizeStatus(entry.payload?.status)))
                     )
                     .map(entry => ({
