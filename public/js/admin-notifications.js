@@ -29,7 +29,7 @@
 
     // Notification visibility is enforced by the authenticated API. The bell
     // must still be available to every signed-in application role.
-    if (!token || !normalizedRole || normalizedRole === "branch_staff") return;
+    if (!token || !normalizedRole) return;
 
     function escapeHtml(value) {
         return String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));

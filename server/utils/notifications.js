@@ -3,6 +3,7 @@ const pool = require("../config/database");
 const NOTIFICATION_TYPES = Object.freeze({
     RECORD_CREATED: "RECORD_CREATED",
     RECORD_UPDATED: "RECORD_UPDATED",
+    RECORD_APPROVED: "RECORD_APPROVED",
     RECORD_DELETED: "RECORD_DELETED",
     RECORD_RESTORED: "RECORD_RESTORED",
     PENDING_APPROVAL: "PENDING_APPROVAL",
@@ -240,7 +241,7 @@ async function notifyRecordOwner({
             JOIN users u ON u.id = r.created_by
             WHERE r.id = $1
               AND LOWER(REPLACE(REPLACE(TRIM(COALESCE(u.role, '')), '_', ' '), '-', ' '))
-                  = 'staff'
+                  IN ('staff', 'branch staff')
             LIMIT 1
         `,
         [normalizeId(recordId, "Record ID", false)]
