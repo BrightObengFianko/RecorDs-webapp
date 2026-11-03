@@ -3970,9 +3970,13 @@ document.addEventListener(
 if (exportButton) {
     exportButton.addEventListener("click", async () => {
         const params = new URLSearchParams();
+        const rawSearchTerm = nameInput.value.trim();
+        const phone = getPhoneSearchTerm(rawSearchTerm);
+        const name = phone ? "" : rawSearchTerm;
         const dateOfBirth = parseDateInput(dateOfBirthInput.value.trim());
         const filters = [
-            ["name", nameInput.value.trim()],
+            ["name", name],
+            ["phone", phone],
             ["dateOfBirth", dateOfBirth],
             ["status", statusSelect.value],
             ["category", categorySelect.value],

@@ -2372,7 +2372,7 @@ const searchRecords = async (req, res) => {
 const exportRecords = async (req, res) => {
     try {
         const {
-            name, dateOfBirth, status, category, registrar, fromDate, toDate,
+            name, phone, dateOfBirth, status, category, registrar, fromDate, toDate,
             branch, office_id: requestedOfficeId
         } = req.query;
         const role = normalizeRole(req.user?.role);
@@ -2383,10 +2383,14 @@ const exportRecords = async (req, res) => {
         // Branch filters are legacy-only. Office scope below is the access
         // boundary for every office role.
 
-        for (const textValue of [name, category, registrar, status]) {
+        for (const textValue of [name, phone, category, registrar, status]) {
             if (textValue !== undefined && boundedText(textValue, 150) === null) {
                 return res.status(400).json({ success: false, message: "An export filter is too long." });
             }
+        }
+        const normalizedPhone = String(phone || "").replace(/\D/g, "");
+        if (phone && !normalizedPhone) {
+            return res.status(400).json({ success: false, message: "Phone search must contain at least one digit." });
         }
         for (const dateValue of [dateOfBirth, fromDate, toDate]) {
             if (dateValue && !isIsoDate(dateValue)) {
@@ -2420,6 +2424,14 @@ const exportRecords = async (req, res) => {
             add("r.office_id = $1", req.user.office_id);
         }
         if (name) add("r.name ILIKE $1", `%${name}%`);
+        if (phone) {
+            query += `
+                AND regexp_replace(COALESCE(r.phone_number::text, ''), '[^0-9]', '', 'g')
+                    LIKE '%' || regexp_replace($${parameter}, '[^0-9]', '', 'g') || '%'
+            `;
+            values.push(normalizedPhone);
+            parameter += 1;
+        }
         if (dateOfBirth) {
             const normalizedCategory = String(category || "").toLowerCase();
             if (normalizedCategory.includes("death") && !normalizedCategory.includes("birth")) {
@@ -2469,7 +2481,7 @@ const exportRecords = async (req, res) => {
             details: `CSV export completed. ${records.length} records exported.`,
             newValue: JSON.stringify({
                 branchId: branchId || "all",
-                filters: { hasNameFilter: Boolean(name), hasDateFilter: Boolean(dateOfBirth), status, category, registrar, fromDate, toDate },
+                filters: { hasNameFilter: Boolean(name), hasPhoneFilter: Boolean(phone), hasDateFilter: Boolean(dateOfBirth), status, category, registrar, fromDate, toDate },
                 count: records.length
             })
         });
