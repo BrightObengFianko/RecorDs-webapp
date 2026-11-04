@@ -46,7 +46,8 @@ a {
     height: auto;
     max-height: 50px;
     object-fit: contain;
-    background:transparent;
+    background: #fff;
+    border-radius: 8px;
 }
 
 @media (min-width: 1101px) {

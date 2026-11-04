@@ -494,7 +494,7 @@
         logoContainer.replaceChildren();
 
         const logo = document.createElement("img");
-        logo.src = "/assets/Record-logo.jpeg";
+        logo.src = "/assets/record-verification-logo.png";
         logo.alt = "RecorDs";
         logo.decoding = "async";
 
@@ -647,7 +647,7 @@
         transition.id = "record-page-logo-transition";
         transition.className = "record-page-logo-transition";
         transition.setAttribute("aria-hidden", "true");
-        transition.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/Record-logo.jpeg" alt=""></div>';
+        transition.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/record-verification-logo.png" alt=""></div>';
         document.body.appendChild(transition);
 
         const removeTransition = () => transition.remove();
@@ -669,7 +669,7 @@
         loader.id = "record-auth-loader";
         loader.setAttribute("aria-live", "polite");
         loader.setAttribute("aria-busy", "true");
-        loader.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/Record-logo.jpeg" alt="RecorDs"></div>';
+        loader.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/record-verification-logo.png" alt="RecorDs"></div>';
         document.body.appendChild(loader);
         document.body.classList.add("record-auth-loading");
     }
@@ -1094,7 +1094,7 @@
 
         element.classList.add("logo-avatar");
         element.classList.remove("has-photo");
-        element.style.backgroundImage = 'url("/assets/Record-logo.jpeg")';
+        element.style.backgroundImage = 'url("/assets/record-verification-logo.png")';
         element.style.backgroundSize = "135% auto";
         element.style.backgroundPosition = "center 18%";
         element.style.backgroundRepeat = "no-repeat";

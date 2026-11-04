@@ -383,7 +383,7 @@ function setAvatar(element, image, label) {
 
     element.classList.add("logo-avatar");
     element.classList.remove("has-photo");
-    element.style.backgroundImage = 'url("/assets/Record-logo.jpeg")';
+    element.style.backgroundImage = 'url("/assets/record-verification-logo.png")';
     element.style.backgroundSize = "cover";
     element.style.backgroundPosition = "center";
     element.style.backgroundRepeat = "no-repeat";

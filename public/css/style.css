@@ -321,7 +321,7 @@ input {
     object-fit: contain;
     object-position: center;
     border-radius: 20px;
-    background: transparent;
+    background: #fff;
 }
 
 .login-card h2 {

@@ -44,7 +44,7 @@ const APP_SHELL = [
     "/js/pending-sync.js",
     "/js/admin-notifications.js",
     "/assets/navigation-icons.svg",
-    "/assets/Record-logo.jpeg",
+    "/assets/record-verification-logo.png",
     "/manifest.webmanifest",
 ];
 

@@ -152,7 +152,8 @@ a {
     max-height: 50px;
 
     object-fit: contain;
-    border-radius: 20px;
+    border-radius: 8px;
+    background: #fff;
 }
 
 .menu,
