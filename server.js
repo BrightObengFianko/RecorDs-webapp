@@ -112,7 +112,7 @@ app.use(
 // Browsers request this conventional path even when a manifest is present.
 // Serve the existing RecorDs app icon instead of returning a 404.
 app.get("/favicon.ico", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "assets", "records-icon-192.png"), {
+    res.sendFile(path.join(__dirname, "public", "assets", "record-verification-logo-192.png"), {
         headers: {
             "Cache-Control": "public, max-age=86400"
         }

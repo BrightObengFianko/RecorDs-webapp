@@ -76,6 +76,13 @@ router.get(
 
 router.get(
     "/export",
+    requireRole(
+        "admin",
+        "office_admin",
+        "system_super_admin",
+        "staff",
+        "branch_staff"
+    ),
     exportRecords
 );
 
