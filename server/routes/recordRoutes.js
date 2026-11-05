@@ -81,6 +81,7 @@ router.get(
         "office_admin",
         "system_super_admin",
         "staff",
+        "office_staff",
         "branch_staff"
     ),
     exportRecords
