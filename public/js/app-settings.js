@@ -494,7 +494,7 @@
         logoContainer.replaceChildren();
 
         const logo = document.createElement("img");
-        logo.src = "/assets/record-verification-logo.png";
+        logo.src = "/assets/record-sidebar-logo.png";
         logo.alt = "RecorDs";
         logo.decoding = "async";
 

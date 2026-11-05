@@ -152,8 +152,8 @@ a {
     max-height: 50px;
 
     object-fit: contain;
-    border-radius: 8px;
-    background: #fff;
+    border-radius: 0;
+    background: transparent;
 }
 
 .menu,
