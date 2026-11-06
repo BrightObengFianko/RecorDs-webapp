@@ -2376,8 +2376,6 @@ const exportRecords = async (req, res) => {
             branch, office_id: requestedOfficeId
         } = req.query;
         const role = normalizeRole(req.user?.role);
-        const isAdmin = isSystemSuperAdmin(req.user);
-        const isRestrictedUser = !isAdmin && !isOfficeAdmin(req.user);
 
         let branchId = null;
         // Branch filters are legacy-only. Office scope below is the access
