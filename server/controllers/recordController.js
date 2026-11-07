@@ -1563,11 +1563,11 @@ const getDashboardSummary = async (req, res) => {
             dashboardTodayCasesValues.push(registrarOfficeId);
         }
 
-        // Branch Staff dashboard metrics are personal metrics. Keep the
-        // existing office scope, then restrict only this role's metrics to
-        // records created by the authenticated user.
+        // Branch Staff dashboard metrics are personal current-year metrics.
+        // Keep the office scope, use the Accra calendar year, and restrict
+        // only this role's metrics to records created by the authenticated user.
         const branchStaffMetricClause = branchStaff
-            ? `${clause} AND r.created_by = $${values.length + 1}`
+            ? `${clause} AND EXTRACT(YEAR FROM COALESCE(r.registration_date::date, r.created_at::date)) = EXTRACT(YEAR FROM (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Accra')) AND r.created_by = $${values.length + 1}`
             : "WHERE FALSE";
         const branchStaffMetricValues = branchStaff
             ? [...values, req.user.id]
