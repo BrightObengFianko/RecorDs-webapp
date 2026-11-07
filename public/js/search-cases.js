@@ -2675,11 +2675,7 @@ function setFiltersExpanded(expanded) {
 }
 
 function syncMobileFilters() {
-    if (window.matchMedia("(max-width: 750px)").matches) {
-        setFiltersExpanded(false);
-    } else {
-        setFiltersExpanded(true);
-    }
+    setFiltersExpanded(false);
 }
 
 filtersToggle?.addEventListener("click", () => {
