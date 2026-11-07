@@ -1272,6 +1272,10 @@ function renderAdminOverview(summary) {
     const isBranchStaff =
         getCurrentUserRole() === "branch_staff";
 
+    if (adminDashboardExtras) {
+        adminDashboardExtras.classList.toggle("branch-staff-only", isBranchStaff);
+    }
+
     if (overviewPanel) {
         overviewPanel.hidden = isBranchStaff;
     }

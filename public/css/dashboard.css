@@ -1080,6 +1080,19 @@ th {
     margin-bottom: 18px;
 }
 
+.admin-dashboard.branch-staff-only {
+    gap: 0;
+    margin-bottom: 0;
+}
+
+.admin-dashboard.branch-staff-only > :not(.branch-staff-dashboard-panel) {
+    display: none !important;
+}
+
+.admin-dashboard.branch-staff-only .branch-staff-dashboard-panel {
+    margin-bottom: 0;
+}
+
 .branch-staff-metrics {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
