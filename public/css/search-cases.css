@@ -1939,6 +1939,7 @@ body.search-page .content {
         width: auto;
         min-width: 92px;
         padding: 0 12px;
+        margin-left: auto;
         justify-self: end;
     }
 
