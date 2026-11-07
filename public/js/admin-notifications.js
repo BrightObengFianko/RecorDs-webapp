@@ -8,7 +8,7 @@
     const notificationOfficeField = document.getElementById("notificationOfficeField");
     const API = "/api/notifications";
     const TYPE_ICONS = {
-        RECORD_CREATED: "🔵", RECORD_UPDATED: "🔵", RECORD_APPROVED: "🟢", RECORD_DELETED: "🗑️", RECORD_RESTORED: "🟢",
+        RECORD_CREATED: "🔵", RECORD_UPDATED: "🔵", RECORD_APPROVED: "🟢", RECORD_READY: "🟢", RECORD_DELETED: "🗑️", RECORD_RESTORED: "🟢",
         PENDING_APPROVAL: "🟠", SMS_FAILED: "🔴", SMS_SERVICE_UNAVAILABLE: "🔴", SYNC_FAILED: "🔴",
         OFFLINE_RECORDS_PENDING: "🟠", DUPLICATE_DETECTED: "⚠️", USER_CREATED: "🔵", USER_DISABLED: "🔴",
         USER_ENABLED: "🟢", BRANCH_ASSIGNMENT_CHANGED: "🔵", FAILED_LOGIN_ALERT: "🔴",
@@ -54,6 +54,7 @@
             RECORD_CREATED: '<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H11l-4.5 4v-4h-1A1.5 1.5 0 0 1 4 14.5z"/>',
             RECORD_UPDATED: '<path d="M5 19h4l10-10-4-4L5 15z"/><path d="m13.5 6.5 4 4"/>',
             RECORD_APPROVED: '<path d="m5 12 4 4L19 6"/>',
+            RECORD_READY: '<path d="m5 12 4 4L19 6"/>',
             RECORD_DELETED: '<path d="M5 7h14M9 7V4h6v3m-8 0 1 13h8l1-13"/>',
             RECORD_RESTORED: '<path d="M6 8V4m0 0h4M6 4a8 8 0 1 1-1.2 10.6"/>',
             PENDING_APPROVAL: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2"/>',
@@ -303,6 +304,7 @@
             case "RECORD_CREATED":
             case "RECORD_UPDATED":
             case "RECORD_APPROVED":
+            case "RECORD_READY":
             case "RECORD_RESTORED":
                 if (recordIds.length > 1) return "search-cases.html";
                 return recordId ? `case-details.html?id=${encodeURIComponent(recordId)}` : "";

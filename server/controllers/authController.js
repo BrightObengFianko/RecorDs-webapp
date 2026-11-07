@@ -124,6 +124,7 @@ const DEFAULT_ACCOUNT_SETTINGS = {
         RECORD_CREATED: true,
         RECORD_UPDATED: true,
         RECORD_APPROVED: true,
+        RECORD_READY: true,
         RECORD_DELETED: true,
         RECORD_RESTORED: true,
         DUPLICATE_DETECTED: true,

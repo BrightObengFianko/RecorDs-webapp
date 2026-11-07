@@ -305,6 +305,7 @@ async function notifyRecordAdmins(request, {
     recordId = null,
     branchId = null,
     eventId,
+    notifyOwner = true,
     metadata = {}
 }) {
     try {
@@ -321,20 +322,22 @@ async function notifyRecordAdmins(request, {
                 actor_user_id: request.user?.id || null
             }
         });
-        await notifyRecordOwner({
-            type,
-            title,
-            message,
-            priority,
-            recordId,
-            branchId,
-            excludeUserId: request.user?.id,
-            metadata: {
-                ...metadata,
-                event_id: eventId,
-                actor_user_id: request.user?.id || null
-            }
-        });
+        if (notifyOwner) {
+            await notifyRecordOwner({
+                type,
+                title,
+                message,
+                priority,
+                recordId,
+                branchId,
+                excludeUserId: request.user?.id,
+                metadata: {
+                    ...metadata,
+                    event_id: eventId,
+                    actor_user_id: request.user?.id || null
+                }
+            });
+        }
     } catch (error) {
         // Notification delivery must not turn a successful record operation into a failure.
         console.error("RECORD ADMIN NOTIFICATION ERROR:", error.message);
@@ -773,8 +776,11 @@ const getRecentTodayRecords = async (req, res) => {
 };
 
 function assertBranchAccess(user, record) {
-    // Branch columns are legacy compatibility data. Office authorization is
-    // enforced by the record query and applies to every office role.
+    // Branch Staff may only view records they personally created. Office
+    // Admin, Staff, and System Super Admin keep their existing office scope.
+    if (isBranchStaff(user)) {
+        return String(record?.created_by || "") === String(user?.id || "");
+    }
     return true;
 }
 
@@ -1166,6 +1172,11 @@ const getRecords = async (req, res) => {
         if (!isSystemSuperAdmin(req.user)) {
             query += ` WHERE r.office_id = $1`;
             values.push(req.user.office_id);
+        }
+
+        if (isBranchStaff(req.user)) {
+            query += values.length ? " AND r.created_by = $2" : " WHERE r.created_by = $1";
+            values.push(req.user.id);
         }
 
         query += `
@@ -2189,6 +2200,12 @@ const searchRecords = async (req, res) => {
             parameter++;
         }
 
+        if (isBranchStaff(req.user)) {
+            query += ` AND r.created_by = $${parameter}`;
+            values.push(req.user.id);
+            parameter++;
+        }
+
         if (name) {
             query += `
                 AND r.name ILIKE $${parameter}
@@ -2421,6 +2438,7 @@ const exportRecords = async (req, res) => {
         } else if (!isSystemSuperAdmin(req.user)) {
             add("r.office_id = $1", req.user.office_id);
         }
+        if (isBranchStaff(req.user)) add("r.created_by = $1", req.user.id);
         if (name) add("r.name ILIKE $1", `%${name}%`);
         if (phone) {
             query += `
@@ -2507,9 +2525,14 @@ const getRecordById = async (req, res) => {
                     ${recordSelectSql()}
                     WHERE r.id = $1
                       AND ($2::int IS NULL OR r.office_id = $2)
+                      AND ($3::int IS NULL OR r.created_by = $3)
                     LIMIT 1
                 `,
-                [id, isSystemSuperAdmin(req.user) ? null : req.user.office_id]
+                [
+                    id,
+                    isSystemSuperAdmin(req.user) ? null : req.user.office_id,
+                    isBranchStaff(req.user) ? req.user.id : null
+                ]
             );
 
         const record =
@@ -3275,6 +3298,7 @@ const approveRecord = async (req, res) => {
             recordId: approvedRecord.id,
             branchId: approvedRecord.branch_id,
             eventId: `record-approved:${approvedRecord.id}:${String(approvedRecord.updated_at || Date.now())}`,
+            notifyOwner: newStatus !== "Ready",
             metadata: {
                 record_id: approvedRecord.id,
                 branch_id: approvedRecord.branch_id,
@@ -3288,7 +3312,7 @@ const approveRecord = async (req, res) => {
                 await notifyRecordOwner({
                     recordId: approvedRecord.id,
                     excludeUserId: req.user?.id,
-                    type: NOTIFICATION_TYPES.RECORD_APPROVED,
+                    type: NOTIFICATION_TYPES.RECORD_READY,
                     title: "Case Ready for Collection",
                     message: `Case #${approvedRecord.id} is ready for collection.`,
                     priority: NOTIFICATION_PRIORITIES.IMPORTANT,
