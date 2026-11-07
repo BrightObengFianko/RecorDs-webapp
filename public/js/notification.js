@@ -3,6 +3,8 @@
  * Provides a beautiful, animated notification system instead of native browser alerts.
  */
 (function () {
+    const nativeBrowserNotification = window.Notification;
+    window.RecordNativeNotification = nativeBrowserNotification;
     let notificationContainer = null;
     let notificationId = 0;
 

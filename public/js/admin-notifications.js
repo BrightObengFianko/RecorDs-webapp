@@ -28,6 +28,7 @@
     let urgentNotificationsInitialized = false;
     let notificationsInitialized = false;
     let notificationAudioContext = null;
+    const pendingSoundItems = new Map();
 
     // Notification visibility is enforced by the authenticated API. The bell
     // must still be available to every signed-in application role.
@@ -113,19 +114,59 @@
         }
     }
 
+    function soundHistoryStorageKey() {
+        try {
+            const cached = JSON.parse(localStorage.getItem("user") || "null");
+            return `recordNotificationSoundHistory:${cached?.id || "current"}`;
+        } catch {
+            return "recordNotificationSoundHistory:current";
+        }
+    }
+
+    function hasPlayedNotificationSound(key) {
+        try {
+            const history = JSON.parse(localStorage.getItem(soundHistoryStorageKey()) || "[]");
+            return Array.isArray(history) && history.includes(key);
+        } catch {
+            return false;
+        }
+    }
+
+    function rememberNotificationSound(key) {
+        try {
+            const storageKey = soundHistoryStorageKey();
+            const history = JSON.parse(localStorage.getItem(storageKey) || "[]");
+            const next = Array.isArray(history) ? history.filter(item => item !== key) : [];
+            next.push(key);
+            localStorage.setItem(storageKey, JSON.stringify(next.slice(-100)));
+        } catch {
+            // Sound deduplication is best-effort when browser storage is blocked.
+        }
+    }
+
+    function playUnreadNotificationSound(item) {
+        if (!notificationSoundEnabled()) return;
+        const key = `${item.id}:${item.last_event_at || item.created_at}:${item.message}`;
+        if (seenNotificationKeys.has(key) || hasPlayedNotificationSound(key)) return;
+        seenNotificationKeys.add(key);
+        if (playNotificationSound(item.priority)) {
+            rememberNotificationSound(key);
+        } else {
+            pendingSoundItems.set(key, { priority: item.priority, volume: notificationVolume() });
+        }
+    }
+
     function playNotificationSound(priority = "INFO", volume = notificationVolume(), force = false) {
         if ((!force && !notificationSoundEnabled()) || volume <= 0) return;
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContext) return;
+            if (!AudioContext) return false;
             notificationAudioContext ||= new AudioContext();
             if (notificationAudioContext.state === "suspended") {
-                notificationAudioContext.resume()
-                    .then(() => playNotificationSound(priority, volume, force))
-                    .catch(() => {});
-                return;
+                notificationAudioContext.resume().catch(() => {});
+                return false;
             }
-            if (notificationAudioContext.state !== "running") return;
+            if (notificationAudioContext.state !== "running") return false;
             const oscillator = notificationAudioContext.createOscillator();
             const gain = notificationAudioContext.createGain();
             const important = ["CRITICAL", "IMPORTANT"].includes(String(priority).toUpperCase());
@@ -151,8 +192,20 @@
                 second.start(start + 0.22);
                 second.stop(start + 0.44);
             }
+            return true;
         } catch {
             // Browser autoplay restrictions must not affect notifications.
+            return false;
+        }
+    }
+
+    function flushPendingSounds() {
+        if (notificationAudioContext?.state !== "running") return;
+        for (const [key, item] of pendingSoundItems) {
+            if (playNotificationSound(item.priority, item.volume)) {
+                rememberNotificationSound(key);
+                pendingSoundItems.delete(key);
+            }
         }
     }
 
@@ -191,7 +244,9 @@
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             if (AudioContext && !notificationAudioContext) notificationAudioContext = new AudioContext();
             if (notificationAudioContext?.state === "suspended") {
-                notificationAudioContext.resume().catch(() => {});
+                notificationAudioContext.resume().then(flushPendingSounds).catch(() => {});
+            } else {
+                flushPendingSounds();
             }
         } catch {}
     }, { passive: true });
@@ -316,7 +371,6 @@
                 const key = `${item.id}:${item.last_event_at || item.created_at}:${item.message}`;
                 if (urgentNotificationKeys.has(key)) return;
                 urgentNotificationKeys.add(key);
-                playNotificationSound(item.priority);
                 const notify = String(item.priority || "").toUpperCase() === "CRITICAL"
                     ? window.Notification?.error
                     : window.Notification?.warning;
@@ -329,17 +383,8 @@
         try {
             const data = await request("/?limit=30&readStatus=unread");
             const items = data.notifications || [];
-            if (!notificationsInitialized) {
-                items.forEach(item => seenNotificationKeys.add(`${item.id}:${item.last_event_at || item.created_at}:${item.message}`));
-                notificationsInitialized = true;
-            } else {
-                items.forEach(item => {
-                    const key = `${item.id}:${item.last_event_at || item.created_at}:${item.message}`;
-                    if (seenNotificationKeys.has(key)) return;
-                    seenNotificationKeys.add(key);
-                    playNotificationSound(item.priority);
-                });
-            }
+            items.forEach(playUnreadNotificationSound);
+            notificationsInitialized = true;
         } catch {
             // Notification polling remains best-effort during network failures.
         }
