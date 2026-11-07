@@ -2,6 +2,7 @@
     "name": "RecorDs",
     "short_name": "RecorDs",
     "start_url": "/dashboard.html",
+    "id": "/dashboard.html",
     "scope": "/",
     "display": "standalone",
     "background_color": "#06113b",
@@ -20,16 +21,16 @@
             "purpose": "any"
         },
         {
-            "src": "/assets/record-binder-icon-1024.png",
+            "src": "/assets/record-binder-maskable-1024.png",
             "sizes": "1024x1024",
             "type": "image/png",
             "purpose": "maskable"
         },
         {
-            "src": "/assets/record-binder-icon-512.png",
+            "src": "/assets/record-binder-maskable-512.png",
             "sizes": "512x512",
             "type": "image/png",
-            "purpose": "any maskable"
+            "purpose": "maskable"
         }
     ]
 }

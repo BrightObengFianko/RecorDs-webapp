@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v188";
+const CACHE_NAME = "records-shell-v189";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -47,6 +47,13 @@ const APP_SHELL = [
     "/assets/record-binder-icon-192.png",
     "/assets/record-binder-icon-512.png",
     "/assets/record-binder-icon-1024.png",
+    "/assets/record-binder-apple-180.png",
+    "/assets/record-binder-foreground-512.png",
+    "/assets/record-binder-foreground-1024.png",
+    "/assets/record-binder-background-512.png",
+    "/assets/record-binder-background-1024.png",
+    "/assets/record-binder-maskable-512.png",
+    "/assets/record-binder-maskable-1024.png",
     "/manifest.webmanifest",
 ];
 
