@@ -211,13 +211,17 @@
 
     window.RecordPushNotifications = {
         testSound: volume => playNotificationSound("IMPORTANT", Number.isFinite(volume) ? volume : notificationVolume(), true),
-        async enable() {
-            if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+        async enable({ requestPermission = true } = {}) {
+            const nativeNotification = window.RecordNativeNotification;
+            if (!nativeNotification || !("serviceWorker" in navigator) || !("PushManager" in window)) {
                 throw new Error("This browser does not support background notifications.");
             }
-            const permission = Notification.permission === "default"
-                ? await Notification.requestPermission()
-                : Notification.permission;
+            const permission = nativeNotification.permission === "default"
+                ? requestPermission
+                    ? await nativeNotification.requestPermission()
+                    : "default"
+                : nativeNotification.permission;
+            if (permission === "default" && !requestPermission) return false;
             if (permission !== "granted") throw new Error("Notifications are blocked. Allow them in your browser or device settings.");
             const config = await request("/push/config");
             if (!config.supported || !config.publicKey) throw new Error("Background notifications are not configured yet.");
@@ -225,7 +229,8 @@
             const base64 = config.publicKey.replace(/-/g, "+").replace(/_/g, "/");
             const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
             const applicationServerKey = Uint8Array.from(atob(padded), char => char.charCodeAt(0));
-            const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
+            const subscription = await registration.pushManager.getSubscription() ||
+                await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
             await request("/push/subscribe", { method: "POST", body: JSON.stringify({ subscription }) });
             return true;
         },
@@ -364,7 +369,6 @@
             if (!urgentNotificationsInitialized) {
                 urgentItems.forEach(item => urgentNotificationKeys.add(`${item.id}:${item.last_event_at || item.created_at}:${item.message}`));
                 urgentNotificationsInitialized = true;
-                return;
             }
 
             urgentItems.forEach(item => {
@@ -396,7 +400,14 @@
         if (refreshTimer) window.clearInterval(refreshTimer);
         refreshTimer = window.setInterval(() => {
             if (document.visibilityState === "visible") loadUnreadCount();
-        }, 30000);
+        }, 10000);
+        const cached = (() => {
+            try { return JSON.parse(localStorage.getItem("user") || "null") || {}; } catch { return {}; }
+        })();
+        if (cached?.accountSettings?.notificationDelivery?.backgroundEnabled !== false &&
+            window.RecordNativeNotification?.permission === "granted") {
+            window.RecordPushNotifications?.enable({ requestPermission: false }).catch(() => {});
+        }
         document.addEventListener("visibilitychange", () => {
             if (document.visibilityState === "visible") loadUnreadCount();
         });
