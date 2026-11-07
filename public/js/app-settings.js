@@ -69,7 +69,7 @@
         }
 
         if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/service-worker.js?v=190", {
+        navigator.serviceWorker.register("/service-worker.js?v=192", {
                 updateViaCache: "none"
             }).then(registration => {
                 // Do not make offline startup wait on a service-worker update check.
@@ -494,7 +494,7 @@
         logoContainer.replaceChildren();
 
         const logo = document.createElement("img");
-        logo.src = "/assets/record-verification-logo.png";
+        logo.src = "/assets/GlossyLogo.png";
         logo.alt = "RecorDs";
         logo.decoding = "async";
 
@@ -536,7 +536,7 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                background: linear-gradient(135deg, #10162f 0%, #1d2851 100%);
+                background: #f6f8fc;
             }
 
             #record-auth-loader .record-auth-loader-box {
@@ -647,7 +647,7 @@
         transition.id = "record-page-logo-transition";
         transition.className = "record-page-logo-transition";
         transition.setAttribute("aria-hidden", "true");
-        transition.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/record-verification-logo.png" alt=""></div>';
+        transition.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/GlossyLogo.png" alt=""></div>';
         document.body.appendChild(transition);
 
         const removeTransition = () => transition.remove();
@@ -669,7 +669,7 @@
         loader.id = "record-auth-loader";
         loader.setAttribute("aria-live", "polite");
         loader.setAttribute("aria-busy", "true");
-        loader.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/record-verification-logo.png" alt="RecorDs"></div>';
+        loader.innerHTML = '<div class="record-auth-loader-box"><img class="record-auth-loader-logo" src="/assets/GlossyLogo.png" alt="RecorDs"></div>';
         document.body.appendChild(loader);
         document.body.classList.add("record-auth-loading");
     }
