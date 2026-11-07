@@ -548,7 +548,7 @@
                 border-radius: 28px;
                 background: rgba(255, 255, 255, 0.96);
                 box-shadow: 0 18px 44px rgba(5, 10, 32, 0.32);
-                animation: record-brand-transition 360ms ease-out both;
+                animation: record-auth-loader-pulse 1200ms ease-in-out infinite alternate;
             }
 
             #record-auth-loader .record-auth-loader-box::before {
@@ -557,7 +557,7 @@
                 inset: -13px;
                 border: 1px solid rgba(255, 255, 255, 0.28);
                 border-radius: 38px;
-                animation: record-brand-ring 420ms ease-out both;
+                animation: record-auth-loader-ring 1400ms ease-in-out infinite alternate;
             }
 
             #record-auth-loader .record-auth-loader-logo {
@@ -623,9 +623,20 @@
                 to { opacity: 1; transform: scale(1); }
             }
 
+            @keyframes record-auth-loader-pulse {
+                from { opacity: 0.82; transform: scale(0.96); }
+                to { opacity: 1; transform: scale(1); }
+            }
+
+            @keyframes record-auth-loader-ring {
+                from { opacity: 0.24; transform: scale(0.88); }
+                to { opacity: 0.72; transform: scale(1); }
+            }
+
             @media (prefers-reduced-motion: reduce) {
                 #record-auth-loader .record-auth-loader-box,
                 #record-auth-loader .record-auth-loader-box::before,
+                #record-auth-loader .record-auth-loader-logo,
                 .record-page-logo-transition,
                 .record-page-logo-transition .record-auth-loader-box,
                 .record-page-logo-transition .record-auth-loader-box::before {
