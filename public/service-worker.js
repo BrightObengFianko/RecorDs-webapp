@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v195";
+const CACHE_NAME = "records-shell-v196";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -136,10 +136,12 @@ self.addEventListener("fetch", event => {
         return;
     }
 
-    // Prefer fresh app code online; use the cached copy only when offline.
+    // Use the last known-good app code immediately. Refresh it in the
+    // background when online so slow connections never leave the app unstyled.
     if (request.destination === "style" || request.destination === "script") {
         event.respondWith(
-            fetch(request)
+            caches.match(request).then(cached => {
+                const refresh = fetch(request)
                     .then(response => {
                         if (response.ok) {
                             const copy = response.clone();
@@ -147,7 +149,10 @@ self.addEventListener("fetch", event => {
                         }
                         return response;
                     })
-                    .catch(() => caches.match(request).then(cached => cached || Response.error()))
+                    .catch(() => null);
+
+                return cached || refresh.then(response => response || Response.error());
+            })
         );
         return;
     }
