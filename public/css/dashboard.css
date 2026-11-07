@@ -1090,7 +1090,7 @@ th {
 }
 
 .admin-dashboard.branch-staff-only .branch-staff-dashboard-panel {
-    margin-bottom: 0;
+    margin-bottom: 12px;
 }
 
 .branch-staff-metrics {
