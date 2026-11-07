@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v197";
+const CACHE_NAME = "records-shell-v198";
 const APP_SHELL = [
     "/",
     "/index.html",

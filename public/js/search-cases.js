@@ -392,6 +392,8 @@ function isBranchStaffSearchUser() {
         .replace(/[\s-]+/g, "_") === "branch_staff";
 }
 
+document.body.classList.toggle("branch-staff-search", isBranchStaffSearchUser());
+
 function canManageRecords() {
     const role = getCurrentUserRole().replace(/[\s-]+/g, "_");
 
