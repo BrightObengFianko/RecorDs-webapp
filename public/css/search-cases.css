@@ -1642,10 +1642,6 @@ body.search-page .content {
     display: none;
 }
 
-.mobile-filter-label {
-    display: none;
-}
-
 .mobile-filter-reset {
     display: none;
 }
@@ -2008,19 +2004,6 @@ body.search-page .content {
     body.search-page .mobile-search-icon-button .ui-icon {
         width: 21px;
         height: 21px;
-    }
-
-    body.search-page.branch-staff-search #mobileFilterButton {
-        width: auto;
-        min-width: 92px;
-        padding: 0 14px;
-        gap: 7px;
-        font-size: 13px;
-        font-weight: 700;
-    }
-
-    body.search-page.branch-staff-search #mobileFilterButton .mobile-filter-label {
-        display: inline;
     }
 
     body.search-page .main-search .search-field:first-child label {
