@@ -231,7 +231,7 @@ async function loadRecord() {
         const branchName = record.branch_name || "-";
         const statusValue = formatStatus(record.status);
 
-        document.title = `RecorDs - ${record.name || "Case Details"}`;
+        document.title = "RecorDs";
         setText(caseSubtitle, `Record #${record.id}`);
         setText(detailsCategory, record.category || "-");
         setText(detailsName, record.name || "-");

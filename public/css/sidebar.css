@@ -76,6 +76,39 @@ a {
     flex: 0 0 auto;
 }
 
+/* Shared top-header brand; page-specific content headings remain unchanged. */
+.records-page-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    color: var(--app-text);
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.records-page-brand img {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+@media (max-width: 760px) {
+    .records-page-brand {
+        gap: 8px;
+        font-size: 1rem;
+    }
+
+    .records-page-brand img {
+        width: 30px;
+        height: 30px;
+    }
+}
+
 .app,
 .page {
     width: 100%;
