@@ -2213,12 +2213,6 @@ const searchRecords = async (req, res) => {
             parameter++;
         }
 
-        if (isBranchStaff(req.user)) {
-            query += ` AND r.created_by = $${parameter}`;
-            values.push(req.user.id);
-            parameter++;
-        }
-
         if (name) {
             query += `
                 AND r.name ILIKE $${parameter}
