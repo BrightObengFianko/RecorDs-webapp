@@ -218,6 +218,7 @@ async function listUsers(req, res) {
                     u.id,
                     u.name,
                     u.email,
+                    u.phone_number,
                     LOWER(u.role) AS role,
                     u.office_id,
                     u.branch_id,
@@ -1544,6 +1545,19 @@ async function listOffices(req, res) {
                    (SELECT COUNT(*)::int FROM users u WHERE u.office_id = o.id) AS user_count,
                    (SELECT COUNT(*)::int FROM branches b WHERE b.office_id = o.id) AS branch_count,
                    (SELECT COUNT(*)::int FROM records r WHERE r.office_id = o.id) AS record_count
+                   ,(SELECT COALESCE(json_agg(json_build_object(
+                        'id', u.id,
+                        'name', u.name,
+                        'email', u.email,
+                        'role', u.role,
+                        'status', u.status,
+                        'branch', b.name
+                    ) ORDER BY u.name ASC), '[]'::json)
+                    FROM users u
+                    LEFT JOIN branches b ON b.id = u.branch_id
+                    WHERE u.office_id = o.id
+                      AND LOWER(REPLACE(REPLACE(COALESCE(u.role, ''), '-', '_'), ' ', '_'))
+                          NOT IN ('system_super_admin', 'super_admin')) AS staff_members
             FROM offices o
             LEFT JOIN office_sms_configurations sc ON sc.office_id = o.id
             ORDER BY o.name ASC

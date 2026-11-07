@@ -539,6 +539,11 @@
                 </div>
 
                 <div class="field">
+                    <label for="userPhone">Telephone Number</label>
+                    <input type="tel" id="userPhone" autocomplete="tel" readonly>
+                </div>
+
+                <div class="field">
                     <label for="userRole">Role</label>
                     <select id="userRole" required>
                         <option value="admin">Admin</option>
@@ -620,6 +625,30 @@
             <div class="modal-actions">
                 <button type="button" class="secondary-button" id="cancelOfficeDestructiveButton">Cancel</button>
                 <button type="button" class="danger-button" id="confirmOfficeDestructiveButton" disabled>Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="officeDetailsModal" hidden>
+        <div class="modal-card office-details-modal" role="dialog" aria-modal="true" aria-labelledby="officeDetailsTitle">
+            <div class="modal-header">
+                <div>
+                    <h3 id="officeDetailsTitle">Office Details</h3>
+                    <p id="officeDetailsSubtitle">Contact information and assigned staff.</p>
+                </div>
+                <button type="button" class="icon-button" id="closeOfficeDetailsButton" aria-label="Close office details" title="Close">
+                    <svg class="ui-icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+                </button>
+            </div>
+            <div class="office-details-body">
+                <div class="office-details-contact" id="officeDetailsContact"></div>
+                <div>
+                    <h4>Office Users</h4>
+                    <div class="office-details-staff" id="officeDetailsStaff"></div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="secondary-button" id="closeOfficeDetailsFooter">Close</button>
             </div>
         </div>
     </div>
@@ -754,6 +783,20 @@
                         id="staffEmail"
                         name="staffEmail"
                         placeholder="example@domain.com"
+                        required
+                    />
+                </div>
+
+                <div class="form-group">
+                    <label for="staffPhone">Telephone Number *</label>
+                    <input
+                        type="tel"
+                        id="staffPhone"
+                        name="staffPhone"
+                        placeholder="0501234567 or 233501234567"
+                        inputmode="tel"
+                        autocomplete="tel"
+                        maxlength="15"
                         required
                     />
                 </div>

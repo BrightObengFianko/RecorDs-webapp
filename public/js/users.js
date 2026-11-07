@@ -28,9 +28,11 @@
     const closeModalButton = document.getElementById("closeModalButton");
     const cancelModalButton = document.getElementById("cancelModalButton");
     const userForm = document.getElementById("userForm");
+    const modalTitle = document.getElementById("modalTitle");
     const userIdInput = document.getElementById("userId");
     const userNameInput = document.getElementById("userName");
     const userEmailInput = document.getElementById("userEmail");
+    const userPhoneInput = document.getElementById("userPhone");
     const userRoleInput = document.getElementById("userRole");
     const userBranchInput = document.getElementById("userBranch");
     const userStatusInput = document.getElementById("userStatus");
@@ -87,6 +89,13 @@
     const closeOfficeDestructiveButton = document.getElementById("closeOfficeDestructiveButton");
     const cancelOfficeDestructiveButton = document.getElementById("cancelOfficeDestructiveButton");
     const confirmOfficeDestructiveButton = document.getElementById("confirmOfficeDestructiveButton");
+    const officeDetailsModal = document.getElementById("officeDetailsModal");
+    const officeDetailsTitle = document.getElementById("officeDetailsTitle");
+    const officeDetailsSubtitle = document.getElementById("officeDetailsSubtitle");
+    const officeDetailsContact = document.getElementById("officeDetailsContact");
+    const officeDetailsStaff = document.getElementById("officeDetailsStaff");
+    const closeOfficeDetailsButton = document.getElementById("closeOfficeDetailsButton");
+    const closeOfficeDetailsFooter = document.getElementById("closeOfficeDetailsFooter");
     const branchModal = document.getElementById("branchModal");
     const branchModalTitle = document.getElementById("branchModalTitle");
     const branchForm = document.getElementById("branchForm");
@@ -118,6 +127,7 @@
     const togglePasswordBtn = document.getElementById("togglePassword");
     const cancelCreateStaffBtn = document.getElementById("cancelCreateStaffBtn");
     const staffPasswordInput = document.getElementById("staffPassword");
+    const staffPhoneInput = document.getElementById("staffPhone");
     const staffRoleInput = document.getElementById("staffRole");
     const staffOfficeInput = document.getElementById("staffOffice");
 
@@ -128,6 +138,7 @@
     let selectedOfficeForBranches = null;
     let selectedOfficeBranches = [];
     let officeMenu = null;
+    let userMenu = null;
     let editingBranchId = null;
     let officeDestructiveState = null;
     const mobilePageSize = 5;
@@ -360,7 +371,7 @@
         const branchLabel = user.branch || user.branch_name || "-";
         const deviceCount = `${Number(user.active_devices || 0)} / ${Math.max(1, Number(user.max_devices || 2))}`;
         const action = canEdit
-            ? `<button type="button" class="mobile-user-action mobile-user-menu-button action-button" data-user-id="${escapeHtml(user.id)}" title="User actions" aria-label="Actions for ${escapeHtml(user.name || "user")}">
+            ? `<button type="button" class="mobile-user-action mobile-user-menu-button action-button" data-user-menu-id="${escapeHtml(user.id)}" title="User actions" aria-label="Actions for ${escapeHtml(user.name || "user")}">
                     <span aria-hidden="true">&#8942;</span><span class="sr-only">Edit</span>
                </button>`
             : '<span class="status-pill status-inactive">Protected</span>';
@@ -542,14 +553,12 @@
                     <td class="desktop-user-cell">
                         ${canEdit ? `<button
                             type="button"
-                            class="action-button"
-                            data-user-id="${escapeHtml(user.id)}"
-                            title="Edit user"
+                            class="action-button user-menu-button"
+                            data-user-menu-id="${escapeHtml(user.id)}"
+                            title="User actions"
+                            aria-label="Actions for ${escapeHtml(user.name || "user")}"
                         >
-                            <svg class="ui-icon" aria-hidden="true">
-                                <use href="#icon-edit"></use>
-                            </svg>
-                            <span>Edit</span>
+                            &#8942;
                         </button>` : '<span class="status-pill status-inactive">Protected</span>'}
                     </td>
                     ${renderMobileUserCard(user, rowIndex, officeLabel, roleClass, statusClass, statusLabel, canEdit)}
@@ -755,7 +764,52 @@
         `;
     }
 
-    function openModal(user) {
+    function closeUserMenu() {
+        userMenu?.remove();
+        userMenu = null;
+    }
+
+    function positionUserMenu(menu, button) {
+        const rect = button.getBoundingClientRect();
+        menu.style.visibility = "hidden";
+        menu.style.display = "block";
+        const menuRect = menu.getBoundingClientRect();
+        const left = Math.min(Math.max(12, rect.right - menuRect.width), window.innerWidth - menuRect.width - 12);
+        const top = rect.bottom + menuRect.height + 8 <= window.innerHeight
+            ? rect.bottom + 8
+            : Math.max(12, rect.top - menuRect.height - 8);
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+        menu.style.visibility = "visible";
+    }
+
+    function openUserMenu(user, button) {
+        closeUserMenu();
+        userMenu = document.createElement("div");
+        userMenu.className = "user-action-menu";
+        userMenu.setAttribute("role", "menu");
+        userMenu.innerHTML = `
+            <button type="button" data-user-menu-action="edit" role="menuitem">Edit</button>
+            <button type="button" data-user-menu-action="details" role="menuitem">Details</button>
+            <button type="button" class="is-danger" data-user-menu-action="delete" role="menuitem">Delete</button>
+        `;
+        document.body.appendChild(userMenu);
+        positionUserMenu(userMenu, button);
+        userMenu.addEventListener("click", event => {
+            event.stopPropagation();
+            const action = event.target.closest("[data-user-menu-action]")?.dataset.userMenuAction;
+            if (!action) return;
+            closeUserMenu();
+            if (action === "edit") openModal(user);
+            if (action === "details") openModal(user, true);
+            if (action === "delete") {
+                openModal(user);
+                deleteUser({ preventDefault() {} });
+            }
+        });
+    }
+
+    function openModal(user, readOnly = false) {
         if (!userModal || !userForm) {
             return;
         }
@@ -763,6 +817,7 @@
         userIdInput.value = user.id || "";
         userNameInput.value = user.name || "";
         userEmailInput.value = user.email || "";
+        if (userPhoneInput) userPhoneInput.value = user.phone_number || "Not provided";
         updateRoleOptions();
         userRoleInput.value = normalize(user.role).replace(/\s+/g, "_") || "staff";
         userStatusInput.value = isActiveUser(user) ? "Active" : "Inactive";
@@ -771,6 +826,13 @@
         }
         userBranchInput.innerHTML = buildBranchOptions(user.branch_id, user.branch);
         userBranchInput.value = user.branch_id ? String(user.branch_id) : "";
+
+        if (modalTitle) modalTitle.textContent = readOnly ? "User Details" : "Edit User";
+        [userNameInput, userEmailInput, userPhoneInput, userRoleInput, userBranchInput, userStatusInput, userMaxDevicesInput]
+            .filter(Boolean)
+            .forEach(input => { input.disabled = readOnly; });
+        if (saveUserButton) saveUserButton.hidden = readOnly;
+        if (deleteUserButton) deleteUserButton.hidden = readOnly;
 
         userModal.hidden = false;
 
@@ -787,6 +849,12 @@
 
         userModal.hidden = true;
         userForm.reset();
+        if (modalTitle) modalTitle.textContent = "Edit User";
+        [userNameInput, userEmailInput, userPhoneInput, userRoleInput, userBranchInput, userStatusInput, userMaxDevicesInput]
+            .filter(Boolean)
+            .forEach(input => { input.disabled = false; });
+        if (saveUserButton) saveUserButton.hidden = false;
+        if (deleteUserButton) deleteUserButton.hidden = false;
         userIdInput.value = "";
         userBranchInput.innerHTML = "<option value=\"\">Select branch</option>";
     }
@@ -978,6 +1046,30 @@
         document.querySelectorAll("[data-office-menu-id]").forEach(button => button.setAttribute("aria-expanded", "false"));
     }
 
+    function openOfficeDetails(office) {
+        if (!officeDetailsModal) return;
+        const staffMembers = Array.isArray(office.staff_members) ? office.staff_members : [];
+        officeDetailsTitle.textContent = office.name || "Office Details";
+        officeDetailsSubtitle.textContent = `${office.code || ""}${office.address ? ` - ${office.address}` : ""}`.trim() || "Office contact information and assigned users.";
+        officeDetailsContact.innerHTML = `
+            <div><span>Phone</span><strong>${escapeHtml(office.phone || "Not provided")}</strong></div>
+            <div><span>Email</span><strong>${escapeHtml(office.email || "Not provided")}</strong></div>
+        `;
+        officeDetailsStaff.innerHTML = staffMembers.length
+            ? staffMembers.map(member => `
+                <div class="office-details-staff-row">
+                    <div><strong>${escapeHtml(member.name || "Unnamed user")}</strong><span>${escapeHtml(member.email || "No email")}</span></div>
+                    <div><span>${escapeHtml(formatRole(member.role))}</span><small>${escapeHtml(member.branch || "Office user")} - ${escapeHtml(member.status || "Unknown")}</small></div>
+                </div>
+            `).join("")
+            : '<p class="empty">No staff or users are assigned to this office.</p>';
+        officeDetailsModal.hidden = false;
+    }
+
+    function closeOfficeDetails() {
+        if (officeDetailsModal) officeDetailsModal.hidden = true;
+    }
+
     function positionOfficeMenu(menu, button) {
         const gap = 8;
         const rect = button.getBoundingClientRect();
@@ -999,24 +1091,46 @@
         officeMenu = document.createElement("div");
         officeMenu.className = "office-action-menu";
         officeMenu.setAttribute("role", "menu");
-        officeMenu.innerHTML = `
-            <button type="button" data-menu-action="users" role="menuitem">Manage Office Users</button>
-            <button type="button" data-menu-action="dashboard" role="menuitem">View Office Dashboard</button>
-            <button type="button" data-menu-action="branches" role="menuitem">View Branches</button>
-            <button type="button" data-menu-action="create-user" role="menuitem">Create User in Office</button>
+        const primaryMenu = () => `
+            <button type="button" data-menu-action="users" role="menuitem">Manage Users</button>
             <button type="button" data-menu-action="sms" role="menuitem">Configure SMS</button>
             <button type="button" data-menu-action="edit" role="menuitem">Edit Office</button>
             <button type="button" data-menu-action="toggle" role="menuitem">${active ? "Deactivate Office" : "Activate Office"}</button>
-            <button type="button" data-menu-action="clear-data" role="menuitem">Clear Office Data</button>
+            <button type="button" data-menu-action="more" role="menuitem">More actions</button>
             <button type="button" class="is-danger" data-menu-action="delete" role="menuitem">Delete Office</button>
         `;
+        const moreMenu = () => `
+            <button type="button" data-menu-action="back" role="menuitem">Back</button>
+            <button type="button" data-menu-action="details" role="menuitem">View Office Details</button>
+            <button type="button" data-menu-action="dashboard" role="menuitem">View Office Dashboard</button>
+            <button type="button" data-menu-action="branches" role="menuitem">View Branches</button>
+            <button type="button" data-menu-action="create-user" role="menuitem">Create User</button>
+            <button type="button" data-menu-action="clear-data" role="menuitem">Clear Office Data</button>
+        `;
+        officeMenu.innerHTML = primaryMenu();
         document.body.appendChild(officeMenu);
         button.setAttribute("aria-expanded", "true");
         positionOfficeMenu(officeMenu, button);
         officeMenu.addEventListener("click", event => {
+            event.stopPropagation();
             const action = event.target.closest("[data-menu-action]")?.dataset.menuAction;
             if (!action) return;
+            if (action === "more") {
+                officeMenu.innerHTML = moreMenu();
+                window.requestAnimationFrame(() => {
+                    if (officeMenu) positionOfficeMenu(officeMenu, button);
+                });
+                return;
+            }
+            if (action === "back") {
+                officeMenu.innerHTML = primaryMenu();
+                window.requestAnimationFrame(() => {
+                    if (officeMenu) positionOfficeMenu(officeMenu, button);
+                });
+                return;
+            }
             closeOfficeMenu();
+            if (action === "details") openOfficeDetails(office);
             if (action === "users") {
                 if (searchInput) searchInput.value = office.name;
                 renderUsers();
@@ -1683,10 +1797,11 @@
 
         const staffName = document.getElementById("staffName")?.value?.trim();
         const staffEmail = document.getElementById("staffEmail")?.value?.trim();
+        const staffPhone = staffPhoneInput?.value?.trim();
         const staffPassword = document.getElementById("staffPassword")?.value?.trim();
         const staffRole = staffRoleInput?.value || "staff";
         const staffOffice = staffOfficeInput?.value || "";
-        if (!staffName || !staffEmail || !staffPassword || !staffRole || !staffOffice) {
+        if (!staffName || !staffEmail || !staffPhone || !staffPassword || !staffRole || !staffOffice) {
             Notification.warning("Please complete the user details and office selection.");
             return;
         }
@@ -1714,6 +1829,7 @@
                 body: JSON.stringify({
                     name: staffName,
                     email: staffEmail,
+                    phone_number: staffPhone,
                     password: staffPassword,
                     role: staffRole,
                     office_id: Number(staffOffice)
@@ -1845,6 +1961,11 @@ They can login immediately.
         officeModal?.addEventListener("click", event => {
             if (event.target === officeModal) closeOfficeModal();
         });
+        closeOfficeDetailsButton?.addEventListener("click", closeOfficeDetails);
+        closeOfficeDetailsFooter?.addEventListener("click", closeOfficeDetails);
+        officeDetailsModal?.addEventListener("click", event => {
+            if (event.target === officeDetailsModal) closeOfficeDetails();
+        });
         officeDestructiveModal?.addEventListener("click", event => {
             if (event.target === officeDestructiveModal) closeOfficeDestructiveModal();
         });
@@ -1889,12 +2010,16 @@ They can login immediately.
             if (button.dataset.officeAction === "delete") deleteOffice(office);
         });
         document.addEventListener("click", event => {
+            if (userMenu && !userMenu.contains(event.target) && !event.target.closest("[data-user-menu-id]")) {
+                closeUserMenu();
+            }
             if (officeMenu && !officeMenu.contains(event.target) && !event.target.closest("[data-office-menu-id]")) {
                 closeOfficeMenu();
             }
         });
         window.addEventListener("resize", () => {
             closeOfficeMenu();
+            closeUserMenu();
             renderOffices();
             renderUsers();
         });
@@ -1905,6 +2030,13 @@ They can login immediately.
                 const deviceButton = event.target.closest("[data-device-user-id]");
                 if (deviceButton) {
                     loadManagedSessions(deviceButton.dataset.deviceUserId);
+                    return;
+                }
+
+                const userMenuButton = event.target.closest("[data-user-menu-id]");
+                if (userMenuButton) {
+                    const user = allUsers.find(item => String(item.id) === String(userMenuButton.dataset.userMenuId));
+                    if (user) openUserMenu(user, userMenuButton);
                     return;
                 }
 
@@ -1989,6 +2121,9 @@ They can login immediately.
             }
             if (event.key === "Escape" && officeModal && !officeModal.hidden) {
                 closeOfficeModal();
+            }
+            if (event.key === "Escape" && officeDetailsModal && !officeDetailsModal.hidden) {
+                closeOfficeDetails();
             }
             if (event.key === "Escape" && officeDestructiveModal && !officeDestructiveModal.hidden) {
                 closeOfficeDestructiveModal();

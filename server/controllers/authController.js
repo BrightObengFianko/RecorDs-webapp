@@ -25,6 +25,7 @@ const {
 const { isSystemSuperAdmin } = require("../utils/officeUtils");
 const { getOfficeSmsConfig } = require("../utils/officeIntegration");
 const { lockStaffAccountQuota } = require("../utils/staffQuota");
+const { formatPhoneNumber, isValidPhoneNumber } = require("../utils/phoneUtils");
 const {
     getDeviceMetadata,
     sessionExpiresAt
@@ -265,6 +266,7 @@ async function fetchUserById(id) {
                 u.id,
                 u.name,
                 u.email,
+                u.phone_number,
                 LOWER(u.role) AS role,
                 u.office_id,
                 u.branch_id,
@@ -408,15 +410,23 @@ const createStaffAccount = async (req, res) => {
         }
 
         const { name, email, password } = req.body;
+        const rawPhoneNumber = String(req.body?.phone_number || "").trim();
         const requestedRole = normalizeRole(req.body?.role || "branch_staff");
         const requestedOfficeId = Number.parseInt(String(req.body?.office_id || ""), 10);
         const requestedBranchId = Number.parseInt(String(req.body?.branch_id || ""), 10);
         const allowedRoles = new Set(["office_admin", "staff", "branch_staff"]);
 
-        if (!name || !email || !password) {
+        if (!name || !email || !password || !rawPhoneNumber) {
             return res.status(400).json({
                 success: false,
-                message: "Please provide name, email, and temporary password."
+                message: "Please provide name, email, telephone number, and temporary password."
+            });
+        }
+
+        if (!isValidPhoneNumber(rawPhoneNumber)) {
+            return res.status(400).json({
+                success: false,
+                message: "Telephone number must contain 9 digits or 10 digits when it starts with 0."
             });
         }
 
@@ -445,6 +455,7 @@ const createStaffAccount = async (req, res) => {
 
         const cleanName = String(name).trim();
         const cleanEmail = String(email).trim().toLowerCase();
+        const phoneNumber = formatPhoneNumber(rawPhoneNumber);
 
         if (
             boundedText(cleanName, 100) === null ||
@@ -511,6 +522,7 @@ const createStaffAccount = async (req, res) => {
                 INSERT INTO users (
                     name,
                     email,
+                    phone_number,
                     password,
                     role,
                     office_id,
@@ -518,12 +530,13 @@ const createStaffAccount = async (req, res) => {
                     account_status,
                     is_active
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING id
             `,
             [
                 cleanName,
                 cleanEmail,
+                phoneNumber,
                 hashedPassword,
                     requestedRole,
                     officeId,

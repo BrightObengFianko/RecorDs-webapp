@@ -247,6 +247,13 @@ async function ensureDatabaseSchema() {
     await pool.query(
         `
             ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS phone_number VARCHAR(30)
+        `
+    );
+
+    await pool.query(
+        `
+            ALTER TABLE users
             ADD COLUMN IF NOT EXISTS office_id INTEGER
         `
     );
