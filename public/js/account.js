@@ -5,6 +5,8 @@ const nameFilter = document.getElementById("nameFilter");
 const dateOfBirthFilter = document.getElementById("dateOfBirthFilter");
 const accountFilterToggle = document.getElementById("accountFilterToggle");
 const accountFilterPanel = document.getElementById("accountFilterPanel");
+const officeFilterField = document.getElementById("officeFilterField");
+const officeFilter = document.getElementById("officeFilter");
 const totalCases = document.getElementById("totalCases");
 const showingInfo = document.getElementById("showingInfo");
 const selectedCount = document.getElementById("selectedCount");
@@ -18,6 +20,15 @@ const rowsPerPage = 10;
 const selectedIds = new Set();
 let records = [];
 let currentPage = 1;
+
+function isSystemSuperAdmin() {
+    try {
+        const user = JSON.parse(localStorage.getItem("user") || "{}");
+        return String(user.role || "").trim().toLowerCase().replace(/[\s-]+/g, "_") === "system_super_admin";
+    } catch (_) {
+        return false;
+    }
+}
 
 if (logoutButton) {
     logoutButton.addEventListener("click", () => {
@@ -243,6 +254,7 @@ async function loadRecords() {
     if (nameFilter.value.trim()) params.set("name", nameFilter.value.trim());
     if (dateOfBirthFilter.value) params.set("dateOfBirth", dateOfBirthFilter.value);
     if (registrarFilter.value) params.set("registrar", registrarFilter.value);
+    if (isSystemSuperAdmin() && officeFilter?.value) params.set("office_id", officeFilter.value);
 
     processingBody.innerHTML = `<tr><td colspan="10" class="account-empty">Loading cases...</td></tr>`;
 
@@ -291,9 +303,11 @@ if (!accountToken) {
     window.location.replace("dashboard.html");
 } else {
     document.getElementById("searchButton").addEventListener("click", loadRecords);
+    officeFilter?.addEventListener("change", loadRecords);
     registrarFilter.addEventListener("change", loadRecords);
     document.getElementById("resetButton").addEventListener("click", () => {
         registrarFilter.value = "";
+        if (officeFilter) officeFilter.value = "";
         nameFilter.value = "";
         dateOfBirthFilter.value = "";
         loadRecords();
@@ -388,5 +402,18 @@ if (!accountToken) {
     window.addEventListener("resize", repositionAccountActionMenus, { passive: true });
     window.addEventListener("scroll", repositionAccountActionMenus, { passive: true });
     processingBody.addEventListener("scroll", repositionAccountActionMenus, { passive: true });
-    loadRecords();
+
+    (async () => {
+        if (isSystemSuperAdmin() && officeFilter && officeFilterField) {
+            try {
+                const data = await accountRequest("/api/admin/offices");
+                officeFilter.innerHTML = '<option value="">All Offices</option>' +
+                    (data?.offices || []).map(office => `<option value="${escapeHtml(office.id)}">${escapeHtml(office.name || office.code || `Office ${office.id}`)}</option>`).join("");
+                officeFilterField.hidden = false;
+            } catch (error) {
+                Notification.error(error.message);
+            }
+        }
+        loadRecords();
+    })();
 }

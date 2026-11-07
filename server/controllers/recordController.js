@@ -1219,7 +1219,8 @@ const getProcessingRecords = async (req, res) => {
         const {
             name,
             dateOfBirth,
-            registrar
+            registrar,
+            office_id: requestedOfficeId
         } = req.query;
 
         for (const dateValue of [dateOfBirth]) {
@@ -1242,6 +1243,14 @@ const getProcessingRecords = async (req, res) => {
         if (!isSystemSuperAdmin(req.user)) {
             query += ` AND r.office_id = $${parameter}`;
             values.push(req.user.office_id);
+            parameter++;
+        } else if (requestedOfficeId) {
+            const officeId = Number.parseInt(String(requestedOfficeId), 10);
+            if (!Number.isInteger(officeId) || officeId <= 0) {
+                return res.status(400).json({ success: false, message: "Office filter is invalid." });
+            }
+            query += ` AND r.office_id = $${parameter}`;
+            values.push(officeId);
             parameter++;
         }
 
