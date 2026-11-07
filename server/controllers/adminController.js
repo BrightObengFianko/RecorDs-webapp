@@ -1550,7 +1550,7 @@ async function listOffices(req, res) {
                         'name', u.name,
                         'email', u.email,
                         'role', u.role,
-                        'status', u.status,
+                        'status', CASE WHEN COALESCE(u.is_active, TRUE) THEN 'Active' ELSE 'Inactive' END,
                         'branch', b.name
                     ) ORDER BY u.name ASC), '[]'::json)
                     FROM users u
