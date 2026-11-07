@@ -5,8 +5,8 @@
     "id": "/dashboard.html",
     "scope": "/",
     "display": "standalone",
-    "background_color": "#06113b",
-    "theme_color": "#06113b",
+    "background_color": "#ffffff",
+    "theme_color": "#ffffff",
     "icons": [
         {
             "src": "/assets/record-binder-icon-192.png",
