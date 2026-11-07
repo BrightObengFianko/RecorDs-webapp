@@ -950,6 +950,23 @@ async function ensureDatabaseSchema() {
 
     await pool.query(
         `
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id BIGSERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+                office_id INTEGER NOT NULL REFERENCES offices(id) ON UPDATE CASCADE ON DELETE CASCADE,
+                endpoint TEXT NOT NULL UNIQUE,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                user_agent VARCHAR(500),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_used_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        `
+    );
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id)`);
+
+    await pool.query(
+        `
             UPDATE notifications n
             SET office_id = COALESCE(
                 (SELECT u.office_id FROM users u WHERE u.id = n.user_id),

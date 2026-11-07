@@ -1,4 +1,5 @@
 const pool = require("../config/database");
+const { sendPushToUser } = require("./pushNotifications");
 
 const NOTIFICATION_TYPES = Object.freeze({
     RECORD_CREATED: "RECORD_CREATED",
@@ -126,7 +127,7 @@ async function createNotification({
     const cleanTitle = validateNotificationText(title, "Notification title", 200);
     const cleanMessage = validateNotificationText(message, "Notification message", 2000);
 
-    const userResult = await pool.query("SELECT id, office_id FROM users WHERE id = $1 LIMIT 1", [normalizedUserId]);
+    const userResult = await pool.query("SELECT id, office_id, account_settings FROM users WHERE id = $1 LIMIT 1", [normalizedUserId]);
     if (!userResult.rowCount) throw new Error("User not found.");
     const normalizedOfficeId = normalizeId(officeId || userResult.rows[0].office_id, "Office ID", false);
 
@@ -164,7 +165,19 @@ async function createNotification({
         ]
     );
 
-    if (result.rows[0]) return result.rows[0];
+    if (result.rows[0]) {
+        if (userResult.rows[0].account_settings?.notificationDelivery?.backgroundEnabled !== false) {
+            void sendPushToUser(normalizedUserId, {
+                id: result.rows[0].id,
+                title: cleanTitle,
+                body: cleanMessage,
+                type: normalizedType,
+                priority: normalizedPriority,
+                url: normalizedRecordId ? `/case-details.html?id=${encodeURIComponent(normalizedRecordId)}` : "/reports.html#notifications"
+            }).catch(error => console.warn("PUSH NOTIFICATION ERROR:", error.message));
+        }
+        return result.rows[0];
+    }
 
     const eventId = normalizedMetadata.event_id;
     if (eventId) {
@@ -464,6 +477,16 @@ async function notifyAdminsGrouped({
                 );
                 await client.query("COMMIT");
                 results.push(updated.rows[0]);
+                if (admin.account_settings?.notificationDelivery?.backgroundEnabled !== false) {
+                    void sendPushToUser(admin.id, {
+                        id: updated.rows[0].id,
+                        title: content.title,
+                        body: content.message,
+                        type,
+                        priority,
+                        url: recordId ? `/case-details.html?id=${encodeURIComponent(recordId)}` : "/reports.html#notifications"
+                    }).catch(error => console.warn("GROUPED PUSH ERROR:", error.message));
+                }
                 continue;
             }
 
@@ -494,7 +517,19 @@ async function notifyAdminsGrouped({
             ]
             );
             await client.query("COMMIT");
-            if (inserted.rows[0]) results.push(inserted.rows[0]);
+            if (inserted.rows[0]) {
+                results.push(inserted.rows[0]);
+                if (admin.account_settings?.notificationDelivery?.backgroundEnabled !== false) {
+                    void sendPushToUser(admin.id, {
+                        id: inserted.rows[0].id,
+                        title: content.title,
+                        body: content.message,
+                        type,
+                        priority,
+                        url: recordId ? `/case-details.html?id=${encodeURIComponent(recordId)}` : "/reports.html#notifications"
+                    }).catch(error => console.warn("GROUPED PUSH ERROR:", error.message));
+                }
+            }
         } catch (error) {
             await client.query("ROLLBACK");
             console.error("GROUPED NOTIFICATION ERROR:", error.message);
@@ -590,7 +625,7 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
         };
 
         if (!current) {
-            await pool.query(
+            const inserted = await pool.query(
                 `
                     INSERT INTO notifications (
                         type, title, message, priority, user_id, office_id, grouping_key,
@@ -598,6 +633,7 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
                     )
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, TRUE, 15, $9::jsonb)
                     ON CONFLICT DO NOTHING
+                    RETURNING id
                 `,
                 [
                     NOTIFICATION_TYPES.PENDING_APPROVAL,
@@ -611,6 +647,16 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
                     JSON.stringify(metadata)
                 ]
             );
+            if (inserted.rowCount && admin.account_settings?.notificationDelivery?.backgroundEnabled !== false) {
+                void sendPushToUser(admin.id, {
+                    id: inserted.rows[0].id,
+                    title: `${adminCount} Records Awaiting Approval`,
+                    body: `${adminCount} records are waiting for approval.`,
+                    type: NOTIFICATION_TYPES.PENDING_APPROVAL,
+                    priority: NOTIFICATION_PRIORITIES.IMPORTANT,
+                    url: "/account.html"
+                }).catch(error => console.warn("PENDING APPROVAL PUSH ERROR:", error.message));
+            }
             continue;
         }
 
@@ -641,6 +687,16 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
                 adminCount > 0
             ]
         );
+        if (becameUnread && admin.account_settings?.notificationDelivery?.backgroundEnabled !== false) {
+            void sendPushToUser(admin.id, {
+                id: current.id,
+                title: `${adminCount} Records Awaiting Approval`,
+                body: `${adminCount} records are waiting for approval.`,
+                type: NOTIFICATION_TYPES.PENDING_APPROVAL,
+                priority: NOTIFICATION_PRIORITIES.IMPORTANT,
+                url: "/account.html"
+            }).catch(error => console.warn("PENDING APPROVAL PUSH ERROR:", error.message));
+        }
         } catch (error) {
             // One malformed user or office must not prevent other authorized
             // recipients from receiving the pending-approval notification.

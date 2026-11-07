@@ -141,6 +141,11 @@ const DEFAULT_ACCOUNT_SETTINGS = {
         SETTINGS_CHANGED: true,
         FAILED_LOGIN_ALERT: true,
         SYSTEM_ALERT: true
+    },
+    notificationDelivery: {
+        soundEnabled: true,
+        backgroundEnabled: true,
+        volume: 0.6
     }
 };
 
@@ -156,6 +161,9 @@ function normalizeAccountSettings(rawSettings, user) {
         : {};
     const rawNotificationPreferences = raw.notificationPreferences && typeof raw.notificationPreferences === "object"
         ? raw.notificationPreferences
+        : {};
+    const rawNotificationDelivery = raw.notificationDelivery && typeof raw.notificationDelivery === "object"
+        ? raw.notificationDelivery
         : {};
     const cleanText = (value, fallback, maxLength) => {
         const text = String(value ?? fallback ?? "").trim();
@@ -193,7 +201,12 @@ function normalizeAccountSettings(rawSettings, user) {
                 type,
                 rawNotificationPreferences[type] !== false
             ])
-        )
+        ),
+        notificationDelivery: {
+            soundEnabled: rawNotificationDelivery.soundEnabled !== false,
+            backgroundEnabled: rawNotificationDelivery.backgroundEnabled !== false,
+            volume: Math.min(1, Math.max(0, Number.isFinite(Number(rawNotificationDelivery.volume)) ? Number(rawNotificationDelivery.volume) : 0.6))
+        }
     };
 }
 

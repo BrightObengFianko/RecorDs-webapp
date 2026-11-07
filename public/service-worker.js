@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v192";
+const CACHE_NAME = "records-shell-v193";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -73,6 +73,36 @@ self.addEventListener("activate", event => {
                 .filter(key => key !== CACHE_NAME)
                 .map(key => caches.delete(key))
         )).then(() => self.clients.claim())
+    );
+});
+
+self.addEventListener("push", event => {
+    let payload = {};
+    try { payload = event.data ? event.data.json() : {}; } catch { payload = { body: event.data?.text() || "New RecorDs notification" }; }
+    const title = payload.title || "RecorDs";
+    const options = {
+        body: payload.body || payload.message || "You have a new notification.",
+        icon: "/assets/GlossyLogo.png",
+        badge: "/assets/record-binder-icon-192.png",
+        tag: payload.id ? `records-notification-${payload.id}` : "records-notification",
+        renotify: true,
+        data: { url: payload.url || "/reports.html#notifications" }
+    };
+    event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", event => {
+    event.notification.close();
+    const target = new URL(event.notification.data?.url || "/reports.html#notifications", self.location.origin).href;
+    event.waitUntil(
+        clients.matchAll({ type: "window", includeUncontrolled: true }).then(clientList => {
+            const existing = clientList.find(client => "focus" in client);
+            if (existing) {
+                existing.navigate(target);
+                return existing.focus();
+            }
+            return clients.openWindow(target);
+        })
     );
 });
 

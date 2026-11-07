@@ -48,6 +48,11 @@ const DEFAULT_SETTINGS = {
         SETTINGS_CHANGED: true,
         FAILED_LOGIN_ALERT: true,
         SYSTEM_ALERT: true
+    },
+    notificationDelivery: {
+        soundEnabled: true,
+        backgroundEnabled: true,
+        volume: 0.6
     }
 };
 
@@ -76,6 +81,10 @@ const showAvatarsInput = document.getElementById("showAvatars");
 const showStatusColorsInput = document.getElementById("showStatusColors");
 const enableAnimationsInput = document.getElementById("enableAnimations");
 const notificationPreferenceInputs = [...document.querySelectorAll("[data-notification-preference]")];
+const notificationSoundInput = document.getElementById("notificationSoundEnabled");
+const backgroundNotificationInput = document.getElementById("backgroundNotificationsEnabled");
+const notificationVolumeInput = document.getElementById("notificationVolume");
+const testNotificationSoundButton = document.getElementById("testNotificationSound");
 const notificationPreferencesSection = document.getElementById("notificationPreferencesSection");
 const saveNotificationPreferencesButton = document.getElementById("saveNotificationPreferences");
 const resetNotificationPreferencesButton = document.getElementById("resetNotificationPreferences");
@@ -194,6 +203,15 @@ function parseSettings(raw, includeProfile) {
     Object.keys(settings.notificationPreferences).forEach(type => {
         settings.notificationPreferences[type] = settings.notificationPreferences[type] !== false;
     });
+    settings.notificationDelivery = {
+        ...DEFAULT_SETTINGS.notificationDelivery,
+        ...(parsed.notificationDelivery && typeof parsed.notificationDelivery === "object"
+            ? parsed.notificationDelivery
+            : {})
+    };
+    settings.notificationDelivery.soundEnabled = settings.notificationDelivery.soundEnabled !== false;
+    settings.notificationDelivery.backgroundEnabled = settings.notificationDelivery.backgroundEnabled !== false;
+    settings.notificationDelivery.volume = Math.min(1, Math.max(0, Number.isFinite(Number(settings.notificationDelivery.volume)) ? Number(settings.notificationDelivery.volume) : 0.6));
 
     return settings;
 }
@@ -202,7 +220,8 @@ function cloneDefaults() {
     return {
         profile: { ...DEFAULT_SETTINGS.profile },
         appearance: { ...DEFAULT_SETTINGS.appearance },
-        notificationPreferences: { ...DEFAULT_SETTINGS.notificationPreferences }
+        notificationPreferences: { ...DEFAULT_SETTINGS.notificationPreferences },
+        notificationDelivery: { ...DEFAULT_SETTINGS.notificationDelivery }
     };
 }
 
@@ -234,6 +253,13 @@ function mergeSettings(base, stored) {
         base.notificationPreferences = {
             ...base.notificationPreferences,
             ...stored.notificationPreferences
+        };
+    }
+
+    if (stored.notificationDelivery && typeof stored.notificationDelivery === "object") {
+        base.notificationDelivery = {
+            ...base.notificationDelivery,
+            ...stored.notificationDelivery
         };
     }
 
@@ -555,6 +581,9 @@ function updateFormFields() {
     notificationPreferenceInputs.forEach(input => {
         input.checked = state.notificationPreferences[input.dataset.notificationPreference] !== false;
     });
+    if (notificationSoundInput) notificationSoundInput.checked = state.notificationDelivery.soundEnabled !== false;
+    if (backgroundNotificationInput) backgroundNotificationInput.checked = state.notificationDelivery.backgroundEnabled !== false;
+    if (notificationVolumeInput) notificationVolumeInput.value = String(Math.round((state.notificationDelivery.volume ?? 0.6) * 100));
     const isAdmin = String(currentUserRole || "").trim().toLowerCase().replace(/[\s-]+/g, "_") === "admin";
     if (notificationPreferencesSection) {
         notificationPreferencesSection.hidden = !isAdmin;
@@ -640,7 +669,11 @@ function persistUserCache() {
         username: state.profile.username || "",
         bio: state.profile.bio || "",
         branch: state.profile.branch || "",
-        branch_id: state.profile.branch_id || ""
+        branch_id: state.profile.branch_id || "",
+        accountSettings: {
+            notificationDelivery: { ...state.notificationDelivery },
+            notificationPreferences: { ...state.notificationPreferences }
+        }
     };
 
     localStorage.setItem("user", JSON.stringify(user));
@@ -880,6 +913,36 @@ async function saveNotificationPreferences() {
     }
 }
 
+async function saveNotificationDelivery() {
+    const previousState = JSON.parse(JSON.stringify(state));
+    state.notificationDelivery = {
+        soundEnabled: notificationSoundInput?.checked !== false,
+        backgroundEnabled: backgroundNotificationInput?.checked !== false,
+        volume: Math.min(1, Math.max(0, Number(notificationVolumeInput?.value || 60) / 100))
+    };
+    saveSettings();
+    try {
+        await persistSettingsToServer();
+        window.dispatchEvent(new CustomEvent("record:notification-preferences-updated", { detail: state.notificationDelivery }));
+        persistUserCache();
+        try {
+            if (state.notificationDelivery.backgroundEnabled) {
+                await window.RecordPushNotifications?.enable?.();
+            } else {
+                await window.RecordPushNotifications?.disable?.();
+            }
+            showToast("Notification delivery settings updated.");
+        } catch (error) {
+            showToast(`Settings saved. ${error.message || "Background notifications could not be updated."}`);
+        }
+    } catch (error) {
+        state = previousState;
+        renderSettings();
+        persistUserCache();
+        showToast(error.message || "Unable to update notification delivery settings.");
+    }
+}
+
 async function resetNotificationPreferences() {
     if (String(currentUserRole || "").trim().toLowerCase().replace(/[\s-]+/g, "_") !== "admin") {
         showToast("Notification Preferences are available to Admin users only.");
@@ -1038,6 +1101,13 @@ function bindEvents() {
         } finally {
             saveNotificationPreferencesButton.disabled = false;
         }
+    });
+    document.getElementById("saveNotificationDelivery")?.addEventListener("click", async event => {
+        event.currentTarget.disabled = true;
+        try { await saveNotificationDelivery(); } finally { event.currentTarget.disabled = false; }
+    });
+    testNotificationSoundButton?.addEventListener("click", () => {
+        window.RecordPushNotifications?.testSound?.(Number(notificationVolumeInput?.value || 60) / 100);
     });
     resetNotificationPreferencesButton?.addEventListener("click", resetNotificationPreferences);
     saveOfficeSmsSettingsButton?.addEventListener("click", async () => {

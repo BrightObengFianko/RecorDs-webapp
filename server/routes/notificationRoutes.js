@@ -11,12 +11,16 @@ const {
     deleteNotification,
     clearAllNotifications
 } = require("../controllers/notificationController");
+const { getPushConfig, subscribeToPush, unsubscribeFromPush } = require("../controllers/pushController");
 
 const router = express.Router();
 
 router.use(authMiddleware, requireRole("admin", "office_admin", "system_super_admin", "staff", "branch_staff"));
 router.param("id", validateIdParam);
 router.get("/", listNotifications);
+router.get("/push/config", getPushConfig);
+router.post("/push/subscribe", subscribeToPush);
+router.delete("/push/subscribe", unsubscribeFromPush);
 router.get("/unread-count", getUnreadCount);
 router.patch("/:id/read", markNotificationRead);
 router.patch("/:id/resolve", resolveNotification);

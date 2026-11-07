@@ -24,7 +24,9 @@
     let pollingStarted = false;
     let panelUnreadIndicator = null;
     const urgentNotificationKeys = new Set();
+    const seenNotificationKeys = new Set();
     let urgentNotificationsInitialized = false;
+    let notificationsInitialized = false;
     let notificationAudioContext = null;
 
     // Notification visibility is enforced by the authenticated API. The bell
@@ -93,37 +95,104 @@
     }
 
     function notificationSoundEnabled() {
-        return localStorage.getItem("recordNotificationSound") !== "false";
+        try {
+            const cached = JSON.parse(localStorage.getItem("user") || "null");
+            return cached?.accountSettings?.notificationDelivery?.soundEnabled !== false;
+        } catch {
+            return true;
+        }
     }
 
-    function playAttentionSound() {
-        if (!notificationSoundEnabled()) return;
+    function notificationVolume() {
+        try {
+            const cached = JSON.parse(localStorage.getItem("user") || "null");
+            const value = Number(cached?.accountSettings?.notificationDelivery?.volume);
+            return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.6;
+        } catch {
+            return 0.6;
+        }
+    }
+
+    function playNotificationSound(priority = "INFO", volume = notificationVolume(), force = false) {
+        if ((!force && !notificationSoundEnabled()) || volume <= 0) return;
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             if (!AudioContext) return;
             notificationAudioContext ||= new AudioContext();
-            if (notificationAudioContext.state === "suspended") notificationAudioContext.resume().catch(() => {});
+            if (notificationAudioContext.state === "suspended") {
+                notificationAudioContext.resume()
+                    .then(() => playNotificationSound(priority, volume, force))
+                    .catch(() => {});
+                return;
+            }
             if (notificationAudioContext.state !== "running") return;
             const oscillator = notificationAudioContext.createOscillator();
             const gain = notificationAudioContext.createGain();
-            oscillator.type = "sine";
-            oscillator.frequency.setValueAtTime(880, notificationAudioContext.currentTime);
-            oscillator.frequency.exponentialRampToValueAtTime(660, notificationAudioContext.currentTime + 0.16);
+            const important = ["CRITICAL", "IMPORTANT"].includes(String(priority).toUpperCase());
+            const start = notificationAudioContext.currentTime;
+            oscillator.type = important ? "triangle" : "sine";
+            oscillator.frequency.setValueAtTime(important ? 1046 : 880, start);
+            oscillator.frequency.exponentialRampToValueAtTime(important ? 784 : 660, start + 0.16);
             gain.gain.setValueAtTime(0.0001, notificationAudioContext.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.07, notificationAudioContext.currentTime + 0.02);
-            gain.gain.exponentialRampToValueAtTime(0.0001, notificationAudioContext.currentTime + 0.18);
+            gain.gain.exponentialRampToValueAtTime(0.07 * volume, start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
             oscillator.connect(gain).connect(notificationAudioContext.destination);
             oscillator.start();
-            oscillator.stop(notificationAudioContext.currentTime + 0.2);
+            oscillator.stop(start + 0.2);
+            if (important) {
+                const second = notificationAudioContext.createOscillator();
+                const secondGain = notificationAudioContext.createGain();
+                second.type = "triangle";
+                second.frequency.setValueAtTime(784, start + 0.22);
+                secondGain.gain.setValueAtTime(0.0001, start + 0.22);
+                secondGain.gain.exponentialRampToValueAtTime(0.06 * volume, start + 0.24);
+                secondGain.gain.exponentialRampToValueAtTime(0.0001, start + 0.42);
+                second.connect(secondGain).connect(notificationAudioContext.destination);
+                second.start(start + 0.22);
+                second.stop(start + 0.44);
+            }
         } catch {
             // Browser autoplay restrictions must not affect notifications.
         }
     }
 
+    window.RecordPushNotifications = {
+        testSound: volume => playNotificationSound("IMPORTANT", Number.isFinite(volume) ? volume : notificationVolume(), true),
+        async enable() {
+            if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+                throw new Error("This browser does not support background notifications.");
+            }
+            const permission = Notification.permission === "default"
+                ? await Notification.requestPermission()
+                : Notification.permission;
+            if (permission !== "granted") throw new Error("Notifications are blocked. Allow them in your browser or device settings.");
+            const config = await request("/push/config");
+            if (!config.supported || !config.publicKey) throw new Error("Background notifications are not configured yet.");
+            const registration = await navigator.serviceWorker.ready;
+            const base64 = config.publicKey.replace(/-/g, "+").replace(/_/g, "/");
+            const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+            const applicationServerKey = Uint8Array.from(atob(padded), char => char.charCodeAt(0));
+            const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
+            await request("/push/subscribe", { method: "POST", body: JSON.stringify({ subscription }) });
+            return true;
+        },
+        async disable() {
+            if (!("serviceWorker" in navigator)) return;
+            const registration = await navigator.serviceWorker.ready;
+            const subscription = await registration.pushManager.getSubscription();
+            if (!subscription) return;
+            await request("/push/subscribe", { method: "DELETE", body: JSON.stringify({ endpoint: subscription.endpoint }) });
+            await subscription.unsubscribe();
+        }
+    };
+
     document.addEventListener("pointerdown", () => {
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             if (AudioContext && !notificationAudioContext) notificationAudioContext = new AudioContext();
+            if (notificationAudioContext?.state === "suspended") {
+                notificationAudioContext.resume().catch(() => {});
+            }
         } catch {}
     }, { passive: true });
 
@@ -247,7 +316,7 @@
                 const key = `${item.id}:${item.last_event_at || item.created_at}:${item.message}`;
                 if (urgentNotificationKeys.has(key)) return;
                 urgentNotificationKeys.add(key);
-                playAttentionSound();
+                playNotificationSound(item.priority);
                 const notify = String(item.priority || "").toUpperCase() === "CRITICAL"
                     ? window.Notification?.error
                     : window.Notification?.warning;
@@ -255,6 +324,24 @@
             });
         } catch {
             // The badge and notification panel remain usable during a transient failure.
+        }
+
+        try {
+            const data = await request("/?limit=30&readStatus=unread");
+            const items = data.notifications || [];
+            if (!notificationsInitialized) {
+                items.forEach(item => seenNotificationKeys.add(`${item.id}:${item.last_event_at || item.created_at}:${item.message}`));
+                notificationsInitialized = true;
+            } else {
+                items.forEach(item => {
+                    const key = `${item.id}:${item.last_event_at || item.created_at}:${item.message}`;
+                    if (seenNotificationKeys.has(key)) return;
+                    seenNotificationKeys.add(key);
+                    playNotificationSound(item.priority);
+                });
+            }
+        } catch {
+            // Notification polling remains best-effort during network failures.
         }
     }
 

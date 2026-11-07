@@ -633,6 +633,19 @@
                 </div>
             </section>
 
+            <section class="panel notification-preferences-panel" id="notificationDeliverySection">
+                <div class="panel-head">
+                    <div class="section-icon"><svg class="icon" aria-hidden="true"><use href="#icon-bell"></use></svg></div>
+                    <div><h2>Notification Delivery</h2><p>Control RecorDs sounds and background alerts on this device.</p></div>
+                </div>
+                <div class="notification-preference-list">
+                    <label class="toggle-row"><span class="toggle-copy"><strong>Notification sounds</strong><span>Play a RecorDs tone while the app is open.</span></span><span class="switch"><input type="checkbox" id="notificationSoundEnabled"><span></span></span></label>
+                    <label class="toggle-row"><span class="toggle-copy"><strong>Background notifications</strong><span>Receive authorized alerts when the installed app is not open.</span></span><span class="switch"><input type="checkbox" id="backgroundNotificationsEnabled"><span></span></span></label>
+                    <label class="toggle-row"><span class="toggle-copy"><strong>Volume</strong><span>Adjust active-app notification volume.</span></span><input id="notificationVolume" type="range" min="0" max="100" value="60" step="5" aria-label="Notification volume"></label>
+                </div>
+                <div class="panel-actions panel-actions-end notification-preference-actions"><button class="outline-button" type="button" id="testNotificationSound">Test sound</button><button class="primary-button" type="button" id="saveNotificationDelivery">Save Delivery Settings</button></div>
+            </section>
+
             <section class="panel notification-preferences-panel" id="notificationPreferencesSection" hidden aria-hidden="true">
                 <div class="panel-head">
                     <div class="section-icon"><svg class="icon" aria-hidden="true"><use href="#icon-bell"></use></svg></div>
