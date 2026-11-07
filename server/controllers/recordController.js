@@ -747,6 +747,10 @@ async function queryRecentTodayRecords(user, requestedPage, officeContextId = nu
 
 const getRecentTodayRecords = async (req, res) => {
     try {
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+
         const officeContextId = await resolveDashboardOfficeContext(req);
         if (officeContextId === false) {
             return res.status(404).json({ success: false, message: "Office not found." });

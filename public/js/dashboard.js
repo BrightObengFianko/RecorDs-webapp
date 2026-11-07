@@ -87,7 +87,9 @@ let offlineRecentRecords = null;
 let dashboardSummaryLoading = false;
 let dashboardRefreshTimer = null;
 
-const DASHBOARD_REFRESH_INTERVAL_MS = 15000;
+// Keep newly created Branch Staff records visible quickly without waiting for
+// a long polling window. The API remains the source of truth.
+const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
 
 function getRecentRecordsPageSize() {
     return window.matchMedia?.("(max-width: 700px)").matches ? 5 : 10;
@@ -1586,9 +1588,11 @@ async function loadRecentRecordsPage(page) {
         const response = await fetch(
             `/api/records/recent-today?${recentParams.toString()}`,
             {
+                cache: "no-store",
                 headers: {
                     "Authorization": `Bearer ${token}`,
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "Cache-Control": "no-cache"
                 }
             }
         );
