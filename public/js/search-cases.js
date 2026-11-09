@@ -427,7 +427,8 @@ let searchAbortController = null;
 
 let automaticSearchTimer = null;
 
-const AUTOMATIC_SEARCH_DEBOUNCE_MS = 400;
+// Keep live name/phone search responsive without issuing one request per key.
+const AUTOMATIC_SEARCH_DEBOUNCE_MS = 250;
 
 const SEARCH_REFRESH_INTERVAL_MS = 12000;
 
