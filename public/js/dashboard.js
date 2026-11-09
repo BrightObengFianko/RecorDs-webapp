@@ -79,7 +79,9 @@ const overviewCategories = new Set();
 const recentRecordsState = {
     page: 1,
     totalPages: 0,
-    loading: false
+    loading: false,
+    hasRendered: false,
+    signature: ""
 };
 
 let offlineRecentRecords = null;
@@ -1424,6 +1426,28 @@ function renderRecentRecords(records, pagination, metadata = {}) {
             : records.filter(isRecordVisibleToDashboardUser)
         : [];
 
+    const renderSignature = JSON.stringify({
+        records: visibleRecords,
+        pagination: {
+            page: Number(pagination?.page || 1),
+            limit: Number(pagination?.limit || getRecentRecordsPageSize()),
+            total: Number(pagination?.total || visibleRecords.length),
+            totalPages: Number(pagination?.totalPages || 0)
+        },
+        selectedDate: metadata.selectedDate || "",
+        isToday: Boolean(metadata.isToday)
+    });
+
+    // Polling remains active, but an unchanged response must not rebuild the
+    // table. This prevents visible flicker and preserves focus/scroll state.
+    if (recentRecordsState.hasRendered && recentRecordsState.signature === renderSignature) {
+        renderRecentPagination(pagination);
+        return;
+    }
+
+    recentRecordsState.hasRendered = true;
+    recentRecordsState.signature = renderSignature;
+
     if (!visibleRecords.length) {
         recentRecordsBody.innerHTML = `
             <tr>
@@ -1645,7 +1669,9 @@ async function loadDashboardSummary() {
     dashboardSummaryLoading = true;
 
     try {
-        setDashboardLoading("Loading recent records...");
+        if (!recentRecordsState.hasRendered) {
+            setDashboardLoading("Loading recent records...");
+        }
 
         const params = new URLSearchParams({
             period: overviewState.period,
@@ -1798,7 +1824,7 @@ async function loadDashboardSummary() {
             }
         }
 
-        if (recentRecordsBody && !showedOfflineRecords) {
+        if (recentRecordsBody && !showedOfflineRecords && !recentRecordsState.hasRendered) {
             recentRecordsBody.innerHTML = `
                 <tr>
                     <td colspan="8" class="empty">
