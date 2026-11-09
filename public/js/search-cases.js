@@ -423,6 +423,7 @@ let refreshInFlight = false;
 
 let searchRequestInFlight = false;
 let searchSmsRequestInFlight = false;
+let searchAbortController = null;
 
 let automaticSearchTimer = null;
 
@@ -1515,18 +1516,22 @@ async function searchCases({ silent = false, automatic = false } = {}) {
 
     closeActionMenus();
 
-    if (searchRequestInFlight) {
-        return;
+    if (searchRequestInFlight && searchAbortController) {
+        searchAbortController.abort();
     }
 
     searchRequestInFlight = true;
+    const requestController = new AbortController();
+    searchAbortController = requestController;
 
 
     // =====================================
     // SHOW LOADING
     // =====================================
 
-        if (!silent) {
+        // Keep the current results visible while an automatic search is
+        // running. Manual searches still show immediate loading feedback.
+        if (!silent && !automatic) {
             resultsBody.innerHTML = `
             <tr>
                 <td colspan="11" class="loading">
@@ -1668,7 +1673,8 @@ async function searchCases({ silent = false, automatic = false } = {}) {
                         "Content-Type":
                             "application/json"
 
-                    }
+                    },
+                    signal: requestController.signal
 
                 }
             );
@@ -1781,6 +1787,10 @@ async function searchCases({ silent = false, automatic = false } = {}) {
 
     } catch (error) {
 
+        if (error?.name === "AbortError") {
+            return;
+        }
+
         console.error(
             "SEARCH ERROR:",
             error
@@ -1836,7 +1846,10 @@ async function searchCases({ silent = false, automatic = false } = {}) {
         setResultsSyncStatus("Unable to update", "offline");
 
     } finally {
-        searchRequestInFlight = false;
+        if (searchAbortController === requestController) {
+            searchAbortController = null;
+            searchRequestInFlight = false;
+        }
     }
 
 }
@@ -1845,6 +1858,7 @@ async function refreshSearchResults() {
     if (
         !hasActiveSearch ||
         refreshInFlight ||
+        searchRequestInFlight ||
         document.visibilityState !== "visible" ||
         navigator.onLine === false
     ) {

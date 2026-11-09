@@ -2215,7 +2215,7 @@ const searchRecords = async (req, res) => {
 
         if (name) {
             query += `
-                AND r.name ILIKE $${parameter}
+                AND LOWER(COALESCE(r.name, '')) LIKE LOWER($${parameter})
             `;
 
             values.push(`%${name}%`);

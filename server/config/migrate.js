@@ -1196,6 +1196,29 @@ async function ensureDatabaseSchema() {
             ON records(sms_last_attempt_by)
         `
     );
+
+    // These optional trigram indexes keep partial name and phone searches
+    // responsive on large datasets. If the hosted PostgreSQL role cannot
+    // install extensions, preserve startup by using the existing indexes.
+    try {
+        await pool.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+        await pool.query(
+            `
+                CREATE INDEX IF NOT EXISTS idx_records_name_trgm
+                ON records USING gin (LOWER(COALESCE(name, '')) gin_trgm_ops)
+            `
+        );
+        await pool.query(
+            `
+                CREATE INDEX IF NOT EXISTS idx_records_phone_trgm
+                ON records USING gin (
+                    regexp_replace(COALESCE(phone_number::text, ''), '[^0-9]', '', 'g') gin_trgm_ops
+                )
+            `
+        );
+    } catch (error) {
+        console.warn("Optional search indexes unavailable:", error.message);
+    }
 }
 
 module.exports = {
