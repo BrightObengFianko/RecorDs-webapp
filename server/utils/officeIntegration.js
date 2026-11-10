@@ -1,4 +1,6 @@
 const crypto = require("crypto");
+const dns = require("dns").promises;
+const net = require("net");
 const pool = require("../config/database");
 const { getJwtSecret } = require("./authSecurity");
 
@@ -153,11 +155,41 @@ function validateOfficeWebhookUrl(value) {
     if (parsed.protocol !== "https:" && !localHost) {
         throw new Error("Office n8n webhook URLs must use HTTPS.");
     }
+    if (!localHost && isPrivateAddress(parsed.hostname)) {
+        throw new Error("Office webhook URLs cannot target private or local network addresses.");
+    }
     if (String(process.env.NODE_ENV || "").toLowerCase() === "production" && localHost) {
         throw new Error("Local n8n webhook URLs are not allowed in production.");
     }
 
     return url;
+}
+
+function isPrivateAddress(hostname) {
+    const address = String(hostname || "").replace(/^\[|\]$/g, "").toLowerCase();
+    if (net.isIPv4(address)) {
+        const [a, b] = address.split(".").map(Number);
+        return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) ||
+            (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+    }
+    if (net.isIPv6(address)) {
+        return address === "::" || address === "::1" || address.startsWith("fc") ||
+            address.startsWith("fd") || /^(fe8|fe9|fea|feb)/.test(address);
+    }
+    return false;
+}
+
+async function assertSafeWebhookUrl(parsedUrl) {
+    const hostname = String(parsedUrl.hostname || "").toLowerCase();
+    const localHost = ["localhost", "127.0.0.1", "::1"].includes(hostname);
+    if (localHost && String(process.env.NODE_ENV || "").toLowerCase() !== "production") return;
+    if (isPrivateAddress(hostname)) {
+        throw new Error("Office webhook URLs cannot target private or local network addresses.");
+    }
+    const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+    if (!addresses.length || addresses.some(entry => isPrivateAddress(entry.address))) {
+        throw new Error("Office webhook URLs cannot resolve to private or local network addresses.");
+    }
 }
 
 async function getOfficeSmsConfig(officeId) {
@@ -355,6 +387,7 @@ async function sendOfficeSms({ officeId, recordId, senderId, message, recipients
 }
 
 module.exports = {
+    assertSafeWebhookUrl,
     decryptOfficeSecret,
     encryptOfficeSecret,
     decryptArkeselApiKey,

@@ -175,7 +175,7 @@
 
     function getStrongPasswordError(password) {
         const value = String(password || "");
-        if (value.length < 12) return "at least 12 characters";
+        if (value.length < 8) return "at least 8 characters";
         if (!/[A-Z]/.test(value)) return "an uppercase letter";
         if (!/[a-z]/.test(value)) return "a lowercase letter";
         if (!/[0-9]/.test(value)) return "a number";

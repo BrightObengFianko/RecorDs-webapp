@@ -59,7 +59,7 @@ function normalizeRole(role) {
 }
 
 async function trackLoginFailure(req, user = null) {
-    const state = recordLoginFailure(req);
+    const state = await recordLoginFailure(req);
     const email = String(user?.email || req.body?.email || "").trim().toLowerCase();
 
     await recordAuthActivity({
@@ -358,18 +358,34 @@ const signup = async (req, res) => {
         }
 
         const requestedBranchId = Number.parseInt(String(branch_id || ""), 10);
+        const requestedOfficeId = Number.parseInt(String(req.body?.office_id || ""), 10);
+        const isSystemAdmin = isSystemSuperAdmin(req.user);
         const branchId = Number.isInteger(requestedBranchId)
             ? requestedBranchId
-            : req.user?.branch_id || await getDefaultBranchId();
+            : req.user?.branch_id || (isSystemAdmin ? await getDefaultBranchId() : null);
 
         if (!branchId) {
-            return res.status(500).json({
+            return res.status(400).json({
                 message: "Default branch is not available."
             });
         }
 
         const branchOffice = await pool.query("SELECT office_id FROM branches WHERE id = $1 LIMIT 1", [branchId]);
         const officeId = branchOffice.rows[0]?.office_id;
+
+        if (!officeId || (!isSystemAdmin && String(officeId) !== String(req.user?.office_id))) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only create accounts in your own office."
+            });
+        }
+
+        if (isSystemAdmin && Number.isInteger(requestedOfficeId) && String(requestedOfficeId) !== String(officeId)) {
+            return res.status(400).json({
+                success: false,
+                message: "The selected branch does not belong to the selected office."
+            });
+        }
 
         const hashedPassword = await hashPassword(password);
 
@@ -890,7 +906,7 @@ const login = async (req, res) => {
             }
         );
 
-        clearLoginFailures(req);
+        await clearLoginFailures(req);
 
         await recordAuthActivity({
             userId: user.id,

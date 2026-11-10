@@ -1,4 +1,4 @@
-const { getOfficeSmsConfig, sendOfficeSms } = require("../utils/officeIntegration");
+const { assertSafeWebhookUrl, getOfficeSmsConfig, sendOfficeSms } = require("../utils/officeIntegration");
 
 async function getN8NConfigStatus(officeId) {
     const config = await getOfficeSmsConfig(officeId);
@@ -78,6 +78,7 @@ const sendToN8N = async (data, officeId) => {
 
     let response;
     try {
+        await assertSafeWebhookUrl(parsedUrl);
         response = await fetch(webhookUrl, {
             method: "POST",
             headers: {

@@ -20,8 +20,8 @@ function getJwtSecret() {
 function validatePassword(password) {
     const value = String(password || "");
 
-    if (value.length < 12) {
-        return "Password must be at least 12 characters long.";
+    if (value.length < 8) {
+        return "Password must contain at least 8 characters.";
     }
 
     if (!/[A-Z]/.test(value)) {

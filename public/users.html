@@ -714,8 +714,8 @@
                 <div class="branch-staff-fields" id="branchStaffFields" hidden>
                     <div class="field"><label for="branchStaffName">Staff Full Name</label><input id="branchStaffName" maxlength="100"></div>
                     <div class="field"><label for="branchStaffEmail">Staff Email</label><input id="branchStaffEmail" type="email" maxlength="150"></div>
-                    <div class="field"><label for="branchStaffPassword">Temporary Password</label><input id="branchStaffPassword" type="password" minlength="12" autocomplete="new-password" aria-describedby="branchStaffPasswordHint"></div>
-                    <small id="branchStaffPasswordHint">Use 12 or more characters with uppercase, lowercase, a number, and a special character.</small>
+                    <div class="field"><label for="branchStaffPassword">Temporary Password</label><input id="branchStaffPassword" type="password" minlength="8" autocomplete="new-password" aria-describedby="branchStaffPasswordHint"></div>
+                    <small id="branchStaffPasswordHint">Password must contain: at least 8 characters, 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character (for example, @ # $ &amp; * ! ?).</small>
                     <small>Password is hashed before storage and is never returned by the API.</small>
                 </div>
                 <div class="modal-actions">
@@ -809,7 +809,7 @@
                             id="staffPassword"
                             name="staffPassword"
                             placeholder="Set a temporary password"
-                            minlength="12"
+                            minlength="8"
                             autocomplete="new-password"
                             aria-describedby="staffPasswordHint"
                             required
@@ -818,7 +818,7 @@
                             👁️
                         </button>
                     </div>
-                    <small id="staffPasswordHint">Use 12 or more characters with uppercase, lowercase, a number, and a special character.</small>
+                    <small id="staffPasswordHint">Password must contain: at least 8 characters, 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character (for example, @ # $ &amp; * ! ?).</small>
                 </div>
 
                 <div class="form-group">

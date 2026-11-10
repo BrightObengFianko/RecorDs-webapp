@@ -857,6 +857,22 @@ async function ensureDatabaseSchema() {
 
     await pool.query(
         `
+            CREATE TABLE IF NOT EXISTS auth_rate_limits (
+                rate_key VARCHAR(300) PRIMARY KEY,
+                window_started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                locked_until TIMESTAMP
+            )
+        `
+    );
+    await pool.query(
+        `DELETE FROM auth_rate_limits
+         WHERE window_started_at < CURRENT_TIMESTAMP - INTERVAL '2 days'
+           AND (locked_until IS NULL OR locked_until < CURRENT_TIMESTAMP)`
+    );
+
+    await pool.query(
+        `
             CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id
             ON password_reset_tokens(user_id)
         `

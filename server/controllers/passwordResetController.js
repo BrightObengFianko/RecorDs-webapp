@@ -13,6 +13,7 @@ const {
     sendPasswordResetConfirmationEmail,
     sendPasswordResetEmail
 } = require("../services/emailService");
+const { consumeRateLimit } = require("../utils/rateLimitStore");
 
 const RESET_TTL_MS = 10 * 60 * 1000;
 const MAX_VERIFY_ATTEMPTS = 5;
@@ -20,8 +21,6 @@ const REQUEST_WINDOW_MS = 15 * 60 * 1000;
 const MAX_REQUESTS_PER_IP = 5;
 const MAX_REQUESTS_PER_IDENTITY = 3;
 const MAX_VERIFY_REQUESTS_PER_IP = 20;
-const requestAttempts = new Map();
-const verificationAttempts = new Map();
 
 function normalizeIdentity(value) {
     return String(value || "").trim().toLowerCase();
@@ -39,53 +38,23 @@ function createResetToken() {
     return crypto.randomBytes(32).toString("hex");
 }
 
-function getRequestKey(req, identity) {
-    return `${req.ip || "unknown"}:${identity}`;
-}
-
-function isRateLimited(req, identity, now = Date.now()) {
-    const keys = [`ip:${req.ip || "unknown"}`, `identity:${getRequestKey(req, identity)}`];
-    return keys.some(key => {
-        const entry = requestAttempts.get(key);
-        if (!entry || now - entry.startedAt >= REQUEST_WINDOW_MS) return false;
-        const max = key.startsWith("ip:") ? MAX_REQUESTS_PER_IP : MAX_REQUESTS_PER_IDENTITY;
-        return entry.count >= max;
+async function passwordResetRequestAllowed(req, identity) {
+    const ip = await consumeRateLimit(`password-reset-ip:${req.ip || "unknown"}`, {
+        windowMs: REQUEST_WINDOW_MS,
+        maxAttempts: MAX_REQUESTS_PER_IP
     });
-}
-
-function recordRequestAttempt(req, identity, now = Date.now()) {
-    [`ip:${req.ip || "unknown"}`, `identity:${getRequestKey(req, identity)}`].forEach(key => {
-        const entry = requestAttempts.get(key);
-        if (!entry || now - entry.startedAt >= REQUEST_WINDOW_MS) {
-            requestAttempts.set(key, { count: 1, startedAt: now });
-        } else {
-            entry.count += 1;
-        }
+    const account = await consumeRateLimit(`password-reset-identity:${req.ip || "unknown"}:${identity}`, {
+        windowMs: REQUEST_WINDOW_MS,
+        maxAttempts: MAX_REQUESTS_PER_IDENTITY
     });
+    return ip.allowed && account.allowed;
 }
 
-function pruneRequestAttempts(now = Date.now()) {
-    for (const [key, entry] of requestAttempts) {
-        if (now - entry.startedAt >= REQUEST_WINDOW_MS) requestAttempts.delete(key);
-    }
-    for (const [key, entry] of verificationAttempts) {
-        if (now - entry.startedAt >= REQUEST_WINDOW_MS) verificationAttempts.delete(key);
-    }
-}
-
-function isVerificationRateLimited(req, now = Date.now()) {
-    const entry = verificationAttempts.get(req.ip || "unknown");
-    return Boolean(entry && now - entry.startedAt < REQUEST_WINDOW_MS && entry.count >= MAX_VERIFY_REQUESTS_PER_IP);
-}
-
-function recordVerificationAttempt(req, now = Date.now()) {
-    const key = req.ip || "unknown";
-    const entry = verificationAttempts.get(key);
-    if (!entry || now - entry.startedAt >= REQUEST_WINDOW_MS) {
-        verificationAttempts.set(key, { count: 1, startedAt: now });
-    } else {
-        entry.count += 1;
-    }
+async function passwordResetVerificationAllowed(req) {
+    return (await consumeRateLimit(`password-reset-verify-ip:${req.ip || "unknown"}`, {
+        windowMs: REQUEST_WINDOW_MS,
+        maxAttempts: MAX_VERIFY_REQUESTS_PER_IP
+    })).allowed;
 }
 
 function getPublicResetUrl(req, token) {
@@ -124,12 +93,9 @@ async function requestPasswordReset(req, res) {
         message: "If an account matches the information provided, a password reset code has been sent."
     };
 
-    pruneRequestAttempts();
-    if (!identity || identity.length > 150 || isRateLimited(req, identity)) {
+    if (!identity || identity.length > 150 || !(await passwordResetRequestAllowed(req, identity))) {
         return res.status(200).json(neutralResponse);
     }
-
-    recordRequestAttempt(req, identity);
 
     try {
         await pool.query("DELETE FROM password_reset_tokens WHERE expires_at <= CURRENT_TIMESTAMP OR used_at IS NOT NULL");
@@ -202,11 +168,9 @@ async function requestPasswordReset(req, res) {
 
 async function verifyResetCode(req, res) {
     const code = String(req.body?.code || req.body?.token || "").trim();
-    pruneRequestAttempts();
-    if (!/^\d{6}$/.test(code) || isVerificationRateLimited(req)) {
+    if (!/^\d{6}$/.test(code) || !(await passwordResetVerificationAllowed(req))) {
         return res.status(400).json({ success: false, message: "Invalid or expired reset code." });
     }
-    recordVerificationAttempt(req);
 
     const client = await pool.connect();
     try {
