@@ -10,7 +10,8 @@ const {
     getAccountSettings,
     getOfficeConfiguration,
     updateAccountSettings,
-    createStaffAccount
+    createStaffAccount,
+    getOfflineSyncCredential
 } = require("../controllers/authController");
 
 const authenticateToken =
@@ -44,6 +45,7 @@ router.post("/logout", authenticateToken, auditMutatingRequest, logout);
 
 // Protected endpoints - auth required
 router.get("/me", authenticateToken, getMe);
+router.get("/offline-sync-credential", authenticateToken, getOfflineSyncCredential);
 router.get("/settings", authenticateToken, getAccountSettings);
 router.get("/office", authenticateToken, getOfficeConfiguration);
 router.patch("/settings", authenticateToken, updateAccountSettings);

@@ -1318,7 +1318,10 @@ recordForm.addEventListener(
                     ? undefined
                     : offlineEditMode
                         ? offlineRecordUuid
-                        : createClientUuid()
+                        : createClientUuid(),
+
+            offline_sync_credential:
+                localStorage.getItem("offlineSyncCredential") || ""
 
         };
 

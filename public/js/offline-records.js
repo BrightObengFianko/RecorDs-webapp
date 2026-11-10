@@ -318,6 +318,13 @@
         const payload =
             clonePayload(recordData);
 
+        const offlineSyncCredential = String(
+            payload.offline_sync_credential ||
+            localStorage.getItem("offlineSyncCredential") ||
+            ""
+        ).trim();
+        payload.offline_sync_credential = offlineSyncCredential;
+
         const operationType = options.operationType === "UPDATE"
             ? "UPDATE"
             : "CREATE";
@@ -363,7 +370,8 @@
             lastAttemptAt: null,
             nextRetryAt: null,
             userId: storedUser?.id || "",
-            branchId: storedUser?.branch_id || ""
+            branchId: storedUser?.branch_id || "",
+            offlineSyncCredential
         };
 
         await saveRecord(entry);
@@ -437,6 +445,23 @@
 
             try {
 
+                if (!entry.offlineSyncCredential) {
+                    await saveRecord({
+                        ...entry,
+                        status: PENDING_STATUS,
+                        lastError: "Original authenticated user login is required.",
+                        updatedAt: new Date().toISOString()
+                    });
+                    return {
+                        online: true,
+                        syncedCount,
+                        failedCount,
+                        pendingCount: await countPendingRecords(ownerKey),
+                        authError: true,
+                        networkError: false
+                    };
+                }
+
                 await saveRecord({
                     ...entry,
                     status: SYNCING_STATUS,
@@ -446,6 +471,7 @@
 
                 const requestPayload = { ...entry.payload };
                 delete requestPayload.record_id;
+                requestPayload.offline_sync_credential = entry.offlineSyncCredential;
 
                 const isUpdate = entry.operationType === "UPDATE";
                 const response =
@@ -781,6 +807,30 @@
         }
     }
 
+    async function refreshOfflineSyncCredential() {
+        const token = localStorage.getItem("token");
+        if (!token || (typeof navigator !== "undefined" && navigator.onLine === false)) {
+            return false;
+        }
+
+        try {
+            const response = await fetch("/api/auth/offline-sync-credential", {
+                cache: "no-store",
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (!response.ok) return false;
+            const data = await response.json();
+            if (data.offlineSyncCredential) {
+                localStorage.setItem("offlineSyncCredential", data.offlineSyncCredential);
+                return true;
+            }
+        } catch (error) {
+            return false;
+        }
+
+        return false;
+    }
+
     function scheduleAutomaticSync(delay = AUTO_SYNC_DELAY_MS) {
         if (automaticSyncTimer || automaticSyncPromise) {
             return;
@@ -796,6 +846,8 @@
 
     async function runAutomaticSync() {
         await wait(AUTO_SYNC_DELAY_MS);
+
+        await refreshOfflineSyncCredential();
 
         for (let attempt = 0; attempt <= AUTO_SYNC_RETRY_DELAYS_MS.length; attempt++) {
             if (typeof navigator !== "undefined" && navigator.onLine === false) {
@@ -852,6 +904,7 @@
     });
 
     if (typeof navigator === "undefined" || navigator.onLine !== false) {
+        refreshOfflineSyncCredential().catch(() => {});
         scheduleAutomaticSync();
     }
 

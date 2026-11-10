@@ -39,6 +39,9 @@
 
     function getState(entry) {
         const status = String(entry.status || "").toUpperCase();
+        if (String(entry.lastError || "").toLowerCase().includes("original authenticated user")) {
+            return { label: "Authentication Required", className: "failed" };
+        }
         if (status === "SYNC_FAILED") return { label: "Sync failed - Retry", className: "failed" };
         if (status === "SYNC_CONFLICT") return { label: "Conflict - Review required", className: "failed" };
         if (status === "SYNCING") return { label: "Syncing...", className: "" };

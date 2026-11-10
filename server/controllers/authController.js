@@ -23,6 +23,26 @@ const {
     recordLoginFailure
 } = require("../middleware/loginRateLimiter");
 const { isSystemSuperAdmin } = require("../utils/officeUtils");
+
+const OFFLINE_SYNC_TOKEN_EXPIRES_IN = process.env.OFFLINE_SYNC_TOKEN_EXPIRES_IN || "30d";
+
+function createOfflineSyncCredential(user) {
+    return jwt.sign(
+        {
+            purpose: "offline_sync",
+            id: user.id,
+            office_id: user.office_id,
+            branch_id: user.branch_id || null,
+            role: normalizeRole(user.role),
+            token_version: Number(user.auth_token_version || 0)
+        },
+        getJwtSecret(),
+        {
+            expiresIn: OFFLINE_SYNC_TOKEN_EXPIRES_IN,
+            algorithm: "HS256"
+        }
+    );
+}
 const { getOfficeSmsConfig } = require("../utils/officeIntegration");
 const { lockStaffAccountQuota } = require("../utils/staffQuota");
 const { formatPhoneNumber, isValidPhoneNumber } = require("../utils/phoneUtils");
@@ -884,6 +904,7 @@ const login = async (req, res) => {
         return res.status(200).json({
             message: "Login successful!",
             token,
+            offlineSyncCredential: createOfflineSyncCredential(user),
             user: {
                 id: user.id,
                 name: user.name,
@@ -905,6 +926,13 @@ const login = async (req, res) => {
             message: "Something went wrong while logging in."
         });
     }
+};
+
+const getOfflineSyncCredential = (req, res) => {
+    return res.json({
+        success: true,
+        offlineSyncCredential: createOfflineSyncCredential(req.user)
+    });
 };
 
 const logout = async (req, res) => {
@@ -1135,5 +1163,6 @@ module.exports = {
     getAccountSettings,
     getOfficeConfiguration,
     updateAccountSettings,
-    createStaffAccount
+    createStaffAccount,
+    getOfflineSyncCredential
 };

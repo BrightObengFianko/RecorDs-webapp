@@ -110,6 +110,9 @@ if (loginForm) {
 
             // Save JWT token
             localStorage.setItem("token", data.token);
+            if (data.offlineSyncCredential) {
+                localStorage.setItem("offlineSyncCredential", data.offlineSyncCredential);
+            }
 
             if (data.user && typeof data.user === "object") {
                 localStorage.setItem(

@@ -1,4 +1,6 @@
 const pool = require("../config/database");
+const jwt = require("jsonwebtoken");
+const { getJwtSecret } = require("../utils/authSecurity");
 
 const DASHBOARD_REGISTRARS = [
     "ADMIN",
@@ -43,6 +45,21 @@ function isSystemSuperAdmin(user) {
 
 function isBranchStaff(user) {
     return normalizeRole(user?.role) === "branch_staff";
+}
+
+function hasValidOfflineSyncCredential(credential, user) {
+    try {
+        const decoded = jwt.verify(String(credential || ""), getJwtSecret(), {
+            algorithms: ["HS256"]
+        });
+
+        return decoded?.purpose === "offline_sync" &&
+            String(decoded.id) === String(user?.id) &&
+            String(decoded.office_id || "") === String(user?.office_id || "") &&
+            Number(decoded.token_version || 0) === Number(user?.auth_token_version || 0);
+    } catch (error) {
+        return false;
+    }
 }
 
 function canMutateRecords(user) {
@@ -813,7 +830,8 @@ const createRecord = async (req, res) => {
             registration_date,
             registrar,
             notes,
-            client_uuid
+            client_uuid,
+            offline_sync_credential
         } = req.body;
 
         if (
@@ -895,6 +913,14 @@ const createRecord = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "Invalid client UUID."
+            });
+        }
+
+        if (clientUuid && !hasValidOfflineSyncCredential(offline_sync_credential, req.user)) {
+            return res.status(401).json({
+                success: false,
+                code: "OFFLINE_AUTH_REQUIRED",
+                message: "The original authenticated user must log in before this offline record can sync."
             });
         }
 
@@ -2611,7 +2637,8 @@ const updateRecord = async (req, res) => {
             registrar,
             notes,
             expected_updated_at,
-            client_uuid
+            client_uuid,
+            offline_sync_credential
         } = req.body;
 
         if (
@@ -2684,6 +2711,14 @@ const updateRecord = async (req, res) => {
                 success: false,
                 message:
                     "Record not found."
+            });
+        }
+
+        if (client_uuid && !hasValidOfflineSyncCredential(offline_sync_credential, req.user)) {
+            return res.status(401).json({
+                success: false,
+                code: "OFFLINE_AUTH_REQUIRED",
+                message: "The original authenticated user must log in before this offline update can sync."
             });
         }
 
