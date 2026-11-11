@@ -1656,8 +1656,12 @@
             });
         }
 
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+        // Remove every browser credential immediately. The server-side logout
+        // request revokes the active session so this JWT cannot be reused.
+        ["token", "offlineSyncCredential", "user"].forEach(key => {
+            localStorage.removeItem(key);
+            sessionStorage.removeItem(key);
+        });
         window.location.replace("index.html");
     }
 

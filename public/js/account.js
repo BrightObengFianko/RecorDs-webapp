@@ -33,6 +33,7 @@ function isSystemSuperAdmin() {
 if (logoutButton) {
     logoutButton.addEventListener("click", () => {
         localStorage.removeItem("token");
+        localStorage.removeItem("offlineSyncCredential");
         localStorage.removeItem("user");
         window.location.replace("index.html");
     });

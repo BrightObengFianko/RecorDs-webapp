@@ -667,6 +667,10 @@ async function loadRecordForEdit() {
             );
 
             localStorage.removeItem(
+                "offlineSyncCredential"
+            );
+
+            localStorage.removeItem(
                 "user"
             );
 

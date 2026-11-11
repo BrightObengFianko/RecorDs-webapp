@@ -2142,6 +2142,7 @@ They can login immediately.
         if (logoutButton) {
             logoutButton.addEventListener("click", () => {
                 localStorage.removeItem("token");
+                localStorage.removeItem("offlineSyncCredential");
                 localStorage.removeItem("user");
                 window.location.href = "index.html";
             });

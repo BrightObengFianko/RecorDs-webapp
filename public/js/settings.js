@@ -703,6 +703,7 @@ async function loadAuthenticatedUser() {
 
     if (response.status === 401 || response.status === 403) {
             localStorage.removeItem("token");
+            localStorage.removeItem("offlineSyncCredential");
             localStorage.removeItem("user");
             window.location.href = "index.html";
             return;
