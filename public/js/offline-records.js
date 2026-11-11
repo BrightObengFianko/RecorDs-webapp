@@ -737,6 +737,7 @@
 
     async function syncForCurrentUser(options = {}) {
         ensureStatusElement();
+        await refreshOwnedOfflineCredentials();
         const before = await getQueueStats();
         if (before.waiting || before.failed) {
             const copy = statusElement?.querySelector(".offline-sync-copy");
@@ -810,7 +811,7 @@
     async function refreshOfflineSyncCredential() {
         const token = localStorage.getItem("token");
         if (!token || (typeof navigator !== "undefined" && navigator.onLine === false)) {
-            return false;
+            return "";
         }
 
         try {
@@ -818,17 +819,73 @@
                 cache: "no-store",
                 headers: { Authorization: `Bearer ${token}` }
             });
-            if (!response.ok) return false;
+            if (!response.ok) return "";
             const data = await response.json();
             if (data.offlineSyncCredential) {
                 localStorage.setItem("offlineSyncCredential", data.offlineSyncCredential);
-                return true;
+                return String(data.offlineSyncCredential);
             }
         } catch (error) {
+            return "";
+        }
+
+        return "";
+    }
+
+    async function refreshOwnedOfflineCredentials() {
+        const token = localStorage.getItem("token");
+        if (!token || (typeof navigator !== "undefined" && navigator.onLine === false)) {
             return false;
         }
 
-        return false;
+        try {
+            const response = await fetch("/api/auth/me", {
+                cache: "no-store",
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (!response.ok) return false;
+
+            const data = await response.json();
+            const user = data.user || data;
+            const userId = String(user.id || "").trim();
+            const ownerKeys = new Set([
+                user.id,
+                user.email,
+                user.name
+            ].map(value => String(value || "").trim().toLowerCase()).filter(Boolean));
+
+            if (!userId || !ownerKeys.size) return false;
+
+            const credential = await refreshOfflineSyncCredential();
+            if (!credential) return false;
+
+            const records = await getAllRecords();
+            const ownedEntries = records.filter(entry =>
+                entry &&
+                isQueuedStatus(entry.status) &&
+                String(entry.userId || "") === userId &&
+                ownerKeys.has(String(entry.ownerKey || "").trim().toLowerCase())
+            );
+
+            for (const entry of ownedEntries) {
+                await saveRecord({
+                    ...entry,
+                    status: PENDING_STATUS,
+                    offlineSyncCredential: credential,
+                    payload: {
+                        ...entry.payload,
+                        offline_sync_credential: credential
+                    },
+                    lastError: null,
+                    nextRetryAt: null,
+                    updatedAt: new Date().toISOString()
+                });
+            }
+
+            return true;
+        } catch (error) {
+            return false;
+        }
     }
 
     function scheduleAutomaticSync(delay = AUTO_SYNC_DELAY_MS) {
@@ -847,7 +904,7 @@
     async function runAutomaticSync() {
         await wait(AUTO_SYNC_DELAY_MS);
 
-        await refreshOfflineSyncCredential();
+        await refreshOwnedOfflineCredentials();
 
         for (let attempt = 0; attempt <= AUTO_SYNC_RETRY_DELAYS_MS.length; attempt++) {
             if (typeof navigator !== "undefined" && navigator.onLine === false) {
