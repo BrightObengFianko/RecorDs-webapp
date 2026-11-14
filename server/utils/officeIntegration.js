@@ -284,7 +284,7 @@ async function upsertOfficeSmsConfig({ officeId, apiKey, senderId }) {
     const encrypted = cleanKey ? encryptArkeselApiKey(cleanKey) : null;
     const result = await pool.query(
         `INSERT INTO office_sms_configurations (office_id, provider, api_key_encrypted, sender_id, status, last_error_code, last_error_message, updated_at)
-         VALUES ($1, 'ARKESEL', $2, NULLIF($3, ''), CASE WHEN $2 IS NULL THEN 'NOT_CONFIGURED' ELSE 'PENDING_VERIFICATION' END, NULL, NULL, CURRENT_TIMESTAMP)
+         VALUES ($1, 'ARKESEL', $2::text, NULLIF($3::text, ''), CASE WHEN $2::text IS NULL THEN 'NOT_CONFIGURED' ELSE 'PENDING_VERIFICATION' END, NULL, NULL, CURRENT_TIMESTAMP)
          ON CONFLICT (office_id) DO UPDATE SET
              api_key_encrypted = COALESCE(EXCLUDED.api_key_encrypted, office_sms_configurations.api_key_encrypted),
              sender_id = COALESCE(EXCLUDED.sender_id, office_sms_configurations.sender_id),
