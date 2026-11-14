@@ -4,7 +4,7 @@ const {
     validatePassword
 } = require("../utils/authSecurity");
 const { boundedText, isIsoDate } = require("../utils/inputValidation");
-const { ACTIVITY_TYPES, recordActivity, makeRecordSnapshot } = require("../utils/authActivity");
+const { ACTIVITY_TYPES, SYSTEM_ADMIN_ACTIVITY_TYPES, recordActivity, makeRecordSnapshot } = require("../utils/authActivity");
 const { NOTIFICATION_TYPES, notifyAdmins } = require("../utils/notifications");
 const { isSystemSuperAdmin, isOfficeSystemSuperAdmin } = require("../utils/officeUtils");
 const {
@@ -360,6 +360,10 @@ async function listAuthActivity(req, res) {
             conditions.push(`auth_activity_logs.office_id = $${values.length}`);
         }
 
+        if (isSystemSuperAdmin(req.user)) {
+            values.push(Array.from(SYSTEM_ADMIN_ACTIVITY_TYPES));
+            conditions.push(`auth_activity_logs.activity_type = ANY($${values.length}::text[])`);
+        }
         if (resultFilter) {
             const normalizedResult = String(resultFilter).trim().toLowerCase();
             if (!["success", "failed"].includes(normalizedResult)) {
