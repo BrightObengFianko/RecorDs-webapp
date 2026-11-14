@@ -3,7 +3,8 @@ const {
     NOTIFICATION_PRIORITIES,
     notificationPrioritySet,
     notificationTypeSet,
-    ATTENTION_NOTIFICATION_TYPES
+    ATTENTION_NOTIFICATION_TYPES,
+    SYSTEM_ADMIN_NOTIFICATION_TYPES
 } = require("../utils/notifications");
 const { isSystemSuperAdmin } = require("../utils/officeUtils");
 
@@ -47,6 +48,10 @@ async function listNotifications(req, res) {
             "n.user_id = $1",
             "(u.account_settings->'notificationPreferences'->>n.type IS DISTINCT FROM 'false')"
         ];
+        if (systemSuperAdmin) {
+            values.push(Array.from(SYSTEM_ADMIN_NOTIFICATION_TYPES));
+            conditions.push(`n.type = ANY($${values.length}::text[])`);
+        }
         const typeValues = String(req.query.type || "")
             .split(",")
             .map(value => value.trim().toUpperCase())
@@ -153,6 +158,12 @@ async function listNotifications(req, res) {
 
 async function getUnreadCount(req, res) {
     try {
+        const values = [req.user.id, Array.from(ATTENTION_NOTIFICATION_TYPES)];
+        const systemSuperAdmin = isSystemSuperAdmin(req.user);
+        const roleCondition = systemSuperAdmin
+            ? "AND n.type = ANY($3::text[])"
+            : "";
+        if (systemSuperAdmin) values.push(Array.from(SYSTEM_ADMIN_NOTIFICATION_TYPES));
         const result = await pool.query(
             `
                 SELECT
@@ -165,8 +176,9 @@ async function getUnreadCount(req, res) {
                 JOIN users u ON u.id = n.user_id
                 WHERE n.user_id = $1
                   AND (u.account_settings->'notificationPreferences'->>n.type IS DISTINCT FROM 'false')
+                  ${roleCondition}
             `,
-            [req.user.id, Array.from(ATTENTION_NOTIFICATION_TYPES)]
+            values
         );
         return res.json({
             success: true,

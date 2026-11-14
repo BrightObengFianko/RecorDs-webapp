@@ -43,6 +43,20 @@ const ATTENTION_NOTIFICATION_TYPES = new Set([
     NOTIFICATION_TYPES.SYSTEM_ALERT
 ]);
 
+// System Super Admin receives platform-level events, not office case traffic.
+// Office admins and staff continue to receive the existing case notifications.
+const SYSTEM_ADMIN_NOTIFICATION_TYPES = new Set([
+    NOTIFICATION_TYPES.USER_CREATED,
+    NOTIFICATION_TYPES.USER_DISABLED,
+    NOTIFICATION_TYPES.USER_ENABLED,
+    NOTIFICATION_TYPES.SMS_FAILED,
+    NOTIFICATION_TYPES.SMS_SERVICE_UNAVAILABLE,
+    NOTIFICATION_TYPES.SYNC_FAILED,
+    NOTIFICATION_TYPES.DUPLICATE_DETECTED,
+    NOTIFICATION_TYPES.FAILED_LOGIN_ALERT,
+    NOTIFICATION_TYPES.SYSTEM_ALERT
+]);
+
 function isAttentionNotificationType(type) {
     return ATTENTION_NOTIFICATION_TYPES.has(String(type || "").trim().toUpperCase());
 }
@@ -306,8 +320,12 @@ async function notifyAdmins({
                   OR LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) IN ('admin', 'system super admin')
                   OR office_id = $1
               )
+              AND (
+                  LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) <> 'system super admin'
+                  OR $2::text = ANY($3::text[])
+              )
         `
-        , [targetOfficeId || null]
+        , [targetOfficeId || null, String(type || '').trim().toUpperCase(), Array.from(SYSTEM_ADMIN_NOTIFICATION_TYPES)]
     );
 
     const notifications = [];
@@ -398,8 +416,12 @@ async function notifyAdminsGrouped({
                   OR LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) IN ('admin', 'system super admin')
                   OR office_id = $1
               )
+              AND (
+                  LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) <> 'system super admin'
+                  OR $2::text = ANY($3::text[])
+              )
         `
-        , [targetOfficeId || null]
+        , [targetOfficeId || null, String(type || '').trim().toUpperCase(), Array.from(SYSTEM_ADMIN_NOTIFICATION_TYPES)]
     );
     const results = [];
 
@@ -581,7 +603,7 @@ async function refreshPendingApprovalNotifications({ markNewAsUnread = false } =
             SELECT id, role, office_id, account_settings,
                    COALESCE(office_id, (SELECT MIN(id) FROM offices)) AS notification_office_id
             FROM users
-            WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) IN ('admin', 'office admin', 'system super admin', 'staff')
+            WHERE LOWER(REPLACE(REPLACE(TRIM(COALESCE(role, '')), '_', ' '), '-', ' ')) IN ('admin', 'office admin', 'staff')
               AND COALESCE(is_active, TRUE) = TRUE
               AND UPPER(COALESCE(account_status, 'APPROVED')) = 'APPROVED'
         `
@@ -723,6 +745,7 @@ module.exports = {
     refreshPendingApprovalNotifications,
     notificationTypeSet,
     notificationPrioritySet,
+    SYSTEM_ADMIN_NOTIFICATION_TYPES,
     ATTENTION_NOTIFICATION_TYPES,
     isAttentionNotificationType
 };
