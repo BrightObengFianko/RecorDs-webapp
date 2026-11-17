@@ -1537,7 +1537,7 @@ async function listOffices(req, res) {
                    o.logo_url, o.primary_color, o.secondary_color, o.dashboard_title,
                    o.n8n_webhook_url, o.n8n_timeout_ms, COALESCE(sc.sender_id, o.sms_sender_id) AS sms_sender_id,
                    CASE
-                       WHEN sc.status = 'ACTIVE'
+                       WHEN (sc.api_key_encrypted IS NOT NULL AND NULLIF(BTRIM(sc.sender_id), '') IS NOT NULL AND sc.status <> 'DISCONNECTED')
                             OR (o.n8n_webhook_url IS NOT NULL AND o.n8n_webhook_secret IS NOT NULL)
                        THEN 'ACTIVE'
                        ELSE COALESCE(sc.status, 'NOT_CONFIGURED')
