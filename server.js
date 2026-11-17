@@ -17,6 +17,7 @@ const recordRoutes = require("./server/routes/recordRoutes");
 const adminRoutes = require("./server/routes/adminRoutes");
 const smsRoutes = require("./server/routes/smsRoutes");
 const notificationRoutes = require("./server/routes/notificationRoutes");
+const subscriptionRoutes = require("./server/routes/subscriptionRoutes");
 
 const app = express();
 
@@ -107,6 +108,11 @@ app.use(
 app.use(
     "/api/notifications",
     notificationRoutes
+);
+
+app.use(
+    "/api/subscriptions",
+    subscriptionRoutes
 );
 
 // Browsers request this conventional path even when a manifest is present.

@@ -1,4 +1,4 @@
-const CACHE_NAME = "records-shell-v207";
+const CACHE_NAME = "records-shell-v226";
 const APP_SHELL = [
     "/",
     "/index.html",
@@ -11,6 +11,7 @@ const APP_SHELL = [
     "/reports.html",
     "/settings.html",
     "/users.html",
+    "/subscription.html",
     "/css/style.css",
     "/css/sidebar.css",
     "/css/notification.css",
@@ -26,6 +27,8 @@ const APP_SHELL = [
     "/css/settings.css",
     "/css/users.css",
     "/css/users.css?v=80",
+    "/css/subscription.css",
+    "/js/subscription.js",
     "/css/pending-sync.css",
     "/css/admin-notifications.css",
     "/js/app-settings.js",

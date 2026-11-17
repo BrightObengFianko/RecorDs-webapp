@@ -787,3 +787,65 @@ body.sidebar-collapsed .logout span {
         padding-bottom: 32px;
     }
 }
+
+/* Shared compact sidebar for every authenticated page. Keep the complete
+   navigation visible without creating an inner sidebar scrollbar. */
+:root {
+    --sidebar-width: 200px;
+}
+
+.sidebar {
+    width: var(--sidebar-width);
+    overflow: hidden;
+}
+
+.sidebar .brand {
+    gap: 8px;
+    padding: 14px 12px 12px;
+}
+
+.sidebar .brand-icon {
+    width: 28px;
+    height: 28px;
+}
+
+.sidebar .brand span {
+    font-size: 15px;
+}
+
+.sidebar .navigation,
+.sidebar .menu {
+    gap: 4px;
+    padding: 10px 8px;
+    overflow: hidden;
+}
+
+.sidebar .navigation .nav-item,
+.sidebar .menu a {
+    min-height: 38px;
+    padding: 8px 10px;
+    gap: 8px;
+    margin-bottom: 0;
+    font-size: 12px;
+}
+
+.sidebar .sidebar-bottom {
+    padding: 10px 12px 12px;
+}
+
+.sidebar .user-box {
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.sidebar .avatar {
+    width: 28px;
+    height: 28px;
+}
+
+@media (max-width: 1100px) {
+    .sidebar {
+        width: 200px !important;
+        overflow: hidden !important;
+    }
+}

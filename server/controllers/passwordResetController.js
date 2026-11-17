@@ -284,6 +284,18 @@ async function resetPassword(req, res) {
         );
         await client.query("UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = $1", [token.id]);
         await client.query("DELETE FROM password_reset_tokens WHERE user_id = $1 AND id <> $2", [token.user_id, token.id]);
+        await client.query(
+            `
+                UPDATE user_sessions
+                SET is_active = FALSE,
+                    revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP),
+                    revocation_reason = 'Password changed',
+                    refresh_token_hash = NULL,
+                    refresh_expires_at = NULL
+                WHERE user_id = $1 AND is_active = TRUE
+            `,
+            [token.user_id]
+        );
         await client.query("COMMIT");
 
         if (!updateResult.rowCount) {

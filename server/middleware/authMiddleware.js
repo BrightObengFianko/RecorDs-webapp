@@ -87,10 +87,10 @@ function requireAuth(req, res, next) {
             algorithms: ["HS256"]
         });
 
-        if (!decoded || !decoded.id) {
+        if (!decoded || !decoded.id || !decoded.sid) {
             return res.status(401).json({
                 success: false,
-                message: "Authentication required."
+                message: "Please log in again to continue."
             });
         }
 
@@ -114,41 +114,56 @@ function requireAuth(req, res, next) {
                 }
 
                 let activeSession = null;
-                if (decoded.sid) {
-                    const sessionResult = await pool.query(
-                        `
-                            SELECT id, session_id, device_id, device_name, device_type,
-                                   browser, operating_system, expires_at
-                            FROM user_sessions
-                            WHERE user_id = $1
-                              AND session_id = $2
-                              AND is_active = TRUE
-                              AND revoked_at IS NULL
-                              AND expires_at > CURRENT_TIMESTAMP
-                            LIMIT 1
-                        `,
-                        [user.id, decoded.sid]
-                    );
+                await pool.query(
+                    `
+                        UPDATE user_sessions
+                        SET is_active = FALSE,
+                            revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP),
+                            revocation_reason = COALESCE(revocation_reason, 'Session expired')
+                        WHERE user_id = $1
+                          AND session_id = $2
+                          AND is_active = TRUE
+                          AND (
+                              expires_at <= CURRENT_TIMESTAMP
+                              OR last_active_at <= CURRENT_TIMESTAMP - INTERVAL '30 minutes'
+                          )
+                    `,
+                    [user.id, decoded.sid]
+                );
 
-                    activeSession = sessionResult.rows[0] || null;
-                    if (!activeSession) {
-                        return res.status(401).json({
-                            success: false,
-                            message: "Your session has expired or been revoked. Please log in again."
-                        });
-                    }
+                const sessionResult = await pool.query(
+                    `
+                        SELECT id, session_id, device_id, device_name, device_type,
+                               browser, operating_system, expires_at
+                        FROM user_sessions
+                        WHERE user_id = $1
+                          AND session_id = $2
+                          AND is_active = TRUE
+                          AND revoked_at IS NULL
+                          AND expires_at > CURRENT_TIMESTAMP
+                          AND last_active_at > CURRENT_TIMESTAMP - INTERVAL '30 minutes'
+                        LIMIT 1
+                    `,
+                    [user.id, decoded.sid]
+                );
 
-                    await pool.query(
-                        `
-                            UPDATE user_sessions
-                            SET last_active_at = CURRENT_TIMESTAMP,
-                                last_seen_at = CURRENT_TIMESTAMP
-                            WHERE id = $1
-                              AND last_seen_at < CURRENT_TIMESTAMP - INTERVAL '60 seconds'
-                        `,
-                        [activeSession.id]
-                    );
+                activeSession = sessionResult.rows[0] || null;
+                if (!activeSession) {
+                    return res.status(401).json({
+                        success: false,
+                        message: "Your session has expired or been revoked. Please log in again."
+                    });
                 }
+
+                await pool.query(
+                    `
+                        UPDATE user_sessions
+                        SET last_active_at = CURRENT_TIMESTAMP,
+                            last_seen_at = CURRENT_TIMESTAMP
+                        WHERE id = $1
+                    `,
+                    [activeSession.id]
+                );
 
                 const accountStatus =
                     normalizeAccountStatus(
@@ -185,6 +200,34 @@ function requireAuth(req, res, next) {
                     });
                 }
 
+                // Subscription restrictions are enforced at the API boundary.
+                // System Super Admin remains able to administer an office that
+                // is overdue or manually restricted.
+                if (normalizeRole(user.role) !== "system_super_admin") {
+                    const subscriptionResult = await pool.query(
+                        `
+                            SELECT status, manual_access_override, expiry_date, grace_period_end
+                            FROM office_subscriptions
+                            WHERE office_id = $1
+                            LIMIT 1
+                        `,
+                        [user.office_id]
+                    );
+                    const subscription = subscriptionResult.rows[0];
+                    const restrictedByOverride = subscription?.manual_access_override === "RESTRICTED";
+                    const restrictedByExpiry = subscription &&
+                        subscription.status !== "GRANDFATHERED" &&
+                        subscription.grace_period_end &&
+                        new Date(`${String(subscription.grace_period_end).slice(0, 10)}T23:59:59Z`) < new Date();
+                    if (restrictedByOverride || restrictedByExpiry || ["SUSPENDED", "CANCELLED"].includes(subscription?.status)) {
+                        return res.status(402).json({
+                            success: false,
+                            status: "SUBSCRIPTION_RESTRICTED",
+                            message: "This office subscription has expired or access has been restricted. Contact the System Super Admin."
+                        });
+                    }
+                }
+
                 req.user = {
                     id: user.id,
                     name: user.name,
@@ -198,8 +241,8 @@ function requireAuth(req, res, next) {
                     account_status: user.account_status,
                     auth_token_version: user.auth_token_version,
                     max_devices: user.max_devices,
-                    session_id: activeSession?.session_id || null,
-                    device_id: activeSession?.device_id || null,
+                    session_id: activeSession.session_id,
+                    device_id: activeSession.device_id,
                     branch: user.branch,
                     created_at: user.created_at
                 };

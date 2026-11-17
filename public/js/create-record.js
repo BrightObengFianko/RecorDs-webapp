@@ -670,6 +670,10 @@ async function loadRecordForEdit() {
                 "offlineSyncCredential"
             );
 
+            sessionStorage.removeItem(
+                "refreshToken"
+            );
+
             localStorage.removeItem(
                 "user"
             );

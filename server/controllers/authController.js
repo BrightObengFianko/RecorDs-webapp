@@ -43,6 +43,36 @@ function createOfflineSyncCredential(user) {
         }
     );
 }
+
+function createRefreshToken() {
+    return crypto.randomBytes(48).toString("base64url");
+}
+
+function hashRefreshToken(token) {
+    return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
+function createAccessToken(user, sessionId) {
+    return jwt.sign(
+        {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: normalizeRole(user.role),
+            office_id: user.office_id,
+            branch_id: user.branch_id,
+            is_active: user.is_active,
+            account_status: normalizeAccountStatus(user.account_status),
+            token_version: user.auth_token_version,
+            sid: sessionId
+        },
+        getJwtSecret(),
+        {
+            expiresIn: JWT_EXPIRES_IN,
+            algorithm: "HS256"
+        }
+    );
+}
 const { getOfficeSmsConfig } = require("../utils/officeIntegration");
 const { lockStaffAccountQuota } = require("../utils/staffQuota");
 const { formatPhoneNumber, isValidPhoneNumber } = require("../utils/phoneUtils");
@@ -729,7 +759,9 @@ const login = async (req, res) => {
         }
 
         const device = getDeviceMetadata(req, req.body?.device_id);
-        const sessionExpiry = sessionExpiresAt();
+        let sessionExpiry = sessionExpiresAt();
+        const refreshToken = createRefreshToken();
+        const refreshTokenHash = hashRefreshToken(refreshToken);
         const sessionClient = await pool.connect();
         let sessionId = null;
         let deviceLimitReached = false;
@@ -755,17 +787,23 @@ const login = async (req, res) => {
                     UPDATE user_sessions
                     SET is_active = FALSE,
                         revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP),
-                        revocation_reason = COALESCE(revocation_reason, 'Session expired')
+                        revocation_reason = COALESCE(revocation_reason, 'Session expired'),
+                        refresh_token_hash = NULL,
+                        refresh_expires_at = NULL
                     WHERE user_id = $1
                       AND is_active = TRUE
-                      AND (expires_at <= CURRENT_TIMESTAMP OR revoked_at IS NOT NULL)
+                      AND (
+                          expires_at <= CURRENT_TIMESTAMP
+                          OR last_active_at <= CURRENT_TIMESTAMP - INTERVAL '30 minutes'
+                          OR revoked_at IS NOT NULL
+                      )
                 `,
                 [user.id]
             );
 
             const activeSessions = await sessionClient.query(
                 `
-                    SELECT session_id, device_id
+                    SELECT session_id, device_id, expires_at, refresh_token_hash
                     FROM user_sessions
                     WHERE user_id = $1
                       AND is_active = TRUE
@@ -783,6 +821,11 @@ const login = async (req, res) => {
 
             if (existingDevice) {
                 sessionId = existingDevice.session_id;
+                // A repeat login on the same device keeps the original
+                // twelve-hour session deadline instead of extending it.
+                sessionExpiry = existingDevice.refresh_token_hash
+                    ? new Date(existingDevice.expires_at)
+                    : sessionExpiresAt();
                 await sessionClient.query(
                     `
                         UPDATE user_sessions
@@ -798,8 +841,10 @@ const login = async (req, res) => {
                             is_active = TRUE,
                             revoked_at = NULL,
                             revoked_by = NULL,
-                            revocation_reason = NULL
-                        WHERE session_id = $8
+                            revocation_reason = NULL,
+                            refresh_token_hash = $8,
+                            refresh_expires_at = $9
+                        WHERE session_id = $10
                     `,
                     [
                         device.deviceName,
@@ -808,6 +853,8 @@ const login = async (req, res) => {
                         device.operatingSystem,
                         String(req.ip || "").slice(0, 64) || null,
                         device.userAgent || null,
+                        sessionExpiry,
+                        refreshTokenHash,
                         sessionExpiry,
                         sessionId
                     ]
@@ -821,9 +868,10 @@ const login = async (req, res) => {
                         INSERT INTO user_sessions (
                             user_id, session_id, device_id, device_name,
                             device_type, browser, operating_system,
-                            ip_address, user_agent, expires_at
+                            ip_address, user_agent, expires_at,
+                            refresh_token_hash, refresh_expires_at
                         )
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                     `,
                     [
                         user.id,
@@ -835,6 +883,8 @@ const login = async (req, res) => {
                         device.operatingSystem,
                         String(req.ip || "").slice(0, 64) || null,
                         device.userAgent || null,
+                        sessionExpiry,
+                        refreshTokenHash,
                         sessionExpiry
                     ]
                 );
@@ -884,27 +934,7 @@ const login = async (req, res) => {
             });
         }
 
-        const userPayload = {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: normalizeRole(user.role),
-            office_id: user.office_id,
-            branch_id: user.branch_id,
-            is_active: user.is_active,
-            account_status: accountStatus.toUpperCase(),
-            token_version: user.auth_token_version,
-            sid: sessionId
-        };
-
-        const token = jwt.sign(
-            userPayload,
-            getJwtSecret(),
-            {
-                expiresIn: JWT_EXPIRES_IN,
-                algorithm: "HS256"
-            }
-        );
+        const token = createAccessToken(user, sessionId);
 
         await clearLoginFailures(req);
 
@@ -920,6 +950,7 @@ const login = async (req, res) => {
         return res.status(200).json({
             message: "Login successful!",
             token,
+            refreshToken,
             offlineSyncCredential: createOfflineSyncCredential(user),
             user: {
                 id: user.id,
@@ -944,6 +975,91 @@ const login = async (req, res) => {
     }
 };
 
+const refreshAccessToken = async (req, res) => {
+    const rawRefreshToken = String(req.body?.refresh_token || "").trim();
+    const refreshTokenHash = hashRefreshToken(rawRefreshToken);
+
+    if (!rawRefreshToken) {
+        return res.status(401).json({ success: false, message: "Session refresh required." });
+    }
+
+    try {
+        const result = await pool.query(
+            `
+                SELECT us.session_id, us.user_id, us.expires_at,
+                       u.account_status, u.is_active,
+                       COALESCE(o.status, 'ACTIVE') AS office_status
+                FROM user_sessions us
+                JOIN users u ON u.id = us.user_id
+                LEFT JOIN offices o ON o.id = u.office_id
+                WHERE us.refresh_token_hash = $1
+                  AND us.is_active = TRUE
+                  AND us.revoked_at IS NULL
+                  AND us.expires_at > CURRENT_TIMESTAMP
+                  AND us.refresh_expires_at > CURRENT_TIMESTAMP
+                  AND us.last_active_at > CURRENT_TIMESTAMP - INTERVAL '30 minutes'
+                LIMIT 1
+            `,
+            [refreshTokenHash]
+        );
+        const session = result.rows[0];
+
+        if (!session || session.is_active === false ||
+            normalizeAccountStatus(session.account_status) !== "approved" ||
+            String(session.office_status).toUpperCase() !== "ACTIVE") {
+            await pool.query(
+                `UPDATE user_sessions
+                 SET is_active = FALSE,
+                     revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP),
+                     revocation_reason = COALESCE(revocation_reason, 'Refresh session expired'),
+                     refresh_token_hash = NULL,
+                     refresh_expires_at = NULL
+                 WHERE refresh_token_hash = $1 AND is_active = TRUE`,
+                [refreshTokenHash]
+            );
+            return res.status(401).json({ success: false, message: "Your session has expired. Please log in again." });
+        }
+
+        const user = await fetchUserById(session.user_id);
+        const nextRefreshToken = createRefreshToken();
+        const nextRefreshTokenHash = hashRefreshToken(nextRefreshToken);
+        await pool.query(
+            `
+                UPDATE user_sessions
+                SET last_active_at = CURRENT_TIMESTAMP,
+                    last_seen_at = CURRENT_TIMESTAMP,
+                    refresh_token_hash = $1
+                WHERE session_id = $2
+                  AND is_active = TRUE
+                  AND expires_at > CURRENT_TIMESTAMP
+            `,
+            [nextRefreshTokenHash, session.session_id]
+        );
+
+        return res.json({
+            success: true,
+            token: createAccessToken(user, session.session_id),
+            refreshToken: nextRefreshToken,
+            offlineSyncCredential: createOfflineSyncCredential(user),
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: normalizeRole(user.role),
+                office_id: user.office_id,
+                branch_id: user.branch_id,
+                is_active: user.is_active,
+                account_status: String(user.account_status || "APPROVED").toUpperCase(),
+                branch: user.branch,
+                created_at: user.created_at
+            }
+        });
+    } catch (error) {
+        console.error("TOKEN REFRESH ERROR:", error.message);
+        return res.status(500).json({ success: false, message: "Unable to refresh the session." });
+    }
+};
+
 const getOfflineSyncCredential = (req, res) => {
     return res.json({
         success: true,
@@ -959,7 +1075,9 @@ const logout = async (req, res) => {
                 SET is_active = FALSE,
                     revoked_at = CURRENT_TIMESTAMP,
                     revoked_by = $1,
-                    revocation_reason = 'User logout'
+                    revocation_reason = 'User logout',
+                    refresh_token_hash = NULL,
+                    refresh_expires_at = NULL
                 WHERE user_id = $1
                   AND session_id = $2
                   AND is_active = TRUE
@@ -1174,6 +1292,7 @@ const updateAccountSettings = async (req, res) => {
 module.exports = {
     signup,
     login,
+    refreshAccessToken,
     logout,
     getMe,
     getAccountSettings,

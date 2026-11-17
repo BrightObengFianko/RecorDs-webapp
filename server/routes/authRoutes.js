@@ -5,6 +5,7 @@ const router = express.Router();
 const {
     signup,
     login,
+    refreshAccessToken,
     logout,
     getMe,
     getAccountSettings,
@@ -38,6 +39,7 @@ const auditMutatingRequest = require("../middleware/auditMiddleware");
 
 // Public endpoint
 router.post("/login", loginRateLimiter, login);
+router.post("/refresh", refreshAccessToken);
 router.post("/password-reset/request", requestPasswordReset);
 router.post("/password-reset/verify", verifyResetCode);
 router.post("/password-reset/complete", resetPassword);

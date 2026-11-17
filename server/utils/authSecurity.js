@@ -5,7 +5,9 @@ const BCRYPT_ROUNDS = Math.max(
     Number.parseInt(process.env.BCRYPT_ROUNDS || "12", 10)
 );
 
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "8h";
+// Access tokens are intentionally short-lived. The database-backed session
+// and refresh token enforce the absolute twelve-hour session limit.
+const JWT_EXPIRES_IN = "15m";
 
 function getJwtSecret() {
     const secret = String(process.env.JWT_SECRET || "").trim();

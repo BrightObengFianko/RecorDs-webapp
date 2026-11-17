@@ -1,28 +1,11 @@
 const crypto = require("crypto");
 
-const DEFAULT_SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
+const ACCESS_TOKEN_EXPIRES_IN = "15m";
+const MAX_SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 
-function parseDuration(value) {
-    const raw = String(value || "").trim().toLowerCase();
-    const match = raw.match(/^(\d+)\s*(ms|s|m|h|d)?$/);
-
-    if (!match) return DEFAULT_SESSION_DURATION_MS;
-
-    const amount = Number(match[1]);
-    const unit = match[2] || "ms";
-    const multipliers = {
-        ms: 1,
-        s: 1000,
-        m: 60 * 1000,
-        h: 60 * 60 * 1000,
-        d: 24 * 60 * 60 * 1000
-    };
-
-    return amount * (multipliers[unit] || 1);
-}
-
-function sessionExpiresAt() {
-    return new Date(Date.now() + parseDuration(process.env.JWT_EXPIRES_IN || "8h"));
+function sessionExpiresAt(startedAt = Date.now()) {
+    return new Date(new Date(startedAt).getTime() + MAX_SESSION_DURATION_MS);
 }
 
 function normalizeDeviceId(value) {
@@ -71,6 +54,9 @@ function getDeviceMetadata(request, requestedDeviceId) {
 }
 
 module.exports = {
+    ACCESS_TOKEN_EXPIRES_IN,
+    INACTIVITY_TIMEOUT_MS,
+    MAX_SESSION_DURATION_MS,
     getDeviceMetadata,
     sessionExpiresAt
 };

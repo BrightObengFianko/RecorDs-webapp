@@ -1698,6 +1698,10 @@ async function searchCases({ silent = false, automatic = false } = {}) {
                 "offlineSyncCredential"
             );
 
+            sessionStorage.removeItem(
+                "refreshToken"
+            );
+
             localStorage.removeItem(
                 "user"
             );

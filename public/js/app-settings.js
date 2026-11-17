@@ -3,6 +3,26 @@
     const USER_KEY = "user";
     const STORAGE_PREFIX = `${STORAGE_KEY}:`;
 
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = async function authenticatedFetch(input, init = {}) {
+        const response = await nativeFetch(input, init);
+        const requestUrl = String(typeof input === "string" ? input : input?.url || "");
+        const refreshable = response.status === 401 &&
+            !/\/api\/auth\/(login|refresh|logout)(?:\?|$)/.test(requestUrl);
+
+        if (!refreshable || !String(sessionStorage.getItem("refreshToken") || "").trim()) {
+            return response;
+        }
+
+        if (!await refreshAccessToken()) {
+            return response;
+        }
+
+        const retryHeaders = new Headers(init.headers || {});
+        retryHeaders.set("Authorization", `Bearer ${localStorage.getItem("token") || ""}`);
+        return nativeFetch(input, { ...init, headers: retryHeaders });
+    };
+
     function normalizeRegistrar(value) {
         const raw = String(value || "").trim().replace(/\s+/g, " ");
         const normalized = raw.toUpperCase();
@@ -80,6 +100,69 @@
                 console.warn("Offline shell registration failed:", error.message);
             });
         }
+    }
+
+    let accessRefreshInFlight = null;
+    let lastAccessRefreshAt = 0;
+    const ACCESS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+
+    async function refreshAccessToken() {
+        const refreshToken = String(sessionStorage.getItem("refreshToken") || "").trim();
+        if (!refreshToken || accessRefreshInFlight) {
+            return accessRefreshInFlight || false;
+        }
+
+        const now = Date.now();
+        if (now - lastAccessRefreshAt < ACCESS_REFRESH_INTERVAL_MS) {
+            return true;
+        }
+        lastAccessRefreshAt = now;
+
+        accessRefreshInFlight = fetch("/api/auth/refresh", {
+            method: "POST",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refresh_token: refreshToken })
+        }).then(async response => {
+            const data = await response.json().catch(() => ({}));
+            if (response.ok && data.token && data.refreshToken) {
+                localStorage.setItem("token", data.token);
+                sessionStorage.setItem("refreshToken", data.refreshToken);
+                if (data.offlineSyncCredential) {
+                    localStorage.setItem("offlineSyncCredential", data.offlineSyncCredential);
+                }
+                if (data.user) {
+                    localStorage.setItem("user", JSON.stringify(data.user));
+                }
+                return true;
+            }
+
+            if (response.status === 401 || response.status === 403) {
+                ["token", "offlineSyncCredential", "user"].forEach(key => {
+                    localStorage.removeItem(key);
+                    sessionStorage.removeItem(key);
+                });
+                window.location.replace("index.html");
+            }
+            return false;
+        }).catch(() => false).finally(() => {
+            accessRefreshInFlight = null;
+        });
+
+        return accessRefreshInFlight;
+    }
+
+    function initializeSessionRefresh() {
+        window.setInterval(() => {
+            if (document.visibilityState === "visible") {
+                refreshAccessToken();
+            }
+        }, ACCESS_REFRESH_INTERVAL_MS);
+
+        window.addEventListener("focus", () => refreshAccessToken());
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") refreshAccessToken();
+        });
     }
 
     function normalizeHex(value) {
@@ -370,7 +453,7 @@
         const normalized = normalizeRole(role);
 
         if (["admin", "office_admin", "system_super_admin"].includes(normalized)) {
-            return new Set([
+            const allowedPages = new Set([
                 "dashboard.html",
                 "create-record.html",
                 "search-cases.html",
@@ -381,6 +464,10 @@
                 "settings.html",
                 "case-details.html"
             ]);
+            if (normalized === "system_super_admin") {
+                allowedPages.add("subscription.html");
+            }
+            return allowedPages;
         }
 
         if (normalized === "branch_staff") {
@@ -434,6 +521,7 @@
         "search-cases.html": "icon-search",
         "reports.html": "icon-chart",
         "users.html": "icon-users",
+        "subscription.html": "icon-wallet",
         "account.html": "icon-user",
         "settings.html": "icon-gear"
     });
@@ -952,6 +1040,17 @@
             item.removeAttribute("aria-hidden");
             item.removeAttribute("tabindex");
         });
+
+        document.querySelectorAll(".nav-item-system-super-admin-only").forEach(item => {
+            if (currentRole !== "system_super_admin") {
+                item.remove();
+                return;
+            }
+
+            item.hidden = false;
+            item.removeAttribute("aria-hidden");
+            item.removeAttribute("tabindex");
+        });
     }
 
     function resolveTheme(themePreference) {
@@ -1203,6 +1302,7 @@
         } catch (_) {}
         const profileState = applyProfile(readProfile());
         initAdminHeaderLogout();
+        initializeSessionRefresh();
         playPageLogoTransition();
 
         window.RecordSettings = {
@@ -1660,8 +1760,8 @@
         // request revokes the active session so this JWT cannot be reused.
         ["token", "offlineSyncCredential", "user"].forEach(key => {
             localStorage.removeItem(key);
-            sessionStorage.removeItem(key);
         });
+        sessionStorage.removeItem("refreshToken");
         window.location.replace("index.html");
     }
 

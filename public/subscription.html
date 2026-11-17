@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/assets/record-binder-icon-192.png">
+    <link rel="stylesheet" href="/css/sidebar.css">
+    <link rel="stylesheet" href="/css/subscription.css">
+    <title>Subscriptions | RecorDs</title>
+</head>
+<body class="subscription-page">
+    <div class="app subscription-app">
+        <aside class="sidebar">
+            <div class="brand"><div class="brand-icon">R</div><span>RecorDs</span></div>
+            <nav class="navigation">
+                <a href="dashboard.html" class="nav-item"><svg class="ui-icon nav-icon"><use href="/assets/navigation-icons.svg#icon-home"></use></svg><span>Dashboard</span></a>
+                <a href="create-record.html" class="nav-item"><svg class="ui-icon nav-icon"><use href="/assets/navigation-icons.svg#icon-plus"></use></svg><span>Record Case</span></a>
+                <a href="search-cases.html" class="nav-item"><svg class="ui-icon nav-icon"><use href="/assets/navigation-icons.svg#icon-search"></use></svg><span>Search Cases</span></a>
+                <a href="reports.html" class="nav-item nav-item-admin-only"><svg class="ui-icon nav-icon"><use href="/assets/navigation-icons.svg#icon-chart"></use></svg><span>Reports</span></a>
+                <a href="users.html" class="nav-item nav-item-admin-only"><svg class="ui-icon nav-icon"><use href="/assets/navigation-icons.svg#icon-users"></use></svg><span>Users</span></a>
+                <a href="subscription.html" class="nav-item nav-item-system-super-admin-only active" aria-current="page"><svg class="ui-icon nav-icon"><use href="/assets/navigation-icons.svg#icon-wallet"></use></svg><span>Subscriptions</span></a>
+                <a href="account.html" class="nav-item nav-item-staff-admin-only"><svg class="ui-icon nav-icon"><use href="/assets/navigation-icons.svg#icon-user"></use></svg><span>Account</span></a>
+                <a href="settings.html" class="nav-item"><svg class="ui-icon nav-icon"><use href="/assets/navigation-icons.svg#icon-gear"></use></svg><span>Settings</span></a>
+            </nav>
+            <div class="sidebar-bottom">
+                <div class="user-box">
+                    <div class="avatar" id="sidebarAvatar">A</div>
+                    <div class="user-info"><strong id="sidebarUserName">Admin</strong><small id="sidebarUserRole">Administrator</small></div>
+                </div>
+                <button class="logout" id="logoutButton" type="button" aria-label="Logout" title="Logout"><svg class="ui-icon logout-icon"><use href="/assets/navigation-icons.svg#icon-logout"></use></svg></button>
+            </div>
+        </aside>
+    <main class="subscription-shell">
+        <header class="subscription-header">
+            <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle sidebar" title="Toggle sidebar"><svg class="ui-icon toggle-icon" aria-hidden="true"><use href="/assets/navigation-icons.svg#icon-chevron-left"></use></svg></button>
+            <div>
+                <p class="eyebrow">System administration</p>
+                <h1>Subscriptions</h1>
+                <p class="subtitle">Manage office plans, payments, access and billing history.</p>
+            </div>
+            <a class="back-link" href="/users.html">Back to users</a>
+        </header>
+
+        <div id="subscription-message" class="message" role="status" aria-live="polite"></div>
+        <section class="summary-grid" aria-label="Subscription summary">
+            <article><span>Total offices</span><strong id="summary-total">-</strong></article>
+            <article><span>Active / paid</span><strong id="summary-active">-</strong></article>
+            <article><span>Pending payments</span><strong id="summary-pending">-</strong></article>
+            <article><span>Restricted</span><strong id="summary-restricted">-</strong></article>
+            <article><span>Confirmed revenue</span><strong id="summary-revenue">-</strong><small>GHS</small></article>
+        </section>
+
+        <section class="panel">
+            <div class="panel-heading">
+                <div><h2>Office subscriptions</h2><p>Payment and access state is calculated server-side.</p></div>
+                <button id="refresh-subscriptions" class="secondary-button" type="button">Refresh</button>
+            </div>
+            <div class="toolbar">
+                <label>Search office<input id="office-search" type="search" placeholder="Name or code"></label>
+                <label>Status<select id="status-filter"><option value="">All statuses</option><option>ACTIVE</option><option>EXPIRING_SOON</option><option>GRACE_PERIOD</option><option>EXPIRED</option><option>SUSPENDED</option><option>GRANDFATHERED</option></select></label>
+            </div>
+            <div class="table-wrap">
+                <table><thead><tr><th>Office</th><th>Plan</th><th>Payment</th><th>Expiry / grace</th><th>Access</th><th></th></tr></thead><tbody id="subscription-rows"><tr><td colspan="6" class="loading">Loading subscriptions...</td></tr></tbody></table>
+            </div>
+            <div id="subscription-cards" class="subscription-cards"></div>
+        </section>
+    </main>
+    </div>
+
+    <dialog id="payment-dialog" class="subscription-dialog">
+        <form id="payment-form" method="dialog">
+            <div class="dialog-heading"><div><h2>Record payment</h2><p id="payment-office"></p></div><button type="button" class="icon-button" data-close-dialog="payment-dialog" aria-label="Close">×</button></div>
+            <input type="hidden" id="payment-office-id">
+            <label>Amount (GHS)<input name="amount" inputmode="decimal" required placeholder="0.00"></label>
+            <label>Payment date<input name="payment_date" type="date" required></label>
+            <label>Method<input name="method" required placeholder="Bank, mobile money..."></label>
+            <label>Reference<input name="reference" required maxlength="120"></label>
+            <label>Plan (optional)<select name="plan_id" id="payment-plan"><option value="">Use 30 days</option></select></label>
+            <label>Note<textarea name="note" maxlength="2000"></textarea></label>
+            <div class="dialog-actions"><button type="button" class="secondary-button" data-close-dialog="payment-dialog">Cancel</button><button class="primary-button">Record payment</button></div>
+        </form>
+    </dialog>
+    <dialog id="history-dialog" class="subscription-dialog"><div class="dialog-heading"><div><h2>Payment history</h2><p id="history-office"></p></div><button type="button" class="icon-button" data-close-dialog="history-dialog" aria-label="Close">×</button></div><div id="payment-history" class="history-list"></div></dialog>
+    <dialog id="access-dialog" class="subscription-dialog"><form id="access-form" method="dialog"><div class="dialog-heading"><div><h2>Change office access</h2><p id="access-office"></p></div><button type="button" class="icon-button" data-close-dialog="access-dialog" aria-label="Close">×</button></div><input type="hidden" id="access-office-id"><input type="hidden" id="access-value"><label>Reason<textarea name="reason" required maxlength="500" placeholder="Explain this access change"></textarea></label><div class="dialog-actions"><button type="button" class="secondary-button" data-close-dialog="access-dialog">Cancel</button><button class="primary-button">Save access</button></div></form></dialog>
+    <dialog id="extend-dialog" class="subscription-dialog"><form id="extend-form" method="dialog"><div class="dialog-heading"><div><h2>Extend subscription</h2><p id="extend-office"></p></div><button type="button" class="icon-button" data-close-dialog="extend-dialog" aria-label="Close">×</button></div><input type="hidden" id="extend-office-id"><label>Days to add<input name="duration_days" type="number" min="1" max="3650" value="30" required></label><label>Note<textarea name="note" maxlength="1000"></textarea></label><div class="dialog-actions"><button type="button" class="secondary-button" data-close-dialog="extend-dialog">Cancel</button><button class="primary-button">Extend subscription</button></div></form></dialog>
+    <script src="/js/app-settings.js"></script>
+    <script src="/js/subscription.js"></script>
+</body>
+</html>

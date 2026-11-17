@@ -364,6 +364,7 @@ async function listAuthActivity(req, res) {
             values.push(Array.from(SYSTEM_ADMIN_ACTIVITY_TYPES));
             conditions.push(`auth_activity_logs.activity_type = ANY($${values.length}::text[])`);
         }
+
         if (resultFilter) {
             const normalizedResult = String(resultFilter).trim().toLowerCase();
             if (!["success", "failed"].includes(normalizedResult)) {
@@ -879,6 +880,21 @@ async function changeAccountStatus(req, res, nextStatus) {
                 WHERE id = $2
             `,
             [desiredStatus, id]
+        );
+
+        await pool.query(
+            `
+                UPDATE user_sessions
+                SET is_active = FALSE,
+                    revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP),
+                    revoked_by = $1,
+                    revocation_reason = $3,
+                    refresh_token_hash = NULL,
+                    refresh_expires_at = NULL
+                WHERE user_id = $2
+                  AND is_active = TRUE
+            `,
+            [req.user.id, id, `Account status changed to ${desiredStatus}.`]
         );
 
         const user = await fetchUserById(id);
@@ -1404,7 +1420,9 @@ async function updateUser(req, res) {
                 SET is_active = FALSE,
                     revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP),
                     revoked_by = $1,
-                    revocation_reason = COALESCE(revocation_reason, 'Account updated by administrator')
+                    revocation_reason = COALESCE(revocation_reason, 'Account updated by administrator'),
+                    refresh_token_hash = NULL,
+                    refresh_expires_at = NULL
                 WHERE user_id = $2
                   AND is_active = TRUE
             `,
@@ -1536,7 +1554,12 @@ async function listOffices(req, res) {
             SELECT o.id, o.name, o.code, o.description, o.address, o.phone, o.email,
                    o.logo_url, o.primary_color, o.secondary_color, o.dashboard_title,
                    o.n8n_webhook_url, o.n8n_timeout_ms, COALESCE(sc.sender_id, o.sms_sender_id) AS sms_sender_id,
-                   COALESCE(sc.status, 'NOT_CONFIGURED') AS sms_config_status,
+                   CASE
+                       WHEN sc.status = 'ACTIVE'
+                            OR (o.n8n_webhook_url IS NOT NULL AND o.n8n_webhook_secret IS NOT NULL)
+                       THEN 'ACTIVE'
+                       ELSE COALESCE(sc.status, 'NOT_CONFIGURED')
+                   END AS sms_config_status,
                    sc.last_tested_at AS sms_last_tested_at,
                    sc.last_error_message AS sms_last_error_message,
                    o.staff_account_limit,
