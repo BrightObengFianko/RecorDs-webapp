@@ -1352,9 +1352,19 @@
                 });
             }
             closeOfficeModal();
-            // Reload the joined SMS configuration/status so the table cannot
-            // show a stale "Not configured" value after a successful save.
-            await loadOffices();
+            if (officeId && data.office) {
+                const savedOffice = {
+                    ...data.office,
+                    staff_account_limit: data.office.staff_account_limit ?? payload.staff_account_limit
+                };
+                allOffices = allOffices.map(office => String(office.id) === String(officeId)
+                    ? { ...office, ...savedOffice }
+                    : office);
+                renderOffices();
+                window.dispatchEvent(new CustomEvent("office-configuration-updated", { detail: savedOffice }));
+            } else {
+                await loadOffices();
+            }
             Notification.success(data.message || (officeId ? "Office updated successfully." : "Office created successfully."));
         } catch (error) {
             Notification.error(error.message || "Unable to save office.");
@@ -2134,7 +2144,6 @@ They can login immediately.
                 localStorage.removeItem("token");
                 localStorage.removeItem("offlineSyncCredential");
                 localStorage.removeItem("user");
-                sessionStorage.removeItem("refreshToken");
                 window.location.href = "index.html";
             });
         }

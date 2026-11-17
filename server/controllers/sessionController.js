@@ -50,7 +50,6 @@ async function listSessionsForUser(userId, currentSessionId = null, includeIp = 
               AND is_active = TRUE
               AND revoked_at IS NULL
               AND expires_at > CURRENT_TIMESTAMP
-              AND last_active_at > CURRENT_TIMESTAMP - INTERVAL '30 minutes'
             ORDER BY last_active_at DESC, id DESC
         `,
         [userId, currentSessionId]
@@ -98,9 +97,7 @@ async function revokeSession(req, res, isAdmin = false) {
                 SET is_active = FALSE,
                     revoked_at = CURRENT_TIMESTAMP,
                     revoked_by = $1,
-                    revocation_reason = $2,
-                    refresh_token_hash = NULL,
-                    refresh_expires_at = NULL
+                    revocation_reason = $2
                 WHERE user_id = $3
                   AND session_id = $4
                   AND is_active = TRUE
@@ -158,9 +155,7 @@ async function revokeAllSessions(req, res, isAdmin = false) {
                 SET is_active = FALSE,
                     revoked_at = CURRENT_TIMESTAMP,
                     revoked_by = $1,
-                    revocation_reason = $2,
-                    refresh_token_hash = NULL,
-                    refresh_expires_at = NULL
+                    revocation_reason = $2
                 WHERE user_id = $3
                   AND is_active = TRUE
                   AND revoked_at IS NULL

@@ -35,7 +35,6 @@ if (logoutButton) {
         localStorage.removeItem("token");
         localStorage.removeItem("offlineSyncCredential");
         localStorage.removeItem("user");
-        sessionStorage.removeItem("refreshToken");
         window.location.replace("index.html");
     });
 }

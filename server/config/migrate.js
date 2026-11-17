@@ -355,8 +355,6 @@ async function ensureDatabaseSchema() {
                 revoked_at TIMESTAMP,
                 revoked_by INTEGER,
                 revocation_reason VARCHAR(200),
-            refresh_token_hash VARCHAR(128),
-            refresh_expires_at TIMESTAMP,
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
                 CONSTRAINT user_sessions_user_id_fkey
                     FOREIGN KEY (user_id)
@@ -371,18 +369,6 @@ async function ensureDatabaseSchema() {
             )
         `
     );
-
-    await pool.query(`
-        ALTER TABLE user_sessions
-            ADD COLUMN IF NOT EXISTS refresh_token_hash VARCHAR(128),
-            ADD COLUMN IF NOT EXISTS refresh_expires_at TIMESTAMP
-    `);
-
-    await pool.query(`
-        CREATE UNIQUE INDEX IF NOT EXISTS user_sessions_refresh_token_unique_idx
-        ON user_sessions(refresh_token_hash)
-        WHERE refresh_token_hash IS NOT NULL
-    `);
 
     await pool.query(
         `
@@ -1169,103 +1155,6 @@ async function ensureDatabaseSchema() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_records_office_registration_date ON records(office_id, registration_date)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_auth_activity_logs_office_id ON auth_activity_logs(office_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_notifications_office_id ON notifications(office_id)`);
-
-    // Subscription billing is deliberately additive. Existing offices are
-    // grandfathered so enabling this feature cannot suspend an active office.
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS subscription_plans (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(100) NOT NULL,
-            description TEXT,
-            amount_pesewas BIGINT NOT NULL DEFAULT 0 CHECK (amount_pesewas >= 0),
-            currency VARCHAR(3) NOT NULL DEFAULT 'GHS',
-            duration_days INTEGER NOT NULL DEFAULT 30 CHECK (duration_days > 0),
-            is_active BOOLEAN NOT NULL DEFAULT TRUE,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-    `);
-
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS office_subscriptions (
-            id SERIAL PRIMARY KEY,
-            office_id INTEGER NOT NULL UNIQUE REFERENCES offices(id) ON DELETE CASCADE,
-            plan_id INTEGER REFERENCES subscription_plans(id) ON DELETE SET NULL,
-            status VARCHAR(30) NOT NULL DEFAULT 'GRANDFATHERED',
-            payment_status VARCHAR(30) NOT NULL DEFAULT 'NOT_REQUIRED',
-            start_date DATE,
-            expiry_date DATE,
-            grace_period_end DATE,
-            amount_pesewas BIGINT NOT NULL DEFAULT 0 CHECK (amount_pesewas >= 0),
-            currency VARCHAR(3) NOT NULL DEFAULT 'GHS',
-            payment_frequency VARCHAR(30) NOT NULL DEFAULT 'MONTHLY',
-            manual_access_override VARCHAR(20),
-            override_reason TEXT,
-            override_changed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-            override_changed_at TIMESTAMP,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            CONSTRAINT office_subscriptions_status_check CHECK (status IN ('GRANDFATHERED', 'TRIAL', 'ACTIVE', 'EXPIRING_SOON', 'GRACE_PERIOD', 'EXPIRED', 'SUSPENDED', 'CANCELLED')),
-            CONSTRAINT office_subscriptions_payment_status_check CHECK (payment_status IN ('NOT_REQUIRED', 'PENDING', 'CONFIRMED', 'FAILED', 'REFUNDED')),
-            CONSTRAINT office_subscriptions_override_check CHECK (manual_access_override IS NULL OR manual_access_override IN ('ALLOWED', 'RESTRICTED'))
-        )
-    `);
-
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS subscription_payments (
-            id SERIAL PRIMARY KEY,
-            office_subscription_id INTEGER NOT NULL REFERENCES office_subscriptions(id) ON DELETE RESTRICT,
-            amount_pesewas BIGINT NOT NULL CHECK (amount_pesewas > 0),
-            currency VARCHAR(3) NOT NULL DEFAULT 'GHS',
-            payment_date DATE NOT NULL,
-            method VARCHAR(40) NOT NULL,
-            reference VARCHAR(120) NOT NULL UNIQUE,
-            note TEXT,
-            status VARCHAR(20) NOT NULL DEFAULT 'CONFIRMED',
-            confirmed_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-            transaction_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            CONSTRAINT subscription_payments_status_check CHECK (status IN ('PENDING', 'CONFIRMED', 'FAILED', 'REFUNDED'))
-        )
-    `);
-
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS subscription_audit_logs (
-            id BIGSERIAL PRIMARY KEY,
-            office_id INTEGER NOT NULL REFERENCES offices(id) ON DELETE RESTRICT,
-            subscription_id INTEGER REFERENCES office_subscriptions(id) ON DELETE SET NULL,
-            actor_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-            action VARCHAR(60) NOT NULL,
-            details JSONB NOT NULL DEFAULT '{}'::jsonb,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-    `);
-
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS subscription_settings (
-            id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-            grace_period_days INTEGER NOT NULL DEFAULT 7 CHECK (grace_period_days BETWEEN 0 AND 60),
-            updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-    `);
-
-    await pool.query(`
-        INSERT INTO subscription_settings (id, grace_period_days)
-        VALUES (1, 7)
-        ON CONFLICT (id) DO NOTHING
-    `);
-    await pool.query(`
-        INSERT INTO office_subscriptions (office_id, status, payment_status)
-        SELECT o.id, 'GRANDFATHERED', 'NOT_REQUIRED'
-        FROM offices o
-        WHERE NOT EXISTS (
-            SELECT 1 FROM office_subscriptions s WHERE s.office_id = o.id
-        )
-    `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_office_subscriptions_status ON office_subscriptions(status)`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_subscription_payments_subscription ON subscription_payments(office_subscription_id, transaction_timestamp DESC)`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_subscription_audit_office ON subscription_audit_logs(office_id, created_at DESC)`);
 
     await pool.query(
         `
