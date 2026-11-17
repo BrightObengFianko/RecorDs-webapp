@@ -75,7 +75,9 @@ async function getSmsBalance(req, res) {
         const officeId = Number.parseInt(String(req.user?.office_id || ""), 10);
         if (!Number.isInteger(officeId)) return res.status(400).json({ success: false, message: "No office is assigned to this account." });
         const config = await getOfficeSmsConfig(officeId);
-        if (config.provider === "ARKESEL") {
+        // Delivery may be routed through n8n, but the office can still have
+        // its encrypted Arkesel credentials available for balance lookup.
+        if (config.apiKey) {
             const result = await getOfficeSmsBalance(officeId);
             return res.json({ success: true, balance: result.balance, bundle: result.balance === null ? null : `${result.balance} SMS credits available`, buyUrl: process.env.ARKESEL_BUNDLE_URL || null });
         }

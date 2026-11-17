@@ -341,7 +341,7 @@ async function testOfficeSmsConfig(officeId) {
 
 async function getOfficeSmsBalance(officeId) {
     const config = await getOfficeSmsConfig(officeId);
-    if (!config.apiKey || config.provider !== "ARKESEL") {
+    if (!config.apiKey) {
         const error = new Error("Arkesel SMS is not configured for this office.");
         error.code = "SMS_NOT_CONFIGURED";
         throw error;
