@@ -219,8 +219,8 @@ async function getOfficeSmsConfig(officeId) {
     // provider call itself remains authoritative for invalid or revoked keys;
     // requiring an ACTIVE test flag here caused configured offices to receive
     // the misleading generic "not configured" error.
-    const arkeselConfigured = arkeselKeyConfigured &&
-        Boolean(office.arkesel_sender_id);
+    const arkeselSenderId = String(office.arkesel_sender_id || office.sms_sender_id || "").trim();
+    const arkeselConfigured = arkeselKeyConfigured && Boolean(arkeselSenderId);
 
     let webhookUrl = String(office.n8n_webhook_url || "").trim();
     let webhookSecret = decryptOfficeSecret(office.n8n_webhook_secret);
@@ -242,7 +242,7 @@ async function getOfficeSmsConfig(officeId) {
         webhookSecret,
         timeoutMs: Math.min(Math.max(Number.parseInt(office.n8n_timeout_ms || "10000", 10), 1000), 30000),
         senderId: arkeselConfigured
-            ? String(office.arkesel_sender_id || "").trim()
+            ? arkeselSenderId
             : String(office.sms_sender_id || "").trim() || null,
         source,
         configured: arkeselConfigured || Boolean(webhookUrl && webhookSecret),
@@ -363,7 +363,10 @@ async function disconnectOfficeSmsConfig(officeId) {
 async function sendOfficeSms({ officeId, recordId, senderId, message, recipients }) {
     const config = await getOfficeSmsConfig(officeId);
     if (config.provider !== "ARKESEL" || !config.apiKey || !config.senderId) {
-        const error = new Error("SMS service is not configured for this office. Please contact the administrator.");
+        const messageText = config.apiKey && !config.senderId
+            ? "Arkesel Sender ID is missing for this office. Configure it before sending SMS."
+            : "SMS service is not configured for this office. Please contact the administrator.";
+        const error = new Error(messageText);
         error.code = "SMS_NOT_CONFIGURED";
         throw error;
     }
