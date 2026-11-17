@@ -114,11 +114,16 @@ async function saveOfficeSmsSettings(req, res) {
     if (!officeId) return;
     try {
         const configuration = await upsertOfficeSmsConfig({ officeId, apiKey: req.body?.api_key, senderId: req.body?.sender_id });
+        let savedConfiguration = configuration;
+        if (configuration.api_key_configured && configuration.sender_id) {
+            await testOfficeSmsConfig(officeId);
+            savedConfiguration = await getOfficeSmsSettings(officeId);
+        }
         await recordActivity({ request: req, userId: req.user?.id, name: req.user?.name, email: req.user?.email, role: req.user?.role, activityType: ACTIVITY_TYPES.SETTINGS_CHANGED, officeId, details: "Office Arkesel SMS configuration saved. API key value was not recorded." });
-        return res.json({ success: true, configuration });
+        return res.json({ success: true, configuration: savedConfiguration });
     } catch (error) {
         if (error.code === "SMS_ENCRYPTION_KEY_MISSING") return res.status(503).json({ success: false, message: "SMS encryption is not configured on the server." });
-        return res.status(400).json({ success: false, message: error.message || "Unable to save SMS settings." });
+        return res.status(502).json({ success: false, status: "ERROR", code: error.code || "ARKESEL_ERROR", message: error.message || "Unable to verify SMS settings." });
     }
 }
 

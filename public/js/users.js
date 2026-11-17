@@ -1352,19 +1352,7 @@
                 });
             }
             closeOfficeModal();
-            if (officeId && data.office) {
-                const savedOffice = {
-                    ...data.office,
-                    staff_account_limit: data.office.staff_account_limit ?? payload.staff_account_limit
-                };
-                allOffices = allOffices.map(office => String(office.id) === String(officeId)
-                    ? { ...office, ...savedOffice }
-                    : office);
-                renderOffices();
-                window.dispatchEvent(new CustomEvent("office-configuration-updated", { detail: savedOffice }));
-            } else {
-                await loadOffices();
-            }
+            await loadOffices();
             Notification.success(data.message || (officeId ? "Office updated successfully." : "Office created successfully."));
         } catch (error) {
             Notification.error(error.message || "Unable to save office.");

@@ -639,7 +639,9 @@ async function saveOfficeSmsConfiguration() {
     });
     officeSmsApiKeyInput.value = "";
     officeSmsSettingsStatus.textContent = `Status: ${String(data?.configuration?.status || "PENDING_VERIFICATION").replace(/_/g, " ")}`;
-    showToast("Office SMS settings saved. Test the connection before sending.");
+    showToast(data?.configuration?.status === "ACTIVE"
+        ? "Office SMS settings saved and verified."
+        : "Office SMS settings saved. Complete the required credentials to activate SMS.");
 }
 
 async function testOfficeSmsConfiguration() {

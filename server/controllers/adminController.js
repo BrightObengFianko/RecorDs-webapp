@@ -1536,7 +1536,12 @@ async function listOffices(req, res) {
             SELECT o.id, o.name, o.code, o.description, o.address, o.phone, o.email,
                    o.logo_url, o.primary_color, o.secondary_color, o.dashboard_title,
                    o.n8n_webhook_url, o.n8n_timeout_ms, COALESCE(sc.sender_id, o.sms_sender_id) AS sms_sender_id,
-                   COALESCE(sc.status, 'NOT_CONFIGURED') AS sms_config_status,
+                   CASE
+                       WHEN sc.status = 'ACTIVE'
+                            OR (o.n8n_webhook_url IS NOT NULL AND o.n8n_webhook_secret IS NOT NULL)
+                       THEN 'ACTIVE'
+                       ELSE COALESCE(sc.status, 'NOT_CONFIGURED')
+                   END AS sms_config_status,
                    sc.last_tested_at AS sms_last_tested_at,
                    sc.last_error_message AS sms_last_error_message,
                    o.staff_account_limit,
