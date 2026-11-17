@@ -94,9 +94,13 @@ function normalizeSmsWorkflowResult(workflowResult) {
         (status === "error" || status === "failed" || status === "failure" ? rawResponse.message : "") ||
         ""
     ).trim();
-    const terminalSources = sources.filter(source =>
-        source.final === true || source.terminal === true
-    );
+    const terminalSources = sources.filter(source => {
+        const sourceStatus = String(source.status || "").trim().toLowerCase();
+        return source.final === true ||
+            source.terminal === true ||
+            typeof source.success === "boolean" ||
+            ["sent", "delivered", "success", "error", "failed", "failure", "invalid"].includes(sourceStatus);
+    });
     const explicitFailure = terminalSources.some(source =>
             source.success === false ||
             source.sms_sent === false ||

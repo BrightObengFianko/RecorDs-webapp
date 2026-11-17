@@ -234,9 +234,15 @@ async function getOfficeSmsConfig(officeId) {
         source = "legacy-environment";
     }
 
+    const n8nConfigured = Boolean(webhookUrl && webhookSecret);
+
+    // Prefer an explicitly configured office workflow. This keeps the READY
+    // event observable in n8n and avoids sending the same SMS twice through
+    // both n8n and Arkesel. Direct Arkesel remains the fallback for offices
+    // that do not have an n8n workflow configured.
     return {
         officeId: office.id,
-        provider: arkeselKeyConfigured ? "ARKESEL" : (webhookUrl && webhookSecret ? "N8N" : null),
+        provider: n8nConfigured ? "N8N" : (arkeselKeyConfigured ? "ARKESEL" : null),
         apiKey: arkeselKeyConfigured ? apiKey : "",
         webhookUrl,
         webhookSecret,
@@ -245,7 +251,7 @@ async function getOfficeSmsConfig(officeId) {
             ? arkeselSenderId
             : String(office.sms_sender_id || "").trim() || null,
         source,
-        configured: arkeselConfigured || Boolean(webhookUrl && webhookSecret),
+        configured: arkeselConfigured || n8nConfigured,
         smsStatus: office.sms_status || "NOT_CONFIGURED",
         lastTestedAt: office.last_tested_at,
         lastErrorCode: office.last_error_code,
